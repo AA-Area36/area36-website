@@ -3,13 +3,14 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Menu, X, Triangle, ChevronDown } from "lucide-react"
+import { Menu, X, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { LanguageSelector } from "@/components/language-selector"
 import { AccessibilityMenu } from "@/components/accessibility-menu"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Logo } from "@/components/logo"
 
 const navigation = [
   { name: "Home", href: "/" },
@@ -49,9 +50,7 @@ export function Header() {
       >
         <div className="flex items-center gap-3">
           <Link href="/" className="flex items-center gap-3" aria-label="Southern Minnesota Area 36 Home">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-              <Triangle className="h-5 w-5 text-primary-foreground" aria-hidden="true" />
-            </div>
+            <Logo size="md" />
             <div className="hidden sm:block">
               <p className="text-lg font-semibold text-foreground">Area 36</p>
               <p className="text-xs text-muted-foreground">Southern Minnesota A.A.</p>

@@ -2,114 +2,158 @@ import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { Mail, Users, Info } from "lucide-react"
 import Link from "next/link"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 
 const officers = [
   {
     role: "Delegate",
-    name: "Panel 75",
+    name: "Doug H.",
     email: "delegate@area36.org",
     description:
-      "The Delegate is the primary link between the local A.A. community and A.A. as a whole, serving as Area 36's representative to the General Service Conference.",
+      "The GSC delegate is elected every odd-numbered year to represent the area at the annual meeting of the conference in New York, and to bring back to the area the results of the Conference meeting.",
   },
   {
     role: "Alternate Delegate",
-    name: "Panel 75",
+    name: "Jennifer A.",
     email: "altdelegate@area36.org",
     description:
-      "The Alternate Delegate assists the Delegate and assumes their duties if necessary. They also coordinate report-backs and other delegate-related activities.",
+      "The alternate delegate serves as a valuable assistant, often traveling with the delegate or giving reports. In Area 36, the alternate delegate also serves as the Structure Committee Chair.",
   },
   {
     role: "Chairperson",
-    name: "Current Chair",
+    name: "Matt B.",
     email: "chairperson@area36.org",
     description:
-      "The Area Chairperson presides at all Area Assembly and Area Committee Meetings, coordinates the work of the Area Committee, and represents Area 36 at regional meetings.",
+      "The Area Chair presides at Area Assembly and Area Committee meetings, sets the agenda, appoints committee chairpersons, and prepares the annual budget.",
   },
   {
     role: "Alternate Chairperson",
-    name: "Current Alt Chair",
+    name: "Eric M.",
     email: "altchairperson@area36.org",
     description:
-      "The Alternate Chairperson assists the Chair in their duties and assumes the Chair's responsibilities in their absence.",
+      "The Alternate Area Chair works closely with the Area Chair and presides over meetings when the Chair is unable to attend. Also serves as the Finance Committee Chair.",
   },
   {
     role: "Secretary",
-    name: "Current Secretary",
+    name: "Jennifer G.",
     email: "secretary@area36.org",
     description:
-      "The Secretary keeps minutes of all Area Assembly and Area Committee Meetings and maintains Area records and correspondence.",
+      "The Secretary records the minutes of Area Assemblies, Area Committee Meetings, and Area Officer meetings, and develops agenda material for Area Assemblies.",
+    interim: true,
   },
   {
     role: "Treasurer",
-    name: "Current Treasurer",
+    name: "Nora H.",
     email: "treasurer@area36.org",
     description:
-      "The Treasurer manages all Area funds, provides financial reports, and maintains the Area's financial records according to A.A. guidelines.",
+      "The Treasurer handles all area monies, keeping records of contributions and disbursements according to the Area Financial Guidelines.",
   },
 ]
 
 const committees = [
   {
-    name: "Accessibility",
-    chair: "accessibility@area36.org",
+    name: "Accessibilities",
+    chairName: "Dan H.",
+    email: "accessibilities@area36.org",
     description:
-      "Works to ensure that A.A. meetings and materials are accessible to all alcoholics, regardless of physical, mental, or language barriers. Coordinates ASL interpretation and accessibility resources.",
+      "Reaches out to communities where it's difficult to carry AA's message due to language, culture, geography, or life conditions. Works with PI and CPC committees to help alcoholics who still suffer.",
   },
   {
     name: "Archives",
-    chair: "archives@area36.org",
+    chairName: null,
+    email: "archives@area36.org",
+    archivistName: "Vince F.",
+    archivistEmail: "archivist@area36.org",
     description:
-      "Collects, preserves, and shares the history of Alcoholics Anonymous in Area 36. Maintains historical documents, photos, and memorabilia for future generations.",
+      "Gathers current and historical information about A.A., especially in our Area, and preserves it in a meaningful order. Provides a clearinghouse of information and coordinates the exchange of ideas between districts.",
   },
   {
     name: "Cooperation with the Professional Community (CPC)",
-    chair: "cpc@area36.org",
+    chairName: "Jim M.",
+    email: "cpc@area36.org",
     description:
-      "Carries the message about A.A. to professionals who work with alcoholics, including doctors, clergy, lawyers, and social workers.",
+      "Works with A.A. groups to provide information on Alcoholics Anonymous to professionals who often meet alcoholics before we do.",
   },
   {
     name: "Corrections",
-    chair: "corrections@area36.org",
+    chairName: "Dave A.",
+    email: "corrections@area36.org",
+    additionalContacts: [
+      { role: "Temporary Contact Coordinator", name: "Brian M.", email: "ctcp@area36.org" },
+      { role: "Pink Can Coordinator", name: "Patrick W.", email: "pinkcanplan@area36.org" },
+      { role: "Statewide Corrections Chair", name: "Carter L.", email: "correctionsmn@area36.org" },
+    ],
     description:
-      "Coordinates A.A. service to alcoholics in correctional facilities and helps incarcerated members transition to A.A. upon release through pre-release contact programs.",
+      "Coordinates the work of A.A. groups in carrying the A.A. message to alcoholics in correctional facilities. Manages the Temporary Contact Program and the Pink Can Plan for literature distribution.",
   },
   {
-    name: "Grapevine / La Viña",
-    chair: "grapevine@area36.org",
+    name: "Finance",
+    chairName: "Eric M.",
+    email: "finance@area36.org",
     description:
-      "Promotes the Grapevine and La Viña magazines as valuable recovery resources and helps spread awareness of these publications throughout the Area.",
+      "Monitors the Area's financial needs, policies and practices. Responsible for reminding groups of their Seventh Tradition opportunities. Reviews and updates the Area financial guidelines as needed.",
+  },
+  {
+    name: "Grapevine",
+    chairName: "Tom W.",
+    email: "grapevine@area36.org",
+    description:
+      "Coordinates the work of A.A. members, groups, and districts to read, subscribe to and utilize the Grapevine and Grapevine-produced materials. Encourages members to contribute written material for publication.",
   },
   {
     name: "Literature",
-    chair: "literature@area36.org",
+    chairName: "Andy J.",
+    email: "literature@area36.org",
     description:
-      "Keeps the fellowship informed about A.A. literature, including new publications, revisions, and discontinued items. Assists groups in selecting appropriate literature.",
+      "Provides information to A.A. members and groups encouraging the use of Conference approved literature and maintains inventory of the Area literature.",
+  },
+  {
+    name: "Newsletter",
+    chairName: "Joe S.",
+    email: "newsletter@area36.org",
+    description:
+      "Publishes The Pigeon four times a year, an informative newsletter about service activities and opportunities throughout the Area.",
   },
   {
     name: "Public Information (PI)",
-    chair: "pi@area36.org",
+    chairName: null,
+    email: "pi@area36.org",
     description:
-      "Carries the A.A. message to the general public through media, public service announcements, and community events, ensuring accurate information about A.A. is available.",
+      "Increases awareness of A.A. in the general public. Also monitors anonymity breaks at the level of press, radio and film.",
+  },
+  {
+    name: "Registrar",
+    chairName: "Justin P.",
+    email: "registrar@area36.org",
+    description:
+      "Maintains an accurate database and mailing list of the groups and trusted servants in the Area. This database is used for mailing lists, the Area Directory, and group listings.",
+  },
+  {
+    name: "Structure",
+    chairName: "Jennifer A.",
+    email: "structure@area36.org",
+    description:
+      "Reviews how the area functions internally on a continual basis. The Alternate Delegate serves as the Structure Committee Chair.",
+  },
+  {
+    name: "Technology",
+    chairName: "Becky N.",
+    email: "technology@area36.org",
+    webmasterName: "Josh G.",
+    webmasterEmail: "webmaster@area36.org",
+    description:
+      "Develops and maintains the Area website, ensuring information is kept current. Addresses technical issues including errors, broken links, and missing documents.",
   },
   {
     name: "Treatment",
-    chair: "treatment@area36.org",
+    chairName: "Brad S.",
+    email: "treatment@area36.org",
+    additionalContacts: [
+      { role: "Temporary Contact Coordinator", name: "Patrick S.", email: "ttcc@area36.org" },
+    ],
     description:
-      "Coordinates A.A. presentations and meetings at treatment facilities and helps residents make contact with A.A. members through Bridging the Gap programs.",
-  },
-  {
-    name: "Website",
-    chair: "webmaster@area36.org",
-    description:
-      "Maintains the Area 36 website, ensuring information is current and accessible. Implements new features and ensures the site meets accessibility standards.",
-  },
-  {
-    name: "Group Records",
-    chair: "grouprecords@area36.org",
-    description:
-      "Maintains accurate records of all registered A.A. groups in Area 36 and coordinates with the General Service Office on group information updates.",
+      "Leads and coordinates the work of A.A. members and groups in carrying the A.A. message to alcoholics in treatment facilities. Manages the Bridging the Gap program through Temporary Contacts.",
   },
 ]
 
@@ -150,8 +194,11 @@ export default function CommitteesPage() {
               {officers.map((officer) => (
                 <Card key={officer.role} className="border-border">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-lg">{officer.role}</CardTitle>
-                    <CardDescription>{officer.name}</CardDescription>
+                    <CardTitle className="text-lg">
+                      {officer.role}
+                      {officer.interim && <span className="text-sm font-normal text-muted-foreground ml-2">(Interim)</span>}
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground">{officer.name}</p>
                   </CardHeader>
                   <CardContent>
                     <p className="text-sm text-muted-foreground mb-4">{officer.description}</p>
@@ -191,19 +238,59 @@ export default function CommitteesPage() {
                   <AccordionTrigger className="hover:no-underline py-4">
                     <div className="flex items-center gap-3 text-left">
                       <Users className="h-5 w-5 text-primary flex-shrink-0" aria-hidden="true" />
-                      <span className="font-semibold text-foreground">{committee.name}</span>
+                      <div>
+                        <span className="font-semibold text-foreground">{committee.name}</span>
+                        {committee.chairName && (
+                          <span className="ml-2 text-sm text-muted-foreground">Chair: {committee.chairName}</span>
+                        )}
+                      </div>
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="pb-4">
                     <div className="pl-8">
                       <p className="text-muted-foreground mb-4">{committee.description}</p>
-                      <Link
-                        href={`mailto:${committee.chair}`}
-                        className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
-                      >
-                        <Mail className="h-4 w-4" aria-hidden="true" />
-                        Contact: {committee.chair}
-                      </Link>
+                      <div className="space-y-2">
+                        <Link
+                          href={`mailto:${committee.email}`}
+                          className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+                        >
+                          <Mail className="h-4 w-4" aria-hidden="true" />
+                          {committee.chairName ? `Chair (${committee.chairName})` : "Contact Committee"}: {committee.email}
+                        </Link>
+                        {committee.archivistName && (
+                          <div>
+                            <Link
+                              href={`mailto:${committee.archivistEmail}`}
+                              className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+                            >
+                              <Mail className="h-4 w-4" aria-hidden="true" />
+                              Area Archivist ({committee.archivistName}): {committee.archivistEmail}
+                            </Link>
+                          </div>
+                        )}
+                        {committee.webmasterName && (
+                          <div>
+                            <Link
+                              href={`mailto:${committee.webmasterEmail}`}
+                              className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+                            >
+                              <Mail className="h-4 w-4" aria-hidden="true" />
+                              Webmaster ({committee.webmasterName}): {committee.webmasterEmail}
+                            </Link>
+                          </div>
+                        )}
+                        {committee.additionalContacts?.map((contact) => (
+                          <div key={contact.email}>
+                            <Link
+                              href={`mailto:${contact.email}`}
+                              className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+                            >
+                              <Mail className="h-4 w-4" aria-hidden="true" />
+                              {contact.role} ({contact.name}): {contact.email}
+                            </Link>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </AccordionContent>
                 </AccordionItem>

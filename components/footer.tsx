@@ -1,5 +1,6 @@
 import Link from "next/link"
-import { Triangle, Mail, MapPin, ExternalLink } from "lucide-react"
+import { Mail, MapPin, ExternalLink } from "lucide-react"
+import { Logo } from "@/components/logo"
 
 const quickLinks = [
   { name: "Find a Meeting", href: "https://www.aa.org/find-aa", external: true },
@@ -27,9 +28,7 @@ export function Footer() {
           {/* Brand */}
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-                <Triangle className="h-5 w-5 text-primary-foreground" aria-hidden="true" />
-              </div>
+              <Logo size="md" />
               <div>
                 <p className="font-semibold text-foreground">Area 36</p>
                 <p className="text-xs text-muted-foreground">Southern Minnesota A.A.</p>

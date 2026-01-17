@@ -1,11 +1,16 @@
+"use client"
+
+import * as React from "react"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
-import { Heart, Mail, MapPin, CreditCard, Building, CheckCircle } from "lucide-react"
+import { Heart, Mail, MapPin, CreditCard, Building, CheckCircle, AlertCircle } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 export default function ContributePage() {
+  const [isAAMember, setIsAAMember] = React.useState<boolean | null>(null)
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
@@ -24,6 +29,75 @@ export default function ContributePage() {
                 Supporting Area 36 through the Seventh Tradition helps carry the message of Alcoholics Anonymous
                 throughout southern Minnesota.
               </p>
+            </div>
+          </div>
+        </section>
+
+        {/* AA Membership Check */}
+        <section className="py-8 sm:py-12 border-b border-border" aria-labelledby="membership-check-heading">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="max-w-2xl mx-auto">
+              {isAAMember === null ? (
+                <Card className="border-primary/20">
+                  <CardHeader className="text-center pb-4">
+                    <CardTitle id="membership-check-heading" className="text-xl">
+                      Before You Contribute
+                    </CardTitle>
+                    <CardDescription className="text-base">
+                      Are you a member of Alcoholics Anonymous?
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex justify-center gap-4">
+                    <Button onClick={() => setIsAAMember(true)} size="lg">
+                      Yes, I am an A.A. member
+                    </Button>
+                    <Button onClick={() => setIsAAMember(false)} variant="outline" size="lg">
+                      No
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : isAAMember === false ? (
+                <Card className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+                  <CardContent className="pt-6">
+                    <div className="flex items-start gap-4">
+                      <AlertCircle className="h-6 w-6 text-amber-600 dark:text-amber-500 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <h3 className="font-semibold text-foreground mb-2">Thank You for Your Interest</h3>
+                        <p className="text-muted-foreground">
+                          Thank you for your interest in supporting Alcoholics Anonymous. However, in keeping with
+                          A.A.&apos;s Seventh Tradition of self-support, we accept contributions only from A.A. members.
+                        </p>
+                        <p className="text-muted-foreground mt-4">
+                          If you or someone you know needs help with a drinking problem, please visit{" "}
+                          <Link href="https://www.aa.org/find-aa" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                            aa.org/find-aa
+                          </Link>{" "}
+                          to find a meeting near you.
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-4"
+                          onClick={() => setIsAAMember(null)}
+                        >
+                          Go Back
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <span>Thank you. Please scroll down to view contribution options.</span>
+                  <button
+                    onClick={() => setIsAAMember(null)}
+                    className="text-primary hover:underline ml-2"
+                  >
+                    Change answer
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </section>

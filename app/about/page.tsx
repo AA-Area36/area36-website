@@ -95,17 +95,17 @@ export default function AboutPage() {
             <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               <StructureCard
                 title="Area Officers"
-                items={["Chair", "Alternate Chair", "Delegate", "Alternate Delegate", "Secretary", "Treasurer"]}
+                items={["Delegate", "Alternate Delegate", "Chair", "Alternate Chair", "Secretary", "Treasurer"]}
                 href="/committees"
               />
               <StructureCard
                 title="Standing Committees"
-                items={["Accessibility", "Archives", "Corrections", "CPC/PI", "Grapevine", "Literature", "Treatment"]}
+                items={["Accessibilities", "Archives", "CPC", "Corrections", "Finance", "Grapevine", "Literature", "Newsletter", "PI", "Registrar", "Structure", "Technology", "Treatment"]}
                 href="/committees"
               />
               <StructureCard
                 title="Districts"
-                items={["15+ Districts", "DCMs", "GSRs", "District Committees"]}
+                items={["26 Geographic Districts", "1 Linguistic District (Spanish)", "DCMs", "GSRs"]}
                 href="/districts"
               />
             </div>
@@ -154,7 +154,7 @@ export default function AboutPage() {
               <p className="mt-6 text-sm text-muted-foreground">
                 To request accommodations for an Area 36 event, please contact the{" "}
                 <Link href="/committees" className="text-primary hover:underline">
-                  Accessibility Committee
+                  Accessibilities Committee
                 </Link>
                 .
               </p>

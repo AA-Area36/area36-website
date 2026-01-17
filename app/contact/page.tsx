@@ -1,11 +1,12 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
+import { useRef, useState, useTransition } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import HCaptcha from "@hcaptcha/react-hcaptcha"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
-import { Mail, MapPin, Send, CheckCircle, Shield } from "lucide-react"
+import { Mail, MapPin, Send, CheckCircle, Shield, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,6 +15,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { contactFormSchema, type ContactFormData } from "@/lib/schemas/contact"
+import { submitContactForm } from "./actions"
 
 const recipients = [
   { value: "general", label: "General Inquiry", email: "chairperson@area36.org" },
@@ -56,25 +59,64 @@ const committees = [
 
 export default function ContactPage() {
   const [submitted, setSubmitted] = useState(false)
-  const [selectedRecipient, setSelectedRecipient] = useState("")
-  const [captchaVerified, setCaptchaVerified] = useState(false)
-  const [captchaAnswer, setCaptchaAnswer] = useState("")
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
+  const captchaRef = useRef<HCaptcha>(null)
 
-  // Simple math CAPTCHA
-  const [captchaNum1] = useState(Math.floor(Math.random() * 10) + 1)
-  const [captchaNum2] = useState(Math.floor(Math.random() * 10) + 1)
-  const correctAnswer = captchaNum1 + captchaNum2
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors },
+  } = useForm<ContactFormData>({
+    resolver: zodResolver(contactFormSchema),
+    defaultValues: {
+      recipient: "",
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      subject: "",
+      message: "",
+      consent: false as unknown as true,
+      hcaptchaToken: "",
+    },
+  })
 
-  const handleCaptchaChange = (value: string) => {
-    setCaptchaAnswer(value)
-    setCaptchaVerified(Number.parseInt(value) === correctAnswer)
+  const selectedRecipient = watch("recipient")
+  const hcaptchaToken = watch("hcaptchaToken")
+
+  const onHCaptchaVerify = (token: string) => {
+    setValue("hcaptchaToken", token, { shouldValidate: true })
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (captchaVerified) {
-      setSubmitted(true)
-    }
+  const onHCaptchaExpire = () => {
+    setValue("hcaptchaToken", "", { shouldValidate: true })
+  }
+
+  const onSubmit = (data: ContactFormData) => {
+    setSubmitError(null)
+
+    startTransition(async () => {
+      const result = await submitContactForm(data)
+
+      if (result.success) {
+        setSubmitted(true)
+      } else {
+        setSubmitError(result.error ?? "An error occurred")
+        captchaRef.current?.resetCaptcha()
+        setValue("hcaptchaToken", "")
+      }
+    })
+  }
+
+  const handleSendAnother = () => {
+    setSubmitted(false)
+    setSubmitError(null)
+    reset()
+    captchaRef.current?.resetCaptcha()
   }
 
   return (
@@ -115,17 +157,26 @@ export default function ContactPage() {
                       {recipients.find((r) => r.value === selectedRecipient)?.label || "recipient"} will get back to you
                       soon.
                     </p>
-                    <Button variant="outline" className="mt-6 bg-transparent" onClick={() => setSubmitted(false)}>
+                    <Button variant="outline" className="mt-6 bg-transparent" onClick={handleSendAnother}>
                       Send Another Message
                     </Button>
                   </div>
                 ) : (
-                  <form onSubmit={handleSubmit} className="space-y-6">
+                  <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                    {submitError && (
+                      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
+                        {submitError}
+                      </div>
+                    )}
+
                     <div className="space-y-2">
                       <Label htmlFor="recipient">
                         Who would you like to contact? <span className="text-destructive">*</span>
                       </Label>
-                      <Select value={selectedRecipient} onValueChange={setSelectedRecipient} required>
+                      <Select
+                        value={selectedRecipient}
+                        onValueChange={(value) => setValue("recipient", value, { shouldValidate: true })}
+                      >
                         <SelectTrigger id="recipient">
                           <SelectValue placeholder="Select a recipient" />
                         </SelectTrigger>
@@ -137,6 +188,9 @@ export default function ContactPage() {
                           ))}
                         </SelectContent>
                       </Select>
+                      {errors.recipient && (
+                        <p className="text-sm text-destructive">{errors.recipient.message}</p>
+                      )}
                       {selectedRecipient && (
                         <p className="text-sm text-muted-foreground">
                           Your message will be sent to: {recipients.find((r) => r.value === selectedRecipient)?.email}
@@ -149,13 +203,19 @@ export default function ContactPage() {
                         <Label htmlFor="firstName">
                           First Name <span className="text-destructive">*</span>
                         </Label>
-                        <Input id="firstName" name="firstName" required />
+                        <Input id="firstName" {...register("firstName")} />
+                        {errors.firstName && (
+                          <p className="text-sm text-destructive">{errors.firstName.message}</p>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="lastName">
                           Last Name <span className="text-destructive">*</span>
                         </Label>
-                        <Input id="lastName" name="lastName" required />
+                        <Input id="lastName" {...register("lastName")} />
+                        {errors.lastName && (
+                          <p className="text-sm text-destructive">{errors.lastName.message}</p>
+                        )}
                       </div>
                     </div>
 
@@ -163,24 +223,35 @@ export default function ContactPage() {
                       <Label htmlFor="email">
                         Email <span className="text-destructive">*</span>
                       </Label>
-                      <Input id="email" name="email" type="email" required />
+                      <Input id="email" type="email" {...register("email")} />
+                      {errors.email && (
+                        <p className="text-sm text-destructive">{errors.email.message}</p>
+                      )}
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="phone">Phone Number</Label>
-                      <Input id="phone" name="phone" type="tel" />
+                      <Input id="phone" type="tel" {...register("phone")} />
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="subject">Subject</Label>
-                      <Input id="subject" name="subject" placeholder="Brief subject line" />
+                      <Label htmlFor="subject">
+                        Subject <span className="text-destructive">*</span>
+                      </Label>
+                      <Input id="subject" placeholder="Brief subject line" {...register("subject")} />
+                      {errors.subject && (
+                        <p className="text-sm text-destructive">{errors.subject.message}</p>
+                      )}
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="message">
                         Message <span className="text-destructive">*</span>
                       </Label>
-                      <Textarea id="message" name="message" rows={5} required className="resize-none" />
+                      <Textarea id="message" rows={5} className="resize-none" {...register("message")} />
+                      {errors.message && (
+                        <p className="text-sm text-destructive">{errors.message.message}</p>
+                      )}
                     </div>
 
                     <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
@@ -189,22 +260,16 @@ export default function ContactPage() {
                         Spam Protection
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="captcha">
-                          What is {captchaNum1} + {captchaNum2}? <span className="text-destructive">*</span>
-                        </Label>
-                        <Input
-                          id="captcha"
-                          name="captcha"
-                          type="number"
-                          value={captchaAnswer}
-                          onChange={(e) => handleCaptchaChange(e.target.value)}
-                          className="max-w-24"
-                          required
+                        <HCaptcha
+                          ref={captchaRef}
+                          sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || ""}
+                          onVerify={onHCaptchaVerify}
+                          onExpire={onHCaptchaExpire}
                         />
-                        {captchaAnswer && !captchaVerified && (
-                          <p className="text-sm text-destructive">Incorrect answer, please try again.</p>
+                        {errors.hcaptchaToken && (
+                          <p className="text-sm text-destructive">{errors.hcaptchaToken.message}</p>
                         )}
-                        {captchaVerified && (
+                        {hcaptchaToken && (
                           <p className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                             <CheckCircle className="h-4 w-4" />
                             Verified
@@ -214,16 +279,34 @@ export default function ContactPage() {
                     </div>
 
                     <div className="flex items-start gap-2">
-                      <Checkbox id="consent" required />
+                      <Checkbox
+                        id="consent"
+                        checked={watch("consent")}
+                        onCheckedChange={(checked) =>
+                          setValue("consent", checked === true ? true : (false as unknown as true), { shouldValidate: true })
+                        }
+                      />
                       <Label htmlFor="consent" className="text-sm text-muted-foreground leading-relaxed">
                         I understand that A.A. is a program of anonymity and that my contact information will be kept
                         confidential.
                       </Label>
                     </div>
+                    {errors.consent && (
+                      <p className="text-sm text-destructive">{errors.consent.message}</p>
+                    )}
 
-                    <Button type="submit" size="lg" className="w-full sm:w-auto" disabled={!captchaVerified}>
-                      <Send className="mr-2 h-4 w-4" aria-hidden="true" />
-                      Send Message
+                    <Button type="submit" size="lg" className="w-full sm:w-auto" disabled={isPending || !hcaptchaToken}>
+                      {isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="mr-2 h-4 w-4" aria-hidden="true" />
+                          Send Message
+                        </>
+                      )}
                     </Button>
                   </form>
                 )}
