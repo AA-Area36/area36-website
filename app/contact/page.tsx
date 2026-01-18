@@ -1,8 +1,9 @@
 "use client"
 
-import { useRef, useState, useTransition } from "react"
+import { useRef, useState, useTransition, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
+import { useTheme } from "next-themes"
 import HCaptcha from "@hcaptcha/react-hcaptcha"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
@@ -61,7 +62,15 @@ export default function ContactPage() {
   const [submitted, setSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [mounted, setMounted] = useState(false)
   const captchaRef = useRef<HCaptcha>(null)
+  const { resolvedTheme } = useTheme()
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  const captchaTheme = mounted ? (resolvedTheme === "dark" ? "dark" : "light") : "light"
 
   const {
     register,
@@ -263,6 +272,7 @@ export default function ContactPage() {
                         <HCaptcha
                           ref={captchaRef}
                           sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || ""}
+                          theme={captchaTheme}
                           onVerify={onHCaptchaVerify}
                           onExpire={onHCaptchaExpire}
                         />

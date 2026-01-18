@@ -7,5 +7,12 @@
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
-  }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "area36-events",
+      "database_id": "646074b4-8660-4ab4-98aa-54511636bc0e"
+    }
+  ]
 }
