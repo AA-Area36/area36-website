@@ -4,6 +4,7 @@ import { HeroSection } from "@/components/hero-section"
 import { EventsPreview } from "@/components/events-preview"
 import { DocumentsSection } from "@/components/documents-section"
 import { CTASection } from "@/components/cta-section"
+import { AffiliatedSites } from "@/components/affiliated-sites"
 
 export default function HomePage() {
   return (
@@ -14,6 +15,7 @@ export default function HomePage() {
         <EventsPreview />
         <DocumentsSection />
         <CTASection />
+        <AffiliatedSites />
       </main>
       <Footer />
     </div>

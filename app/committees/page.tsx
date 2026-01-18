@@ -228,7 +228,7 @@ export default function CommitteesPage() {
               </p>
             </div>
 
-            <Accordion type="single" collapsible className="space-y-4">
+            <Accordion type="single" collapsible className="space-y-4 pb-1">
               {committees.map((committee) => (
                 <AccordionItem
                   key={committee.name}

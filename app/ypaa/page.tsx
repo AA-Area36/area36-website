@@ -169,8 +169,8 @@ export default function YPAAPage() {
                 </p>
                 <div className="flex flex-wrap gap-4">
                   <Button asChild>
-                    <Link href="https://www.aa.org/find-aa" target="_blank" rel="noopener noreferrer">
-                      Find a Meeting
+                    <Link href="https://aaminneapolis.org/meetings/#/?type=young-people-attend" target="_blank" rel="noopener noreferrer">
+                      Minneapolis Area
                       <ExternalLink className="ml-2 h-4 w-4" aria-label="(opens in new tab)" />
                     </Link>
                   </Button>

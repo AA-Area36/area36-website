@@ -10,7 +10,7 @@ const servicePositions = [
     title: "General Service Representative (GSR)",
     description:
       "The GSR is elected by the group to represent its voice in A.A. as a whole. They attend district and area meetings, report back to the group, and help with group inventory.",
-    timeCommitment: "2-year term, monthly meetings",
+    timeCommitment: "Often 1-2 year term, monthly meetings",
   },
   {
     title: "District Committee Member (DCM)",
@@ -35,25 +35,25 @@ const servicePositions = [
 const resources = [
   {
     title: "The A.A. Service Manual",
-    href: "https://www.aa.org/aa-service-manual-twelve-concepts-world-services",
+    href: "https://www.aa.org/aa-service-manualtwelve-concepts-world-services",
     external: true,
     description: "The comprehensive guide to A.A. service",
   },
   {
     title: "Twelve Concepts for World Service",
-    href: "https://www.aa.org/twelve-concepts-world-services",
+    href: "https://www.aa.org/the-twelve-concepts",
     external: true,
     description: "Principles for A.A. service work",
   },
   {
     title: "A.A. Guidelines",
-    href: "https://www.aa.org/aa-guidelines",
+    href: "https://www.aa.org/resources/literature?terms=guidelines",
     external: true,
     description: "Shared experience for various service areas",
   },
   {
     title: "Box 459 Newsletter",
-    href: "https://www.aa.org/box-459-news-and-notes-about-aa-gso",
+    href: "https://www.aa.org/box-459",
     external: true,
     description: "News from GSO",
   },

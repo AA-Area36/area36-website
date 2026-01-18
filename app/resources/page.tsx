@@ -277,7 +277,7 @@ export default function ResourcesPage() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <Link
-                    href="https://www.aa.org/information-professionals"
+                    href="https://www.aa.org/aa-for-professionals"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-2 text-sm text-primary hover:underline"
@@ -286,7 +286,7 @@ export default function ResourcesPage() {
                     <ExternalLink className="h-3 w-3" aria-label="(opens in new tab)" />
                   </Link>
                   <Link
-                    href="https://www.aa.org/sites/default/files/literature/p-42_aamembersMHP.pdf"
+                    href="https://www.aa.org/aa-resource-health-care-professional"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-2 text-sm text-primary hover:underline"
@@ -336,12 +336,12 @@ export default function ResourcesPage() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <Link
-                    href="https://www.aa.org/accessibility"
+                    href="https://www.aa.org/accessibility-resources"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-2 text-sm text-primary hover:underline"
                   >
-                    A.A. Accessibility Statement
+                    A.A. Accessibility Resources
                     <ExternalLink className="h-3 w-3" aria-label="(opens in new tab)" />
                   </Link>
                   <p className="text-sm text-muted-foreground">

@@ -50,7 +50,7 @@ export function CTASection() {
                 Find resources and information here.
               </p>
               <Button asChild variant="outline" className="mt-6 bg-transparent">
-                <Link href="/about#professionals">
+                <Link href="/professionals">
                   View Resources
                   <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
                 </Link>

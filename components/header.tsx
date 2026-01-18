@@ -31,6 +31,8 @@ const navigation = [
       { name: "Documents & Forms", href: "/resources" },
       { name: "Newsletter", href: "/newsletter" },
       { name: "Service Basics", href: "/service" },
+      { name: "For Professionals", href: "/professionals" },
+      { name: "Grapevine & La Viña", href: "/grapevine" },
     ],
   },
   { name: "YPAA", href: "/ypaa" },

@@ -186,7 +186,7 @@ export default function AboutPage() {
                 <ul className="space-y-3" role="list">
                   <li>
                     <Link
-                      href="https://www.aa.org/information-professionals"
+                      href="https://www.aa.org/aa-for-professionals"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-2 text-primary hover:underline"

@@ -3,7 +3,7 @@
 import * as React from "react"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
-import { Heart, Mail, MapPin, CreditCard, Building, CheckCircle, AlertCircle } from "lucide-react"
+import { Heart, Mail, MapPin, CreditCard, CheckCircle, AlertCircle, Info, ExternalLink } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -115,9 +115,27 @@ export default function ContributePage() {
                     The Seventh Tradition
                   </h2>
                 </div>
-                <blockquote className="border-l-4 border-primary pl-4 italic text-lg text-muted-foreground mb-6">
-                  &quot;Every A.A. group ought to be fully self-supporting, declining outside contributions.&quot;
-                </blockquote>
+                <div className="space-y-4 mb-6">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Short Form</p>
+                    <blockquote className="border-l-4 border-primary pl-4 italic text-lg text-muted-foreground">
+                      &quot;Every A.A. group ought to be fully self-supporting, declining outside contributions.&quot;
+                    </blockquote>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Long Form</p>
+                    <blockquote className="border-l-4 border-primary/50 pl-4 italic text-sm text-muted-foreground">
+                      &quot;The A.A. groups themselves ought to be fully supported by the voluntary contributions of
+                      their own members. We think that each group should soon achieve this ideal; that any public
+                      solicitation of funds using the name of Alcoholics Anonymous is highly dangerous, whether by
+                      groups, clubs, hospitals, or other outside agencies; that acceptance of large gifts from any
+                      source, or of contributions carrying any obligation whatever, is unwise. Then too, we view with
+                      much concern those A.A. treasuries which continue, beyond prudent reserves, to accumulate funds
+                      for no stated A.A. purpose. Experience has often warned us that nothing can so surely destroy our
+                      spiritual heritage as futile disputes over property, money, and authority.&quot;
+                    </blockquote>
+                  </div>
+                </div>
                 <div className="prose prose-muted dark:prose-invert max-w-none">
                   <p className="text-muted-foreground leading-relaxed">
                     The Seventh Tradition ensures that A.A. remains independent and free from outside influences. When
@@ -177,7 +195,7 @@ export default function ContributePage() {
                     <div className="flex items-start gap-2">
                       <MapPin className="h-4 w-4 mt-1 flex-shrink-0" aria-hidden="true" />
                       <div>
-                        SMAA
+                        Southern Minnesota Area Assembly
                         <br />
                         P.O. Box 2812
                         <br />
@@ -198,35 +216,68 @@ export default function ContributePage() {
                     <CreditCard className="h-6 w-6" aria-hidden="true" />
                   </div>
                   <CardTitle>Online</CardTitle>
-                  <CardDescription>Contribute securely online via PayPal or card</CardDescription>
+                  <CardDescription>Contribute securely online via PayPal</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    Make a one-time or recurring contribution through our secure online portal.
-                  </p>
-                  <Button className="w-full">Contribute Online</Button>
-                  <p className="text-xs text-muted-foreground text-center">
-                    Secure payment processed by PayPal. No PayPal account required.
-                  </p>
+                  <Button asChild className="w-full">
+                    <Link
+                      href="https://www.paypal.com/donate?token=-CJeteg7cQKEn9zd6-aPJfZIxoxotgX8H3N5Es6yL-QV_e6x_akZ0sFT1arDdazpHB8IkUqaLSXabZem"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Contribute via PayPal
+                    </Link>
+                  </Button>
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground">
+                      Or send directly via PayPal app/website to:
+                    </p>
+                    <p className="text-sm font-medium text-foreground mt-1">
+                      treasurer@area36.org
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-border bg-muted/50 p-3">
+                    <div className="flex items-start gap-2">
+                      <Info className="h-4 w-4 mt-0.5 flex-shrink-0 text-primary" aria-hidden="true" />
+                      <div className="text-xs text-muted-foreground">
+                        <p className="font-medium text-foreground mb-1">In the PayPal notes, please include:</p>
+                        <ul className="list-disc list-inside space-y-0.5">
+                          <li>Type: Group, Individual, Birthday, or Pink Can Plan</li>
+                          <li>Group name and service ID (if group contribution)</li>
+                          <li>For birthday contributions credited to your group, include group info</li>
+                        </ul>
+                        <p className="mt-2">Contributions acknowledged via email unless otherwise indicated.</p>
+                      </div>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
 
-              {/* Bank Transfer */}
+              {/* Pink Can Plan */}
               <Card>
                 <CardHeader>
                   <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary mb-4">
-                    <Building className="h-6 w-6" aria-hidden="true" />
+                    <Heart className="h-6 w-6" aria-hidden="true" />
                   </div>
-                  <CardTitle>Bank Transfer</CardTitle>
-                  <CardDescription>Direct bank transfer or ACH</CardDescription>
+                  <CardTitle>Pink Can Plan</CardTitle>
+                  <CardDescription>Send a check payable to &quot;Pink Can Plan&quot;</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    For bank transfer information, please contact the Area Treasurer.
+                <CardContent>
+                  <address className="not-italic text-muted-foreground leading-relaxed">
+                    <div className="flex items-start gap-2">
+                      <MapPin className="h-4 w-4 mt-1 flex-shrink-0" aria-hidden="true" />
+                      <div>
+                        Pink Can Plan Coordinator
+                        <br />
+                        PO Box 41633
+                        <br />
+                        Plymouth, MN 55441-0633
+                      </div>
+                    </div>
+                  </address>
+                  <p className="text-sm text-muted-foreground mt-4">
+                    The Pink Can Plan is a separate fund dedicated to carrying the A.A. message to those in correctional facilities.
                   </p>
-                  <Button asChild variant="outline" className="w-full bg-transparent">
-                    <Link href="mailto:treasurer@area36.org">Contact Treasurer</Link>
-                  </Button>
                 </CardContent>
               </Card>
             </div>
@@ -279,7 +330,7 @@ export default function ContributePage() {
                 <p className="text-sm text-muted-foreground mt-3">
                   Or contribute online at{" "}
                   <Link
-                    href="https://www.aa.org/contribute"
+                    href="https://contribution.aa.org/"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-primary hover:underline"
@@ -288,6 +339,44 @@ export default function ContributePage() {
                   </Link>
                 </p>
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Resources */}
+        <section className="py-12 sm:py-16 bg-muted/30" aria-labelledby="resources-heading">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <h2 id="resources-heading" className="text-2xl font-bold text-foreground mb-6">
+              Learn More About Self-Support
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Link
+                href="https://www.aa.org/self-support-where-money-and-spirituality-mix"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 hover:bg-muted/50 transition-colors"
+              >
+                <ExternalLink className="h-5 w-5 text-primary flex-shrink-0" aria-hidden="true" />
+                <span className="text-sm font-medium text-foreground">Self-Support: Where Money and Spirituality Mix</span>
+              </Link>
+              <Link
+                href="https://www.aa.org/aa-group-treasurer"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 hover:bg-muted/50 transition-colors"
+              >
+                <ExternalLink className="h-5 w-5 text-primary flex-shrink-0" aria-hidden="true" />
+                <span className="text-sm font-medium text-foreground">The A.A. Group Treasurer</span>
+              </Link>
+              <Link
+                href="https://www.aa.org/seventh-tradition-fact-sheet-your-seventh-tradition-contributions"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 rounded-lg border border-border bg-card p-4 hover:bg-muted/50 transition-colors"
+              >
+                <ExternalLink className="h-5 w-5 text-primary flex-shrink-0" aria-hidden="true" />
+                <span className="text-sm font-medium text-foreground">Your Seventh Tradition Contributions</span>
+              </Link>
             </div>
           </div>
         </section>
