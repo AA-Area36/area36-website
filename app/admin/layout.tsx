@@ -1,7 +1,7 @@
 import { auth, signOut } from "@/lib/auth"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { CalendarDays, LogOut, Shield } from "lucide-react"
+import { CalendarDays, LogOut, Shield, TrendingUp } from "lucide-react"
 
 export default async function AdminLayout({
   children,
@@ -32,6 +32,13 @@ export default async function AdminLayout({
                 >
                   <CalendarDays className="h-4 w-4" />
                   Events
+                </Link>
+                <Link
+                  href="/admin/subscription-drives"
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <TrendingUp className="h-4 w-4" />
+                  Subscription Drives
                 </Link>
               </nav>
             </div>

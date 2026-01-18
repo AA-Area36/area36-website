@@ -92,3 +92,50 @@ export const events = sqliteTable("events", {
 
 export type Event = typeof events.$inferSelect
 export type NewEvent = typeof events.$inferInsert
+
+// Subscription Drives tables
+export const driveSubmissionStatuses = ["pending", "approved", "denied"] as const
+export type DriveSubmissionStatus = (typeof driveSubmissionStatuses)[number]
+
+export const subscriptionDrives = sqliteTable("subscription_drives", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  startDate: text("start_date").notNull(),
+  endDate: text("end_date").notNull(),
+  prizeDescription: text("prize_description"),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+})
+
+export const driveSubmissions = sqliteTable("drive_submissions", {
+  id: text("id").primaryKey(),
+  driveId: text("drive_id").references(() => subscriptionDrives.id),
+  district: text("district").notNull(),
+  subscriptionCount: integer("subscription_count").notNull(),
+  confirmationImageKey: text("confirmation_image_key").notNull(),
+  status: text("status").notNull().default("pending").$type<DriveSubmissionStatus>(),
+  denialReason: text("denial_reason"),
+  submitterContact: text("submitter_contact"),
+  reviewedBy: text("reviewed_by"),
+  reviewedAt: text("reviewed_at"),
+  submittedAt: text("submitted_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+})
+
+export type SubscriptionDrive = typeof subscriptionDrives.$inferSelect
+export type NewSubscriptionDrive = typeof subscriptionDrives.$inferInsert
+export type DriveSubmission = typeof driveSubmissions.$inferSelect
+export type NewDriveSubmission = typeof driveSubmissions.$inferInsert

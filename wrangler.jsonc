@@ -14,5 +14,11 @@
       "database_name": "area36-events",
       "database_id": "646074b4-8660-4ab4-98aa-54511636bc0e"
     }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "DRIVE_IMAGES",
+      "bucket_name": "area36-drive-confirmations"
+    }
   ]
 }
