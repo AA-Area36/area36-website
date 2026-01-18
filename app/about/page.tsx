@@ -208,7 +208,7 @@ export default function AboutPage() {
                   </li>
                   <li>
                     <Link
-                      href="/resources#professionals"
+                      href="/professionals"
                       className="flex items-center gap-2 text-primary hover:underline"
                     >
                       Area 36 Resources for Professionals

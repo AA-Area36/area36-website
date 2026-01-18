@@ -3,6 +3,7 @@ import { Footer } from "@/components/footer"
 import { HeroSection } from "@/components/hero-section"
 import { EventsPreview } from "@/components/events-preview"
 import { DocumentsSection } from "@/components/documents-section"
+import { TCPHighlight } from "@/components/tcp-highlight"
 import { CTASection } from "@/components/cta-section"
 import { AffiliatedSites } from "@/components/affiliated-sites"
 
@@ -13,6 +14,7 @@ export default function HomePage() {
       <main id="main-content" className="flex-1">
         <HeroSection />
         <EventsPreview />
+        <TCPHighlight />
         <DocumentsSection />
         <CTASection />
         <AffiliatedSites />

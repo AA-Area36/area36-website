@@ -213,6 +213,18 @@ export default function ResourcesPage() {
                   <p className="text-muted-foreground mt-1">
                     General Service Conference background and related materials.
                   </p>
+                  <div className="mt-4 p-4 rounded-lg bg-primary/5 border border-primary/20">
+                    <h3 className="text-sm font-semibold text-foreground mb-2">
+                      What is the General Service Conference?
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      The General Service Conference is the annual meeting where delegates from all 93 areas in the U.S.
+                      and Canada come together to discuss matters affecting A.A. as a whole. The Conference acts as the
+                      voice and conscience of the fellowship, making recommendations on policy, literature, and services.
+                      Each year, Area 36&apos;s Delegate attends the Conference and brings back information to share with
+                      groups throughout southern Minnesota.
+                    </p>
+                  </div>
                   <div className="mt-4 p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
                     <div className="flex items-start gap-3">
                       <Lock className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
@@ -294,8 +306,8 @@ export default function ResourcesPage() {
                     A.A. as a Resource for Healthcare
                     <ExternalLink className="h-3 w-3" aria-label="(opens in new tab)" />
                   </Link>
-                  <Link href="/committees" className="flex items-center gap-2 text-sm text-primary hover:underline">
-                    Contact CPC Committee →
+                  <Link href="/professionals" className="flex items-center gap-2 text-sm text-primary hover:underline">
+                    Area 36 Resources for Professionals →
                   </Link>
                 </CardContent>
               </Card>
@@ -316,11 +328,14 @@ export default function ResourcesPage() {
                     Help newcomers make their first meeting by becoming a temporary contact or requesting a contact for
                     someone you know.
                   </p>
-                  <Link href="/committees" className="flex items-center gap-2 text-sm text-primary hover:underline">
-                    Contact Treatment Committee →
+                  <Link href="/temporary-contact" className="flex items-center gap-2 text-sm text-primary hover:underline">
+                    Learn About TCP →
                   </Link>
-                  <Link href="/committees" className="flex items-center gap-2 text-sm text-primary hover:underline">
-                    Contact Corrections Committee →
+                  <Link href="/temporary-contact/treatment" className="flex items-center gap-2 text-sm text-primary hover:underline">
+                    Treatment TCP →
+                  </Link>
+                  <Link href="/temporary-contact/corrections" className="flex items-center gap-2 text-sm text-primary hover:underline">
+                    Corrections TCP →
                   </Link>
                 </CardContent>
               </Card>
