@@ -363,9 +363,11 @@ export function EventsClient({ events }: EventsClientProps) {
         setIsSubmitting(false)
         return
       }
+      console.log("Executing reCAPTCHA for event...")
       const recaptchaToken = await executeRecaptcha("submit_event")
+      console.log("reCAPTCHA token received:", recaptchaToken ? "yes" : "no")
 
-      const formData = new FormData(e.currentTarget)
+      const formData = new FormData(formRef.current!)
       const data = {
         title: formData.get("eventTitle") as string,
         date: formData.get("eventDate") as string,
@@ -384,6 +386,7 @@ export function EventsClient({ events }: EventsClientProps) {
       }
 
       const result = await submitEvent(data)
+      console.log("Server result:", result)
 
       if (result.success) {
         // Reset form but keep the success message visible
@@ -398,8 +401,9 @@ export function EventsClient({ events }: EventsClientProps) {
           setFieldErrors(result.fieldErrors)
         }
       }
-    } catch {
-      setSubmitMessage({ type: "error", text: "reCAPTCHA verification failed. Please try again." })
+    } catch (error) {
+      console.error("Event submission error:", error)
+      setSubmitMessage({ type: "error", text: `Error: ${error instanceof Error ? error.message : "Unknown error"}` })
     }
 
     setIsSubmitting(false)
