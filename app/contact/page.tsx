@@ -116,6 +116,8 @@ function ContactForm() {
         }
       } catch {
         setSubmitError("reCAPTCHA verification failed. Please try again.")
+        window.grecaptcha?.reset?.()
+        window.grecaptcha?.execute?.(process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!, { action: "contact_form" })
       }
     })
   }, [executeRecaptcha])

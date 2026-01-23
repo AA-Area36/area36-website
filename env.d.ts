@@ -10,6 +10,13 @@ declare global {
       NEXT_PUBLIC_RECAPTCHA_SITE_KEY: string
     }
   }
+
+  interface Window {
+    grecaptcha?: {
+      reset?: () => void
+      execute?: (siteKey: string, options: { action: string }) => Promise<string>
+    }
+  }
 }
 
 // Cloudflare environment bindings
