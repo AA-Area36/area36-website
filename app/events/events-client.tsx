@@ -160,6 +160,16 @@ export function EventsClient({ events }: EventsClientProps) {
   const [selectedTimezone, setSelectedTimezone] = React.useState(DEFAULT_TIMEZONE)
   const [locationType, setLocationType] = React.useState<LocationType>("in-person")
   const tabsRef = React.useRef<HTMLDivElement>(null)
+  const formRef = React.useRef<HTMLFormElement>(null)
+
+  // Reset form to initial state
+  const resetForm = React.useCallback(() => {
+    formRef.current?.reset()
+    setSubmitMessage(null)
+    setFieldErrors({})
+    setSelectedTimezone(DEFAULT_TIMEZONE)
+    setLocationType("in-person")
+  }, [])
 
   // Detect user timezone
   React.useEffect(() => {
@@ -302,11 +312,12 @@ export function EventsClient({ events }: EventsClientProps) {
       const result = await submitEvent(data)
 
       if (result.success) {
-        setSubmitMessage({ type: "success", text: result.message! })
+        // Reset form but keep the success message visible
+        formRef.current?.reset()
         setFieldErrors({})
-        ;(e.target as HTMLFormElement).reset()
         setSelectedTimezone(DEFAULT_TIMEZONE)
         setLocationType("in-person")
+        setSubmitMessage({ type: "success", text: result.message! })
       } else {
         setSubmitMessage({ type: "error", text: result.error! })
         if (result.fieldErrors) {
@@ -422,11 +433,11 @@ export function EventsClient({ events }: EventsClientProps) {
 
                 {/* Submit Event Dialog */}
                 <Dialog open={submitDialogOpen} onOpenChange={(open) => {
-                  setSubmitDialogOpen(open)
-                  if (!open) {
-                    setSubmitMessage(null)
-                    setFieldErrors({})
+                  if (open) {
+                    // Reset form when opening to clear any previous state
+                    resetForm()
                   }
+                  setSubmitDialogOpen(open)
                 }}>
                   <DialogTrigger asChild>
                     <Button>
@@ -455,7 +466,7 @@ export function EventsClient({ events }: EventsClientProps) {
                         </Button>
                       </div>
                     ) : (
-                      <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+                      <form ref={formRef} onSubmit={handleSubmit} className="space-y-4 mt-4">
                         {submitMessage?.type === "error" && (
                           <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
                             {submitMessage.text}
@@ -571,7 +582,6 @@ export function EventsClient({ events }: EventsClientProps) {
                               id="eventAddress"
                               name="eventAddress"
                               placeholder="e.g., 123 Main St, City, MN 55555"
-                              required
                               aria-invalid={!!fieldErrors.address}
                             />
                             {fieldErrors.address ? (
@@ -586,7 +596,7 @@ export function EventsClient({ events }: EventsClientProps) {
                         {(locationType === "hybrid" || locationType === "online") && (
                           <div className="space-y-2">
                             <Label htmlFor="eventMeetingLink">
-                              Meeting Link {locationType === "online" ? "" : "(Optional)"}
+                              Meeting Link *
                             </Label>
                             <Input
                               id="eventMeetingLink"

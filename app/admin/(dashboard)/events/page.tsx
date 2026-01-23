@@ -31,6 +31,7 @@ function formatEventLocation(event: Event) {
 }
 import { approveEvent, deleteEvent } from "./actions"
 import { DenyEventDialog } from "./deny-event-dialog"
+import { EditEventDialog } from "./edit-event-dialog"
 import { formatTimeRange } from "@/lib/timezone"
 
 export const dynamic = "force-dynamic"
@@ -257,7 +258,7 @@ function EventCard({
           </div>
 
           <div className="flex flex-col gap-2 lg:min-w-32">
-            {showActions ? (
+            {showActions && (
               <>
                 <form action={approveEvent.bind(null, event.id)}>
                   <Button type="submit" size="sm" className="w-full">
@@ -267,14 +268,14 @@ function EventCard({
                 </form>
                 <DenyEventDialog eventId={event.id} eventTitle={event.title} />
               </>
-            ) : (
-              <form action={deleteEvent.bind(null, event.id)}>
-                <Button type="submit" variant="ghost" size="sm" className="w-full text-destructive hover:text-destructive">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete
-                </Button>
-              </form>
             )}
+            <EditEventDialog event={event} />
+            <form action={deleteEvent.bind(null, event.id)}>
+              <Button type="submit" variant="ghost" size="sm" className="w-full text-destructive hover:text-destructive">
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </Button>
+            </form>
           </div>
         </div>
       </CardContent>

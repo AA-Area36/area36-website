@@ -17,6 +17,25 @@ interface ReCaptchaResponse {
 
 const RECAPTCHA_SCORE_THRESHOLD = 0.5
 
+/**
+ * Get reCAPTCHA secret key from Cloudflare context or process.env
+ */
+async function getRecaptchaSecretKey(): Promise<string | undefined> {
+  // Try Cloudflare context first (for deployed environment)
+  try {
+    const { getCloudflareContext } = await import("@opennextjs/cloudflare")
+    const { env } = await getCloudflareContext({ async: true })
+    if (env.RECAPTCHA_SECRET_KEY) {
+      return env.RECAPTCHA_SECRET_KEY
+    }
+  } catch {
+    // Not in Cloudflare environment
+  }
+
+  // Fall back to process.env (for local development)
+  return process.env.RECAPTCHA_SECRET_KEY
+}
+
 export async function getActiveDrive(): Promise<SubscriptionDrive | null> {
   const db = await getDb()
   const [drive] = await db
@@ -121,7 +140,7 @@ export async function submitDriveConfirmation(formData: FormData) {
     }
 
     // Verify reCAPTCHA token
-    const secretKey = process.env.RECAPTCHA_SECRET_KEY
+    const secretKey = await getRecaptchaSecretKey()
     if (!secretKey) {
       console.error("RECAPTCHA_SECRET_KEY is not configured")
       return {

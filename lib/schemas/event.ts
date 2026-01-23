@@ -7,36 +7,55 @@ const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/
 // This checks for common address patterns like "123 Main St" or "1234 W Broadway Ave"
 const addressRegex = /^\d+\s+[\w\s]+(\s+(St|Street|Ave|Avenue|Blvd|Boulevard|Dr|Drive|Rd|Road|Ln|Lane|Way|Ct|Court|Pl|Place|Cir|Circle|Hwy|Highway|Pkwy|Parkway)\.?)?(,?\s+[\w\s]+)*(,?\s+\w{2}\s+\d{5}(-\d{4})?)?$/i
 
+// Helper to handle optional URL fields - empty string becomes undefined
+const optionalUrl = z.preprocess(
+  (val) => (val === "" || val === null ? undefined : val),
+  z.string().url("Please enter a valid URL").optional()
+)
+
+// Helper to handle optional string fields - empty string becomes undefined  
+const optionalString = z.preprocess(
+  (val) => (val === "" || val === null ? undefined : val),
+  z.string().optional()
+)
+
 export const eventSubmissionSchema = z.object({
   title: z.string().min(1, "Title is required").max(200, "Title must be 200 characters or less"),
   date: z.string().min(1, "Date is required"),
-  endDate: z.string().optional(),
+  endDate: optionalString,
   startTime: z.string()
     .min(1, "Start time is required")
     .regex(timeRegex, "Please enter a valid time (HH:MM)"),
-  endTime: z.string()
-    .regex(timeRegex, "Please enter a valid time (HH:MM)")
-    .optional()
-    .or(z.literal("")),
+  endTime: z.preprocess(
+    (val) => (val === "" || val === null ? undefined : val),
+    z.string().regex(timeRegex, "Please enter a valid time (HH:MM)").optional()
+  ),
   timezone: z.string().min(1, "Timezone is required"),
   locationType: z.enum(locationTypes, { errorMap: () => ({ message: "Please select a location type" }) }),
-  address: z.string().max(500, "Address must be 500 characters or less").optional().or(z.literal("")),
-  meetingLink: z.string().url("Please enter a valid URL").optional().or(z.literal("")),
+  address: z.preprocess(
+    (val) => (val === "" || val === null ? undefined : val),
+    z.string().max(500, "Address must be 500 characters or less").optional()
+  ),
+  meetingLink: optionalUrl,
   description: z.string().min(10, "Description must be at least 10 characters").max(2000, "Description must be 2000 characters or less"),
   type: z.enum(eventTypes, { errorMap: () => ({ message: "Please select a valid event type" }) }),
   submitterEmail: z.string().email("Please enter a valid email address"),
-  flyerUrl: z.string().url("Please enter a valid URL").optional().or(z.literal("")),
+  flyerUrl: optionalUrl,
   recaptchaToken: z.string().min(1, "reCAPTCHA verification failed"),
 }).refine(
   (data) => {
-    // If both start and end time are provided, end must be after start
+    // If both start and end time are provided on the SAME day, end must be after start
+    // For multi-day events (endDate > date), end time can be before start time
     if (data.startTime && data.endTime) {
-      return data.endTime > data.startTime
+      const isSameDay = !data.endDate || data.endDate === data.date
+      if (isSameDay) {
+        return data.endTime > data.startTime
+      }
     }
     return true
   },
   {
-    message: "End time must be after start time",
+    message: "End time must be after start time for same-day events",
     path: ["endTime"],
   }
 ).refine(
@@ -62,6 +81,18 @@ export const eventSubmissionSchema = z.object({
   {
     message: "Please enter a valid address (e.g., 123 Main St, City, MN 55555)",
     path: ["address"],
+  }
+).refine(
+  (data) => {
+    // Meeting link is required for online and hybrid events
+    if (data.locationType === "online" || data.locationType === "hybrid") {
+      return !!data.meetingLink && data.meetingLink.trim().length > 0
+    }
+    return true
+  },
+  {
+    message: "Meeting link is required for online and hybrid events",
+    path: ["meetingLink"],
   }
 )
 
