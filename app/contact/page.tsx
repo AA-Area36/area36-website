@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useCallback } from "react"
+import { useState, useTransition, useCallback, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { GoogleReCaptchaProvider, useGoogleReCaptcha } from "react-google-recaptcha-v3"
@@ -89,35 +89,44 @@ function ContactForm() {
 
   const selectedRecipient = watch("recipient")
 
+  useEffect(() => {
+    console.log("reCAPTCHA site key:", process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY)
+    console.log("executeRecaptcha available:", !!executeRecaptcha)
+    
+    if (executeRecaptcha) {
+      executeRecaptcha("page_load").then(token => {
+        console.log("reCAPTCHA token on load:", token)
+      }).catch(err => {
+        console.error("reCAPTCHA error on load:", err)
+      })
+    }
+  }, [executeRecaptcha])
+
   const onSubmit = useCallback(async (data: ContactFormData) => {
     setSubmitError(null)
 
-    const isDev = process.env.NODE_ENV === "development"
-
     startTransition(async () => {
       try {
-        // Skip reCAPTCHA in development, execute in production
-        let token = "dev-bypass"
-        if (!isDev) {
-          if (!executeRecaptcha) {
-            setSubmitError("reCAPTCHA not loaded. Please refresh and try again.")
-            return
-          }
-          token = await executeRecaptcha("contact_form")
+        if (!executeRecaptcha) {
+          setSubmitError("reCAPTCHA not loaded. Please refresh and try again.")
+          return
         }
+        console.log("Executing reCAPTCHA...")
+        const token = await executeRecaptcha("contact_form")
+        console.log("reCAPTCHA token received:", token ? "yes" : "no")
         
         // Submit form with token
         const result = await submitContactForm({ ...data, recaptchaToken: token })
+        console.log("Server result:", result)
 
         if (result.success) {
           setSubmitted(true)
         } else {
           setSubmitError(result.error ?? "An error occurred")
         }
-      } catch {
-        setSubmitError("reCAPTCHA verification failed. Please try again.")
-        window.grecaptcha?.reset?.()
-        window.grecaptcha?.execute?.(process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!, { action: "contact_form" })
+      } catch (error) {
+        console.error("Form submission error:", error)
+        setSubmitError(`reCAPTCHA error: ${error instanceof Error ? error.message : "Unknown error"}`)
       }
     })
   }, [executeRecaptcha])

@@ -14,7 +14,7 @@ export const driveSubmissionSchema = z.object({
   privacyAcknowledged: z.literal(true, {
     errorMap: () => ({ message: "Please acknowledge the privacy notice" }),
   }),
-  recaptchaToken: z.string().min(1, "reCAPTCHA verification failed"),
+  recaptchaToken: z.string(),
 })
 
 export type DriveSubmissionData = z.infer<typeof driveSubmissionSchema>

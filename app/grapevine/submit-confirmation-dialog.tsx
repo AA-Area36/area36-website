@@ -81,19 +81,13 @@ export function SubmitConfirmationDialog() {
       return
     }
 
-    const isDev = process.env.NODE_ENV === "development"
-
     startTransition(async () => {
       try {
-        // Skip reCAPTCHA in development, execute in production
-        let recaptchaToken = "dev-bypass"
-        if (!isDev) {
-          if (!executeRecaptcha) {
-            setError("reCAPTCHA not loaded. Please refresh and try again.")
-            return
-          }
-          recaptchaToken = await executeRecaptcha("submit_drive_confirmation")
+        if (!executeRecaptcha) {
+          setError("reCAPTCHA not loaded. Please refresh and try again.")
+          return
         }
+        const recaptchaToken = await executeRecaptcha("submit_drive_confirmation")
 
         const submitData = new FormData()
         submitData.append("district", formData.district)
@@ -111,8 +105,6 @@ export function SubmitConfirmationDialog() {
         }
       } catch {
         setError("reCAPTCHA verification failed. Please try again.")
-        window.grecaptcha?.reset?.()
-        window.grecaptcha?.execute?.(process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!, { action: "submit_drive_confirmation" })
       }
     })
   }

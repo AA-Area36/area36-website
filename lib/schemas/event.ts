@@ -41,7 +41,7 @@ export const eventSubmissionSchema = z.object({
   type: z.enum(eventTypes, { errorMap: () => ({ message: "Please select a valid event type" }) }),
   submitterEmail: z.string().email("Please enter a valid email address"),
   flyerUrl: optionalUrl,
-  recaptchaToken: z.string().min(1, "reCAPTCHA verification failed"),
+  recaptchaToken: z.string(),
 }).refine(
   (data) => {
     // If both start and end time are provided on the SAME day, end must be after start

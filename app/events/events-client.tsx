@@ -357,19 +357,13 @@ export function EventsClient({ events }: EventsClientProps) {
     setSubmitMessage(null)
     setFieldErrors({})
 
-    const isDev = process.env.NODE_ENV === "development"
-
     try {
-      // Skip reCAPTCHA in development, execute in production
-      let recaptchaToken = "dev-bypass"
-      if (!isDev) {
-        if (!executeRecaptcha) {
-          setSubmitMessage({ type: "error", text: "reCAPTCHA not loaded. Please refresh and try again." })
-          setIsSubmitting(false)
-          return
-        }
-        recaptchaToken = await executeRecaptcha("submit_event")
+      if (!executeRecaptcha) {
+        setSubmitMessage({ type: "error", text: "reCAPTCHA not loaded. Please refresh and try again." })
+        setIsSubmitting(false)
+        return
       }
+      const recaptchaToken = await executeRecaptcha("submit_event")
 
       const formData = new FormData(e.currentTarget)
       const data = {
@@ -406,8 +400,6 @@ export function EventsClient({ events }: EventsClientProps) {
       }
     } catch {
       setSubmitMessage({ type: "error", text: "reCAPTCHA verification failed. Please try again." })
-      window.grecaptcha?.reset?.()
-      window.grecaptcha?.execute?.(process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!, { action: "submit_event" })
     }
 
     setIsSubmitting(false)
