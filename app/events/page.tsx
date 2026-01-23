@@ -31,11 +31,10 @@ async function getApprovedEvents() {
 
 export default async function EventsPage() {
   const approvedEvents = await getApprovedEvents()
-  const hcaptchaSiteKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || ""
 
   return (
     <Suspense fallback={<EventsLoading />}>
-      <EventsClient events={approvedEvents} hcaptchaSiteKey={hcaptchaSiteKey} />
+      <EventsClient events={approvedEvents} />
     </Suspense>
   )
 }

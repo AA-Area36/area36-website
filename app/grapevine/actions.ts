@@ -6,10 +6,16 @@ import { uploadImage } from "@/lib/r2"
 import { eq, and, desc } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 
-interface HCaptchaResponse {
+interface ReCaptchaResponse {
   success: boolean
+  score?: number
+  action?: string
+  challenge_ts?: string
+  hostname?: string
   "error-codes"?: string[]
 }
+
+const RECAPTCHA_SCORE_THRESHOLD = 0.5
 
 export async function getActiveDrive(): Promise<SubscriptionDrive | null> {
   const db = await getDb()
@@ -78,7 +84,7 @@ export async function submitDriveConfirmation(formData: FormData) {
   const subscriptionCount = parseInt(formData.get("subscriptionCount") as string, 10)
   const submitterContact = formData.get("submitterContact") as string | null
   const privacyAcknowledged = formData.get("privacyAcknowledged") === "true"
-  const hcaptchaToken = formData.get("hcaptchaToken") as string
+  const recaptchaToken = formData.get("recaptchaToken") as string
   const confirmationImage = formData.get("confirmationImage") as File | null
 
   // Basic validation
@@ -103,45 +109,67 @@ export async function submitDriveConfirmation(formData: FormData) {
     }
   }
 
-  if (!hcaptchaToken) {
-    return {
-      success: false,
-      error: "Please complete the captcha.",
-    }
-  }
+  // Skip reCAPTCHA verification on localhost
+  const isLocalhost = process.env.NODE_ENV === "development"
 
-  // Verify hCaptcha token
-  const secretKey = process.env.HCAPTCHA_SECRET_KEY
-  if (!secretKey) {
-    console.error("HCAPTCHA_SECRET_KEY is not configured")
-    return {
-      success: false,
-      error: "Server configuration error. Please try again later.",
+  if (!isLocalhost) {
+    if (!recaptchaToken) {
+      return {
+        success: false,
+        error: "reCAPTCHA verification failed. Please try again.",
+      }
+    }
+
+    // Verify reCAPTCHA token
+    const secretKey = process.env.RECAPTCHA_SECRET_KEY
+    if (!secretKey) {
+      console.error("RECAPTCHA_SECRET_KEY is not configured")
+      return {
+        success: false,
+        error: "Server configuration error. Please try again later.",
+      }
+    }
+
+    try {
+      const verifyResponse = await fetch("https://www.google.com/recaptcha/api/siteverify", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          secret: secretKey,
+          response: recaptchaToken,
+        }),
+      })
+
+      const verifyResult: ReCaptchaResponse = await verifyResponse.json()
+
+      if (!verifyResult.success) {
+        console.error("reCAPTCHA verification failed:", verifyResult["error-codes"])
+        return {
+          success: false,
+          error: "reCAPTCHA verification failed. Please try again.",
+        }
+      }
+
+      // Check the score (v3 returns a score from 0.0 to 1.0)
+      if (verifyResult.score !== undefined && verifyResult.score < RECAPTCHA_SCORE_THRESHOLD) {
+        console.warn("reCAPTCHA score too low:", verifyResult.score)
+        return {
+          success: false,
+          error: "Suspicious activity detected. Please try again or contact us directly.",
+        }
+      }
+    } catch (error) {
+      console.error("reCAPTCHA verification error:", error)
+      return {
+        success: false,
+        error: "reCAPTCHA verification failed. Please try again.",
+      }
     }
   }
 
   try {
-    const verifyResponse = await fetch("https://api.hcaptcha.com/siteverify", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        secret: secretKey,
-        response: hcaptchaToken,
-      }),
-    })
-
-    const verifyResult: HCaptchaResponse = await verifyResponse.json()
-
-    if (!verifyResult.success) {
-      console.error("hCaptcha verification failed:", verifyResult["error-codes"])
-      return {
-        success: false,
-        error: "Captcha verification failed. Please try again.",
-      }
-    }
-
     // Get active drive
     const activeDrive = await getActiveDrive()
     if (!activeDrive) {

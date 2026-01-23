@@ -1,8 +1,7 @@
 "use client"
 
-import { useRef, useState, useTransition, useEffect } from "react"
-import { useTheme } from "next-themes"
-import HCaptcha from "@hcaptcha/react-hcaptcha"
+import { useRef, useState, useTransition } from "react"
+import { useGoogleReCaptcha } from "react-google-recaptcha-v3"
 import {
   Dialog,
   DialogContent,
@@ -24,35 +23,18 @@ import { submitDriveConfirmation } from "./actions"
 export function SubmitConfirmationDialog() {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
-  const [mounted, setMounted] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
-  const captchaRef = useRef<HCaptcha>(null)
-  const { resolvedTheme } = useTheme()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { executeRecaptcha } = useGoogleReCaptcha()
 
   const [formData, setFormData] = useState({
     district: "",
     subscriptionCount: "",
     submitterContact: "",
     privacyAcknowledged: false,
-    hcaptchaToken: "",
   })
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  const captchaTheme = mounted ? (resolvedTheme === "dark" ? "dark" : "light") : "light"
-
-  const handleHCaptchaVerify = (token: string) => {
-    setFormData((prev) => ({ ...prev, hcaptchaToken: token }))
-  }
-
-  const handleHCaptchaExpire = () => {
-    setFormData((prev) => ({ ...prev, hcaptchaToken: "" }))
-  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -75,7 +57,7 @@ export function SubmitConfirmationDialog() {
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
 
@@ -99,27 +81,36 @@ export function SubmitConfirmationDialog() {
       return
     }
 
-    if (!formData.hcaptchaToken) {
-      setError("Please complete the captcha.")
-      return
-    }
-
-    const submitData = new FormData()
-    submitData.append("district", formData.district)
-    submitData.append("subscriptionCount", formData.subscriptionCount)
-    submitData.append("submitterContact", formData.submitterContact)
-    submitData.append("privacyAcknowledged", String(formData.privacyAcknowledged))
-    submitData.append("hcaptchaToken", formData.hcaptchaToken)
-    submitData.append("confirmationImage", selectedFile)
+    const isDev = process.env.NODE_ENV === "development"
 
     startTransition(async () => {
-      const result = await submitDriveConfirmation(submitData)
-      if (result.success) {
-        setSuccess(true)
-      } else {
-        setError(result.error ?? "An error occurred")
-        captchaRef.current?.resetCaptcha()
-        setFormData((prev) => ({ ...prev, hcaptchaToken: "" }))
+      try {
+        // Skip reCAPTCHA in development, execute in production
+        let recaptchaToken = "dev-bypass"
+        if (!isDev) {
+          if (!executeRecaptcha) {
+            setError("reCAPTCHA not loaded. Please refresh and try again.")
+            return
+          }
+          recaptchaToken = await executeRecaptcha("submit_drive_confirmation")
+        }
+
+        const submitData = new FormData()
+        submitData.append("district", formData.district)
+        submitData.append("subscriptionCount", formData.subscriptionCount)
+        submitData.append("submitterContact", formData.submitterContact)
+        submitData.append("privacyAcknowledged", String(formData.privacyAcknowledged))
+        submitData.append("recaptchaToken", recaptchaToken)
+        submitData.append("confirmationImage", selectedFile!)
+
+        const result = await submitDriveConfirmation(submitData)
+        if (result.success) {
+          setSuccess(true)
+        } else {
+          setError(result.error ?? "An error occurred")
+        }
+      } catch {
+        setError("reCAPTCHA verification failed. Please try again.")
       }
     })
   }
@@ -133,12 +124,10 @@ export function SubmitConfirmationDialog() {
         subscriptionCount: "",
         submitterContact: "",
         privacyAcknowledged: false,
-        hcaptchaToken: "",
       })
       setSelectedFile(null)
       setError(null)
       setSuccess(false)
-      captchaRef.current?.resetCaptcha()
     }
   }
 
@@ -274,25 +263,10 @@ export function SubmitConfirmationDialog() {
                 </Label>
               </div>
 
-              <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
-                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <div className="rounded-lg border border-border bg-muted/30 p-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Shield className="h-4 w-4 text-primary" />
-                  Spam Protection
-                </div>
-                <div className="space-y-2">
-                  <HCaptcha
-                    ref={captchaRef}
-                    sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || ""}
-                    theme={captchaTheme}
-                    onVerify={handleHCaptchaVerify}
-                    onExpire={handleHCaptchaExpire}
-                  />
-                  {formData.hcaptchaToken && (
-                    <p className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                      <CheckCircle className="h-4 w-4" />
-                      Verified
-                    </p>
-                  )}
+                  <span>This form is protected by Google reCAPTCHA v3.</span>
                 </div>
               </div>
             </div>
@@ -300,7 +274,7 @@ export function SubmitConfirmationDialog() {
               <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={isPending}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isPending || !formData.hcaptchaToken}>
+              <Button type="submit" disabled={isPending}>
                 {isPending ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />

@@ -2,16 +2,14 @@
 
 import * as React from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useTheme } from "next-themes"
-import HCaptcha from "@hcaptcha/react-hcaptcha"
+import { useGoogleReCaptcha } from "react-google-recaptcha-v3"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
-import { Calendar, MapPin, Clock, ExternalLink, List, CalendarDays, Search, Plus, X, Video, Globe } from "lucide-react"
+import { Calendar, MapPin, Clock, ExternalLink, Search, Plus, X, Video, Globe, HelpCircle } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
@@ -95,17 +93,24 @@ const eventTypeColors: Record<string, string> = {
   District: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
 }
 
+// Parse date string as local date to avoid timezone issues
+// "2025-01-15" should be Jan 15, not Jan 14 (which happens when parsed as UTC)
+function parseLocalDate(dateString: string): Date {
+  const [year, month, day] = dateString.substring(0, 10).split("-").map(Number)
+  return new Date(year, month - 1, day)
+}
+
 function formatDate(dateString: string) {
-  const date = new Date(dateString)
+  const date = parseLocalDate(dateString)
   return date.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
 }
 
 function formatDateRange(start: string, end?: string | null) {
-  const startDate = new Date(start)
+  const startDate = parseLocalDate(start)
   if (!end) {
     return formatDate(start)
   }
-  const endDate = new Date(end)
+  const endDate = parseLocalDate(end)
   const startMonth = startDate.toLocaleDateString("en-US", { month: "long" })
   const endMonth = endDate.toLocaleDateString("en-US", { month: "long" })
 
@@ -126,22 +131,20 @@ const eventTypeOptions = eventTypes
 
 interface EventsClientProps {
   events: Event[]
-  hcaptchaSiteKey: string
 }
 
-export function EventsClient({ events, hcaptchaSiteKey }: EventsClientProps) {
+export function EventsClient({ events }: EventsClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { resolvedTheme } = useTheme()
+  const { executeRecaptcha } = useGoogleReCaptcha()
 
   // Get initial values from URL
   const initialSearch = searchParams.get("q") || ""
   const initialTypes = searchParams.get("types")?.split(",").filter(Boolean) || []
-  const initialView = searchParams.get("view") || "list"
   const initialDateFrom = searchParams.get("from")
   const initialDateTo = searchParams.get("to")
   const initialDateRange: DateRange | undefined = initialDateFrom
-    ? { from: new Date(initialDateFrom), to: initialDateTo ? new Date(initialDateTo) : undefined }
+    ? { from: parseLocalDate(initialDateFrom), to: initialDateTo ? parseLocalDate(initialDateTo) : undefined }
     : undefined
 
   const [searchQuery, setSearchQuery] = React.useState(initialSearch)
@@ -149,34 +152,27 @@ export function EventsClient({ events, hcaptchaSiteKey }: EventsClientProps) {
   const [dateRange, setDateRange] = React.useState<DateRange | undefined>(initialDateRange)
   const [currentMonth, setCurrentMonth] = React.useState(new Date())
   const [submitDialogOpen, setSubmitDialogOpen] = React.useState(false)
-  const [activeView, setActiveView] = React.useState(initialView)
+  const [instructionsDialogOpen, setInstructionsDialogOpen] = React.useState(false)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [submitMessage, setSubmitMessage] = React.useState<{ type: "success" | "error"; text: string } | null>(null)
-  const [hcaptchaToken, setHcaptchaToken] = React.useState("")
-  const [mounted, setMounted] = React.useState(false)
+  const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({})
   const [userTimezone, setUserTimezone] = React.useState(DEFAULT_TIMEZONE)
   const [selectedTimezone, setSelectedTimezone] = React.useState(DEFAULT_TIMEZONE)
   const [locationType, setLocationType] = React.useState<LocationType>("in-person")
-  const captchaRef = React.useRef<HCaptcha>(null)
   const tabsRef = React.useRef<HTMLDivElement>(null)
 
-  // Set mounted and detect user timezone
+  // Detect user timezone
   React.useEffect(() => {
-    setMounted(true)
     setUserTimezone(getUserTimezone())
   }, [])
 
-  // Captcha theme based on current color scheme
-  const captchaTheme = mounted ? (resolvedTheme === "dark" ? "dark" : "light") : "light"
-
   // Update URL when filters change
-  const updateURL = React.useCallback((search: string, types: string[], range: DateRange | undefined, view: string) => {
+  const updateURL = React.useCallback((search: string, types: string[], range: DateRange | undefined) => {
     const params = new URLSearchParams()
     if (search) params.set("q", search)
     if (types.length > 0) params.set("types", types.join(","))
     if (range?.from) params.set("from", range.from.toISOString().split("T")[0])
     if (range?.to) params.set("to", range.to.toISOString().split("T")[0])
-    if (view && view !== "list") params.set("view", view)
 
     const queryString = params.toString()
     router.replace(queryString ? `?${queryString}` : "/events", { scroll: false })
@@ -185,22 +181,17 @@ export function EventsClient({ events, hcaptchaSiteKey }: EventsClientProps) {
   // Wrapped state setters to update URL
   const handleSearchChange = (value: string) => {
     setSearchQuery(value)
-    updateURL(value, selectedTypes, dateRange, activeView)
+    updateURL(value, selectedTypes, dateRange)
   }
 
   const handleTypesChange = (types: string[]) => {
     setSelectedTypes(types)
-    updateURL(searchQuery, types, dateRange, activeView)
+    updateURL(searchQuery, types, dateRange)
   }
 
   const handleDateRangeChange = (range: DateRange | undefined) => {
     setDateRange(range)
-    updateURL(searchQuery, selectedTypes, range, activeView)
-  }
-
-  const handleViewChange = (view: string) => {
-    setActiveView(view)
-    updateURL(searchQuery, selectedTypes, dateRange, view)
+    updateURL(searchQuery, selectedTypes, range)
   }
 
   // Common filter logic for search and date
@@ -210,7 +201,7 @@ export function EventsClient({ events, hcaptchaSiteKey }: EventsClientProps) {
       event.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (event.address?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
 
-    const eventDate = new Date(event.date)
+    const eventDate = parseLocalDate(event.date)
     const matchesDateRange = !dateRange?.from || (
       eventDate >= dateRange.from &&
       (!dateRange.to || eventDate <= dateRange.to)
@@ -254,19 +245,10 @@ export function EventsClient({ events, hcaptchaSiteKey }: EventsClientProps) {
     setSelectedTypes([])
     setDateRange(undefined)
     setSearchQuery("")
-    updateURL("", [], undefined, activeView)
+    updateURL("", [], undefined)
   }
 
   const hasActiveFilters = selectedTypes.length > 0 || dateRange?.from || searchQuery
-
-  const getMonthEvents = (year: number, month: number) => {
-    return events.filter((event) => {
-      const eventDate = new Date(event.date)
-      return eventDate.getFullYear() === year && eventDate.getMonth() === month
-    })
-  }
-
-  const monthEvents = getMonthEvents(currentMonth.getFullYear(), currentMonth.getMonth())
 
   const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate()
   const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay()
@@ -283,36 +265,56 @@ export function EventsClient({ events, hcaptchaSiteKey }: EventsClientProps) {
     e.preventDefault()
     setIsSubmitting(true)
     setSubmitMessage(null)
+    setFieldErrors({})
 
-    const formData = new FormData(e.currentTarget)
-    const data = {
-      title: formData.get("eventTitle") as string,
-      date: formData.get("eventDate") as string,
-      endDate: formData.get("eventEndDate") as string,
-      startTime: formData.get("startTime") as string,
-      endTime: formData.get("endTime") as string,
-      timezone: selectedTimezone,
-      locationType: locationType,
-      address: formData.get("eventAddress") as string,
-      meetingLink: formData.get("eventMeetingLink") as string,
-      type: formData.get("eventType") as "Assembly" | "Regional" | "Workshop" | "Meeting" | "Committee" | "District",
-      description: formData.get("eventDescription") as string,
-      submitterEmail: formData.get("submitterEmail") as string,
-      flyerUrl: formData.get("eventFlyerUrl") as string,
-      hcaptchaToken,
-    }
+    const isDev = process.env.NODE_ENV === "development"
 
-    const result = await submitEvent(data)
+    try {
+      // Skip reCAPTCHA in development, execute in production
+      let recaptchaToken = "dev-bypass"
+      if (!isDev) {
+        if (!executeRecaptcha) {
+          setSubmitMessage({ type: "error", text: "reCAPTCHA not loaded. Please refresh and try again." })
+          setIsSubmitting(false)
+          return
+        }
+        recaptchaToken = await executeRecaptcha("submit_event")
+      }
 
-    if (result.success) {
-      setSubmitMessage({ type: "success", text: result.message! })
-      ;(e.target as HTMLFormElement).reset()
-      setHcaptchaToken("")
-      setSelectedTimezone(DEFAULT_TIMEZONE)
-      setLocationType("in-person")
-      captchaRef.current?.resetCaptcha()
-    } else {
-      setSubmitMessage({ type: "error", text: result.error! })
+      const formData = new FormData(e.currentTarget)
+      const data = {
+        title: formData.get("eventTitle") as string,
+        date: formData.get("eventDate") as string,
+        endDate: formData.get("eventEndDate") as string,
+        startTime: formData.get("startTime") as string,
+        endTime: formData.get("endTime") as string,
+        timezone: selectedTimezone,
+        locationType: locationType,
+        address: formData.get("eventAddress") as string,
+        meetingLink: formData.get("eventMeetingLink") as string,
+        type: formData.get("eventType") as "Assembly" | "Regional" | "Workshop" | "Meeting" | "Committee" | "District",
+        description: formData.get("eventDescription") as string,
+        submitterEmail: formData.get("submitterEmail") as string,
+        flyerUrl: formData.get("eventFlyerUrl") as string,
+        recaptchaToken,
+      }
+
+      const result = await submitEvent(data)
+
+      if (result.success) {
+        setSubmitMessage({ type: "success", text: result.message! })
+        setFieldErrors({})
+        ;(e.target as HTMLFormElement).reset()
+        setSelectedTimezone(DEFAULT_TIMEZONE)
+        setLocationType("in-person")
+      } else {
+        setSubmitMessage({ type: "error", text: result.error! })
+        if (result.fieldErrors) {
+          setFieldErrors(result.fieldErrors)
+        }
+      }
+    } catch {
+      setSubmitMessage({ type: "error", text: "reCAPTCHA verification failed. Please try again." })
     }
 
     setIsSubmitting(false)
@@ -338,12 +340,92 @@ export function EventsClient({ events, hcaptchaSiteKey }: EventsClientProps) {
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
+                {/* Instructions Dialog */}
+                <Dialog open={instructionsDialogOpen} onOpenChange={setInstructionsDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline">
+                      <HelpCircle className="mr-2 h-4 w-4" aria-hidden="true" />
+                      How to Submit
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                      <DialogTitle>How to Submit an Event</DialogTitle>
+                      <DialogDescription>
+                        Follow these steps to get your event listed on the Area 36 calendar.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-4">
+                      <div className="space-y-3">
+                        <div className="flex gap-3">
+                          <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
+                            1
+                          </div>
+                          <div>
+                            <p className="font-medium text-foreground">Fill out the submission form</p>
+                            <p className="text-sm text-muted-foreground">
+                              Click &quot;Submit Event&quot; and provide all the required details about your event.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex gap-3">
+                          <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
+                            2
+                          </div>
+                          <div>
+                            <p className="font-medium text-foreground">Include key information</p>
+                            <p className="text-sm text-muted-foreground">
+                              Make sure to include the event title, date, time, location (or meeting link for online events), and a description.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex gap-3">
+                          <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
+                            3
+                          </div>
+                          <div>
+                            <p className="font-medium text-foreground">Add a flyer (optional)</p>
+                            <p className="text-sm text-muted-foreground">
+                              If you have a flyer, upload it to Google Drive or another file hosting service and include the link.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex gap-3">
+                          <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
+                            4
+                          </div>
+                          <div>
+                            <p className="font-medium text-foreground">Wait for approval</p>
+                            <p className="text-sm text-muted-foreground">
+                              An Area administrator will review your submission. You&apos;ll receive an email if we have any questions.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="pt-4 border-t border-border">
+                        <p className="text-sm text-muted-foreground">
+                          <strong>Tips:</strong> Submit events at least 2 weeks in advance. Include all details upfront to speed up approval.
+                        </p>
+                      </div>
+                      <div className="flex justify-end">
+                        <Button onClick={() => {
+                          setInstructionsDialogOpen(false)
+                          setSubmitDialogOpen(true)
+                        }}>
+                          <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+                          Submit an Event
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Submit Event Dialog */}
                 <Dialog open={submitDialogOpen} onOpenChange={(open) => {
                   setSubmitDialogOpen(open)
                   if (!open) {
                     setSubmitMessage(null)
-                    setHcaptchaToken("")
-                    captchaRef.current?.resetCaptcha()
+                    setFieldErrors({})
                   }
                 }}>
                   <DialogTrigger asChild>
@@ -381,32 +463,75 @@ export function EventsClient({ events, hcaptchaSiteKey }: EventsClientProps) {
                         )}
                         <div className="space-y-2">
                           <Label htmlFor="eventTitle">Event Title</Label>
-                          <Input id="eventTitle" name="eventTitle" placeholder="e.g., District 5 Workshop" required />
+                          <Input
+                            id="eventTitle"
+                            name="eventTitle"
+                            placeholder="e.g., District 5 Workshop"
+                            required
+                            aria-invalid={!!fieldErrors.title}
+                          />
+                          {fieldErrors.title && (
+                            <p className="text-sm text-destructive">{fieldErrors.title}</p>
+                          )}
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <Label htmlFor="eventDate">Start Date</Label>
-                            <Input id="eventDate" name="eventDate" type="date" required />
+                            <Input
+                              id="eventDate"
+                              name="eventDate"
+                              type="date"
+                              required
+                              aria-invalid={!!fieldErrors.date}
+                            />
+                            {fieldErrors.date && (
+                              <p className="text-sm text-destructive">{fieldErrors.date}</p>
+                            )}
                           </div>
                           <div className="space-y-2">
                             <Label htmlFor="eventEndDate">End Date (Optional)</Label>
-                            <Input id="eventEndDate" name="eventEndDate" type="date" />
+                            <Input
+                              id="eventEndDate"
+                              name="eventEndDate"
+                              type="date"
+                              aria-invalid={!!fieldErrors.endDate}
+                            />
+                            {fieldErrors.endDate && (
+                              <p className="text-sm text-destructive">{fieldErrors.endDate}</p>
+                            )}
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <Label htmlFor="startTime">Start Time *</Label>
-                            <Input type="time" id="startTime" name="startTime" required />
+                            <Input
+                              type="time"
+                              id="startTime"
+                              name="startTime"
+                              required
+                              aria-invalid={!!fieldErrors.startTime}
+                            />
+                            {fieldErrors.startTime && (
+                              <p className="text-sm text-destructive">{fieldErrors.startTime}</p>
+                            )}
                           </div>
                           <div className="space-y-2">
                             <Label htmlFor="endTime">End Time</Label>
-                            <Input type="time" id="endTime" name="endTime" />
+                            <Input
+                              type="time"
+                              id="endTime"
+                              name="endTime"
+                              aria-invalid={!!fieldErrors.endTime}
+                            />
+                            {fieldErrors.endTime && (
+                              <p className="text-sm text-destructive">{fieldErrors.endTime}</p>
+                            )}
                           </div>
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="eventTimezone">Timezone *</Label>
                           <Select value={selectedTimezone} onValueChange={setSelectedTimezone}>
-                            <SelectTrigger id="eventTimezone">
+                            <SelectTrigger id="eventTimezone" aria-invalid={!!fieldErrors.timezone}>
                               <SelectValue placeholder="Select timezone" />
                             </SelectTrigger>
                             <SelectContent>
@@ -417,11 +542,14 @@ export function EventsClient({ events, hcaptchaSiteKey }: EventsClientProps) {
                               ))}
                             </SelectContent>
                           </Select>
+                          {fieldErrors.timezone && (
+                            <p className="text-sm text-destructive">{fieldErrors.timezone}</p>
+                          )}
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="locationType">Location Type *</Label>
                           <Select value={locationType} onValueChange={(value) => setLocationType(value as LocationType)}>
-                            <SelectTrigger id="locationType">
+                            <SelectTrigger id="locationType" aria-invalid={!!fieldErrors.locationType}>
                               <SelectValue placeholder="Select location type" />
                             </SelectTrigger>
                             <SelectContent>
@@ -432,6 +560,9 @@ export function EventsClient({ events, hcaptchaSiteKey }: EventsClientProps) {
                               ))}
                             </SelectContent>
                           </Select>
+                          {fieldErrors.locationType && (
+                            <p className="text-sm text-destructive">{fieldErrors.locationType}</p>
+                          )}
                         </div>
                         {(locationType === "in-person" || locationType === "hybrid") && (
                           <div className="space-y-2">
@@ -441,10 +572,15 @@ export function EventsClient({ events, hcaptchaSiteKey }: EventsClientProps) {
                               name="eventAddress"
                               placeholder="e.g., 123 Main St, City, MN 55555"
                               required
+                              aria-invalid={!!fieldErrors.address}
                             />
-                            <p className="text-xs text-muted-foreground">
-                              Full street address including city, state, and zip
-                            </p>
+                            {fieldErrors.address ? (
+                              <p className="text-sm text-destructive">{fieldErrors.address}</p>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">
+                                Full street address including city, state, and zip
+                              </p>
+                            )}
                           </div>
                         )}
                         {(locationType === "hybrid" || locationType === "online") && (
@@ -457,16 +593,21 @@ export function EventsClient({ events, hcaptchaSiteKey }: EventsClientProps) {
                               name="eventMeetingLink"
                               type="url"
                               placeholder="https://zoom.us/j/..."
+                              aria-invalid={!!fieldErrors.meetingLink}
                             />
-                            <p className="text-xs text-muted-foreground">
-                              Zoom, Google Meet, or other video conference link
-                            </p>
+                            {fieldErrors.meetingLink ? (
+                              <p className="text-sm text-destructive">{fieldErrors.meetingLink}</p>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">
+                                Zoom, Google Meet, or other video conference link
+                              </p>
+                            )}
                           </div>
                         )}
                         <div className="space-y-2">
                           <Label htmlFor="eventType">Event Type</Label>
                           <Select name="eventType" required>
-                            <SelectTrigger id="eventType">
+                            <SelectTrigger id="eventType" aria-invalid={!!fieldErrors.type}>
                               <SelectValue placeholder="Select type" />
                             </SelectTrigger>
                             <SelectContent>
@@ -479,36 +620,63 @@ export function EventsClient({ events, hcaptchaSiteKey }: EventsClientProps) {
                                 ))}
                             </SelectContent>
                           </Select>
+                          {fieldErrors.type && (
+                            <p className="text-sm text-destructive">{fieldErrors.type}</p>
+                          )}
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="eventDescription">Description</Label>
-                          <Textarea id="eventDescription" name="eventDescription" placeholder="Describe the event..." rows={3} required />
+                          <Textarea
+                            id="eventDescription"
+                            name="eventDescription"
+                            placeholder="Describe the event..."
+                            rows={3}
+                            required
+                            aria-invalid={!!fieldErrors.description}
+                          />
+                          {fieldErrors.description && (
+                            <p className="text-sm text-destructive">{fieldErrors.description}</p>
+                          )}
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="eventFlyerUrl">Flyer URL (Optional)</Label>
-                          <Input id="eventFlyerUrl" name="eventFlyerUrl" type="url" placeholder="https://..." />
-                          <p className="text-xs text-muted-foreground">
-                            Link to an image or PDF flyer for your event
-                          </p>
+                          <Input
+                            id="eventFlyerUrl"
+                            name="eventFlyerUrl"
+                            type="url"
+                            placeholder="https://..."
+                            aria-invalid={!!fieldErrors.flyerUrl}
+                          />
+                          {fieldErrors.flyerUrl ? (
+                            <p className="text-sm text-destructive">{fieldErrors.flyerUrl}</p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">
+                              Link to an image or PDF flyer for your event
+                            </p>
+                          )}
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="submitterEmail">Your Email</Label>
-                          <Input id="submitterEmail" name="submitterEmail" type="email" placeholder="For follow-up questions" required />
-                        </div>
-                        <div className="flex justify-center">
-                          <HCaptcha
-                            ref={captchaRef}
-                            sitekey={hcaptchaSiteKey}
-                            theme={captchaTheme}
-                            onVerify={setHcaptchaToken}
-                            onExpire={() => setHcaptchaToken("")}
+                          <Input
+                            id="submitterEmail"
+                            name="submitterEmail"
+                            type="email"
+                            placeholder="For follow-up questions"
+                            required
+                            aria-invalid={!!fieldErrors.submitterEmail}
                           />
+                          {fieldErrors.submitterEmail && (
+                            <p className="text-sm text-destructive">{fieldErrors.submitterEmail}</p>
+                          )}
+                        </div>
+                        <div className="text-sm text-muted-foreground text-center py-2">
+                          This form is protected by Google reCAPTCHA v3.
                         </div>
                         <div className="flex justify-end gap-3 pt-4">
                           <Button type="button" variant="outline" onClick={() => setSubmitDialogOpen(false)}>
                             Cancel
                           </Button>
-                          <Button type="submit" disabled={isSubmitting || !hcaptchaToken}>
+                          <Button type="submit" disabled={isSubmitting}>
                             {isSubmitting ? "Submitting..." : "Submit for Review"}
                           </Button>
                         </div>
@@ -621,28 +789,100 @@ export function EventsClient({ events, hcaptchaSiteKey }: EventsClientProps) {
         {/* Events Content */}
         <section className="py-8 sm:py-12" aria-label="Events" ref={tabsRef}>
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <Tabs value={activeView} onValueChange={handleViewChange} className="space-y-6">
-              <TabsList>
-                <TabsTrigger value="list" className="gap-2">
-                  <List className="h-4 w-4" aria-hidden="true" />
-                  List View
-                </TabsTrigger>
-                <TabsTrigger value="calendar" className="gap-2">
-                  <CalendarDays className="h-4 w-4" aria-hidden="true" />
-                  Calendar View
-                </TabsTrigger>
-              </TabsList>
+            {/* Calendar - Always Visible */}
+            <div className="rounded-xl border border-border bg-card overflow-hidden mb-8">
+              {/* Calendar Header */}
+              <div className="flex items-center justify-between p-4 border-b border-border">
+                <Button variant="ghost" size="sm" onClick={prevMonth} aria-label="Previous month">
+                  ← Previous
+                </Button>
+                <h3 className="text-lg font-semibold text-foreground">
+                  {currentMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                </h3>
+                <Button variant="ghost" size="sm" onClick={nextMonth} aria-label="Next month">
+                  Next →
+                </Button>
+              </div>
 
-              {/* List View */}
-              <TabsContent value="list" className="space-y-4">
-                {filteredEvents.length === 0 ? (
-                  <div className="text-center py-12 rounded-xl border border-border bg-card">
-                    <Calendar className="mx-auto h-12 w-12 text-muted-foreground" />
-                    <h3 className="mt-4 text-lg font-medium text-foreground">No events found</h3>
-                    <p className="mt-2 text-muted-foreground">Try adjusting your search or filter criteria.</p>
+              {/* Calendar Grid */}
+              <div className="grid grid-cols-7">
+                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                  <div
+                    key={day}
+                    className="p-2 text-center text-sm font-medium text-muted-foreground border-b border-border bg-muted/30"
+                  >
+                    {day}
                   </div>
-                ) : (
-                  filteredEvents.map((event) => (
+                ))}
+                {Array.from({ length: firstDayOfMonth }).map((_, i) => (
+                  <div key={`empty-${i}`} className="p-2 min-h-24 border-b border-r border-border bg-muted/10" />
+                ))}
+                {Array.from({ length: daysInMonth }).map((_, i) => {
+                  const day = i + 1
+                  const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+                  // Filter calendar events based on search and type filters
+                  const dayEvents = events.filter((e) => {
+                    // Compare only the date part (first 10 chars of YYYY-MM-DD format)
+                    if (e.date.substring(0, 10) !== dateStr) return false
+                    // Apply search filter
+                    if (searchQuery) {
+                      const matchesSearch =
+                        e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        e.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        (e.address?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
+                      if (!matchesSearch) return false
+                    }
+                    // Apply type filter
+                    if (selectedTypes.length > 0 && !selectedTypes.includes(e.type)) {
+                      return false
+                    }
+                    return true
+                  })
+                  // Check if this is today by comparing year, month, day directly
+                  // This avoids timezone issues from parsing date strings
+                  const today = new Date()
+                  const isToday =
+                    today.getFullYear() === currentMonth.getFullYear() &&
+                    today.getMonth() === currentMonth.getMonth() &&
+                    today.getDate() === day
+
+                  return (
+                    <div
+                      key={day}
+                      className={`p-2 min-h-24 border-b border-r border-border ${isToday ? "bg-primary/5" : ""}`}
+                    >
+                      <span className={`text-sm font-medium ${isToday ? "text-primary" : "text-foreground"}`}>
+                        {day}
+                      </span>
+                      <div className="mt-1 space-y-1">
+                        {dayEvents.map((event) => (
+                          <div
+                            key={event.id}
+                            className={`text-xs p-1 rounded truncate ${eventTypeColors[event.type]}`}
+                            title={event.title}
+                          >
+                            {event.title}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Events List */}
+            <div className="space-y-6">
+              <h3 className="text-xl font-semibold text-foreground">Upcoming Events</h3>
+              {filteredEvents.length === 0 ? (
+                <div className="text-center py-12 rounded-xl border border-border bg-card">
+                  <Calendar className="mx-auto h-12 w-12 text-muted-foreground" />
+                  <h3 className="mt-4 text-lg font-medium text-foreground">No events found</h3>
+                  <p className="mt-2 text-muted-foreground">Try adjusting your search or filter criteria.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {filteredEvents.map((event) => (
                     <article
                       key={event.id}
                       className="group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md"
@@ -676,91 +916,10 @@ export function EventsClient({ events, hcaptchaSiteKey }: EventsClientProps) {
                         </div>
                       </div>
                     </article>
-                  ))
-                )}
-              </TabsContent>
-
-              {/* Calendar View */}
-              <TabsContent value="calendar">
-                <div className="rounded-xl border border-border bg-card overflow-hidden">
-                  {/* Calendar Header */}
-                  <div className="flex items-center justify-between p-4 border-b border-border">
-                    <Button variant="ghost" size="sm" onClick={prevMonth} aria-label="Previous month">
-                      ← Previous
-                    </Button>
-                    <h3 className="text-lg font-semibold text-foreground">
-                      {currentMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-                    </h3>
-                    <Button variant="ghost" size="sm" onClick={nextMonth} aria-label="Next month">
-                      Next →
-                    </Button>
-                  </div>
-
-                  {/* Calendar Grid */}
-                  <div className="grid grid-cols-7">
-                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                      <div
-                        key={day}
-                        className="p-2 text-center text-sm font-medium text-muted-foreground border-b border-border bg-muted/30"
-                      >
-                        {day}
-                      </div>
-                    ))}
-                    {Array.from({ length: firstDayOfMonth }).map((_, i) => (
-                      <div key={`empty-${i}`} className="p-2 min-h-24 border-b border-r border-border bg-muted/10" />
-                    ))}
-                    {Array.from({ length: daysInMonth }).map((_, i) => {
-                      const day = i + 1
-                      const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
-                      const dayEvents = events.filter((e) => e.date === dateStr)
-                      const isToday = new Date().toDateString() === new Date(dateStr).toDateString()
-
-                      return (
-                        <div
-                          key={day}
-                          className={`p-2 min-h-24 border-b border-r border-border ${isToday ? "bg-primary/5" : ""}`}
-                        >
-                          <span className={`text-sm font-medium ${isToday ? "text-primary" : "text-foreground"}`}>
-                            {day}
-                          </span>
-                          <div className="mt-1 space-y-1">
-                            {dayEvents.map((event) => (
-                              <div
-                                key={event.id}
-                                className={`text-xs p-1 rounded truncate ${eventTypeColors[event.type]}`}
-                                title={event.title}
-                              >
-                                {event.title}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-
-                  {/* Month Events Summary */}
-                  {monthEvents.length > 0 && (
-                    <div className="p-4 border-t border-border bg-muted/30">
-                      <h4 className="text-sm font-medium text-foreground mb-3">Events this month</h4>
-                      <div className="space-y-2">
-                        {monthEvents.map((event) => (
-                          <div key={event.id} className="flex items-center gap-3 text-sm">
-                            <Badge variant="secondary" className={`${eventTypeColors[event.type]} text-xs`}>
-                              {event.type}
-                            </Badge>
-                            <span className="text-foreground font-medium">{event.title}</span>
-                            <span className="text-muted-foreground">
-                              {new Date(event.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  ))}
                 </div>
-              </TabsContent>
-            </Tabs>
+              )}
+            </div>
 
             {/* District Events */}
             <div className="mt-12 pt-8 border-t border-border">

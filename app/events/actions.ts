@@ -4,55 +4,92 @@ import { eventSubmissionSchema, type EventSubmissionData } from "@/lib/schemas/e
 import { getDb } from "@/lib/db"
 import { events } from "@/lib/db/schema"
 
-interface HCaptchaResponse {
+interface ReCaptchaResponse {
   success: boolean
+  score?: number
+  action?: string
+  challenge_ts?: string
+  hostname?: string
   "error-codes"?: string[]
 }
+
+const RECAPTCHA_SCORE_THRESHOLD = 0.5
 
 export async function submitEvent(data: EventSubmissionData) {
   // Validate the form data
   const result = eventSubmissionSchema.safeParse(data)
 
   if (!result.success) {
+    // Build field-level errors
+    const fieldErrors: Record<string, string> = {}
+    for (const error of result.error.errors) {
+      const field = error.path[0] as string
+      if (field && !fieldErrors[field]) {
+        fieldErrors[field] = error.message
+      }
+    }
     return {
       success: false,
-      error: result.error.errors[0]?.message ?? "Invalid form data",
+      error: "Please fix the errors below",
+      fieldErrors,
     }
   }
 
-  // Verify hCaptcha token
-  const secretKey = process.env.HCAPTCHA_SECRET_KEY
+  // Skip reCAPTCHA verification on localhost
+  const isLocalhost = process.env.NODE_ENV === "development"
 
-  if (!secretKey) {
-    console.error("HCAPTCHA_SECRET_KEY is not configured")
-    return {
-      success: false,
-      error: "Server configuration error. Please try again later.",
+  if (!isLocalhost) {
+    // Verify reCAPTCHA token
+    const secretKey = process.env.RECAPTCHA_SECRET_KEY
+
+    if (!secretKey) {
+      console.error("RECAPTCHA_SECRET_KEY is not configured")
+      return {
+        success: false,
+        error: "Server configuration error. Please try again later.",
+      }
+    }
+
+    try {
+      const verifyResponse = await fetch("https://www.google.com/recaptcha/api/siteverify", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          secret: secretKey,
+          response: result.data.recaptchaToken,
+        }),
+      })
+
+      const verifyResult: ReCaptchaResponse = await verifyResponse.json()
+
+      if (!verifyResult.success) {
+        console.error("reCAPTCHA verification failed:", verifyResult["error-codes"])
+        return {
+          success: false,
+          error: "reCAPTCHA verification failed. Please try again.",
+        }
+      }
+
+      // Check the score (v3 returns a score from 0.0 to 1.0)
+      if (verifyResult.score !== undefined && verifyResult.score < RECAPTCHA_SCORE_THRESHOLD) {
+        console.warn("reCAPTCHA score too low:", verifyResult.score)
+        return {
+          success: false,
+          error: "Suspicious activity detected. Please try again or contact us directly.",
+        }
+      }
+    } catch (error) {
+      console.error("reCAPTCHA verification error:", error)
+      return {
+        success: false,
+        error: "reCAPTCHA verification failed. Please try again.",
+      }
     }
   }
 
   try {
-    const verifyResponse = await fetch("https://api.hcaptcha.com/siteverify", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        secret: secretKey,
-        response: result.data.hcaptchaToken,
-      }),
-    })
-
-    const verifyResult: HCaptchaResponse = await verifyResponse.json()
-
-    if (!verifyResult.success) {
-      console.error("hCaptcha verification failed:", verifyResult["error-codes"])
-      return {
-        success: false,
-        error: "Captcha verification failed. Please try again.",
-      }
-    }
-
     // Insert event into database
     const db = await getDb()
     const eventId = crypto.randomUUID()

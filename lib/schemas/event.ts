@@ -26,7 +26,7 @@ export const eventSubmissionSchema = z.object({
   type: z.enum(eventTypes, { errorMap: () => ({ message: "Please select a valid event type" }) }),
   submitterEmail: z.string().email("Please enter a valid email address"),
   flyerUrl: z.string().url("Please enter a valid URL").optional().or(z.literal("")),
-  hcaptchaToken: z.string().min(1, "Please complete the captcha"),
+  recaptchaToken: z.string().min(1, "reCAPTCHA verification failed"),
 }).refine(
   (data) => {
     // If both start and end time are provided, end must be after start

@@ -11,7 +11,7 @@ export const contactFormSchema = z.object({
   consent: z.literal(true, {
     errorMap: () => ({ message: "You must acknowledge the anonymity policy" }),
   }),
-  hcaptchaToken: z.string().min(1, "Please complete the captcha"),
+  recaptchaToken: z.string().min(1, "reCAPTCHA verification failed"),
 })
 
 export type ContactFormData = z.infer<typeof contactFormSchema>

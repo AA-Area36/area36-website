@@ -1,10 +1,9 @@
 "use client"
 
-import { useRef, useState, useTransition, useEffect } from "react"
+import { useState, useTransition, useCallback } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useTheme } from "next-themes"
-import HCaptcha from "@hcaptcha/react-hcaptcha"
+import { useGoogleReCaptcha } from "react-google-recaptcha-v3"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { Mail, MapPin, Send, CheckCircle, Shield, Loader2 } from "lucide-react"
@@ -62,15 +61,7 @@ export default function ContactPage() {
   const [submitted, setSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
-  const [mounted, setMounted] = useState(false)
-  const captchaRef = useRef<HCaptcha>(null)
-  const { resolvedTheme } = useTheme()
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  const captchaTheme = mounted ? (resolvedTheme === "dark" ? "dark" : "light") : "light"
+  const { executeRecaptcha } = useGoogleReCaptcha()
 
   const {
     register,
@@ -90,42 +81,47 @@ export default function ContactPage() {
       subject: "",
       message: "",
       consent: false as unknown as true,
-      hcaptchaToken: "",
+      recaptchaToken: "",
     },
   })
 
   const selectedRecipient = watch("recipient")
-  const hcaptchaToken = watch("hcaptchaToken")
 
-  const onHCaptchaVerify = (token: string) => {
-    setValue("hcaptchaToken", token, { shouldValidate: true })
-  }
-
-  const onHCaptchaExpire = () => {
-    setValue("hcaptchaToken", "", { shouldValidate: true })
-  }
-
-  const onSubmit = (data: ContactFormData) => {
+  const onSubmit = useCallback(async (data: ContactFormData) => {
     setSubmitError(null)
 
-    startTransition(async () => {
-      const result = await submitContactForm(data)
+    const isDev = process.env.NODE_ENV === "development"
 
-      if (result.success) {
-        setSubmitted(true)
-      } else {
-        setSubmitError(result.error ?? "An error occurred")
-        captchaRef.current?.resetCaptcha()
-        setValue("hcaptchaToken", "")
+    startTransition(async () => {
+      try {
+        // Skip reCAPTCHA in development, execute in production
+        let token = "dev-bypass"
+        if (!isDev) {
+          if (!executeRecaptcha) {
+            setSubmitError("reCAPTCHA not loaded. Please refresh and try again.")
+            return
+          }
+          token = await executeRecaptcha("contact_form")
+        }
+        
+        // Submit form with token
+        const result = await submitContactForm({ ...data, recaptchaToken: token })
+
+        if (result.success) {
+          setSubmitted(true)
+        } else {
+          setSubmitError(result.error ?? "An error occurred")
+        }
+      } catch {
+        setSubmitError("reCAPTCHA verification failed. Please try again.")
       }
     })
-  }
+  }, [executeRecaptcha])
 
   const handleSendAnother = () => {
     setSubmitted(false)
     setSubmitError(null)
     reset()
-    captchaRef.current?.resetCaptcha()
   }
 
   return (
@@ -263,29 +259,14 @@ export default function ContactPage() {
                       )}
                     </div>
 
-                    <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
-                      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <div className="rounded-lg border border-border bg-muted/30 p-4">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Shield className="h-4 w-4 text-primary" aria-hidden="true" />
-                        Spam Protection
+                        <span>This form is protected by Google reCAPTCHA v3.</span>
                       </div>
-                      <div className="space-y-2">
-                        <HCaptcha
-                          ref={captchaRef}
-                          sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || ""}
-                          theme={captchaTheme}
-                          onVerify={onHCaptchaVerify}
-                          onExpire={onHCaptchaExpire}
-                        />
-                        {errors.hcaptchaToken && (
-                          <p className="text-sm text-destructive">{errors.hcaptchaToken.message}</p>
-                        )}
-                        {hcaptchaToken && (
-                          <p className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                            <CheckCircle className="h-4 w-4" />
-                            Verified
-                          </p>
-                        )}
-                      </div>
+                      {errors.recaptchaToken && (
+                        <p className="text-sm text-destructive mt-2">{errors.recaptchaToken.message}</p>
+                      )}
                     </div>
 
                     <div className="flex items-start gap-2">
@@ -305,7 +286,7 @@ export default function ContactPage() {
                       <p className="text-sm text-destructive">{errors.consent.message}</p>
                     )}
 
-                    <Button type="submit" size="lg" className="w-full sm:w-auto" disabled={isPending || !hcaptchaToken}>
+                    <Button type="submit" size="lg" className="w-full sm:w-auto" disabled={isPending}>
                       {isPending ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
