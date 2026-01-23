@@ -12,10 +12,11 @@ export async function fetchUpcomingEvents(): Promise<Event[]> {
   try {
     const db = await getDb()
     
-    // Get yesterday's date - events are only hidden if they ended before today
-    const yesterday = new Date()
+    // Get yesterday's date in Central time (Area 36 is in Minnesota)
+    const now = new Date()
+    const yesterday = new Date(now)
     yesterday.setDate(yesterday.getDate() - 1)
-    const yesterdayStr = yesterday.toISOString().split("T")[0]
+    const yesterdayStr = yesterday.toLocaleDateString("en-CA", { timeZone: "America/Chicago" })
 
     const upcomingEvents = await db
       .select()

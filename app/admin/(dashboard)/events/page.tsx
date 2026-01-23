@@ -52,7 +52,8 @@ const eventTypeColors: Record<string, string> = {
 }
 
 function formatDate(dateString: string) {
-  const date = new Date(dateString)
+  // Parse as local date by appending T00:00:00 to avoid UTC shift
+  const date = new Date(dateString + "T00:00:00")
   return date.toLocaleDateString("en-US", {
     weekday: "short",
     year: "numeric",

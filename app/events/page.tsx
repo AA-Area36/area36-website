@@ -9,11 +9,16 @@ export const dynamic = "force-dynamic"
 
 async function getApprovedEvents() {
   const db = await getDb()
-  // Get yesterday's date - events are only hidden if they ended before today
-  // This ensures same-day events still appear (could be ongoing)
-  const yesterday = new Date()
+  // Get today's date in Central time (Area 36 is in Minnesota)
+  // This ensures events are shown until the end of the day in their local timezone
+  const now = new Date()
+  // Format as YYYY-MM-DD in Central time
+  const todayStr = now.toLocaleDateString("en-CA", { timeZone: "America/Chicago" })
+  
+  // Get yesterday for the comparison (events ending yesterday should be hidden)
+  const yesterday = new Date(now)
   yesterday.setDate(yesterday.getDate() - 1)
-  const yesterdayStr = yesterday.toISOString().split("T")[0]
+  const yesterdayStr = yesterday.toLocaleDateString("en-CA", { timeZone: "America/Chicago" })
 
   return db
     .select()

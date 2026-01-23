@@ -70,9 +70,9 @@ export async function GET(request: Request) {
   try {
     const db = await getDb()
 
-    // Get today's date
+    // Get today's date in Central time (Area 36 is in Minnesota)
     const today = new Date()
-    const todayStr = today.toISOString().split("T")[0]
+    const todayStr = today.toLocaleDateString("en-CA", { timeZone: "America/Chicago" })
 
     // Fetch approved events from today onwards
     const approvedEvents = await db
