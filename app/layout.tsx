@@ -2,7 +2,6 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter, Geist_Mono } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
-import { ReCaptchaProvider } from "@/components/recaptcha-provider"
 import "./globals.css"
 
 const _inter = Inter({ subsets: ["latin"] })
@@ -24,12 +23,10 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className="font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <ReCaptchaProvider>
-            <a href="#main-content" className="skip-link">
-              Skip to main content
-            </a>
-            {children}
-          </ReCaptchaProvider>
+          <a href="#main-content" className="skip-link">
+            Skip to main content
+          </a>
+          {children}
         </ThemeProvider>
       </body>
     </html>

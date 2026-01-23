@@ -31,6 +31,7 @@ const navigation = [
       { name: "Documents & Forms", href: "/resources" },
       { name: "Newsletter", href: "/newsletter" },
       { name: "Recordings", href: "/recordings" },
+      { name: "General Service Conference", href: "/general-service-conference" },
       { name: "Service Basics", href: "/service" },
       { name: "Temporary Contact Program", href: "/temporary-contact" },
       { name: "For Professionals", href: "/professionals" },

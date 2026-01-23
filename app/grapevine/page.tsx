@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { getActiveDrive, getDriveLeaderboard } from "./actions"
 import { SubscriptionDriveSection } from "./subscription-drive-section"
+import { ReCaptchaProvider } from "@/components/recaptcha-provider"
 
 export const dynamic = "force-dynamic"
 
@@ -225,7 +226,9 @@ export default async function GrapevinePage() {
 
         {/* Subscription Drive Section */}
         {activeDrive && (
-          <SubscriptionDriveSection drive={activeDrive} leaderboard={leaderboard} />
+          <ReCaptchaProvider>
+            <SubscriptionDriveSection drive={activeDrive} leaderboard={leaderboard} />
+          </ReCaptchaProvider>
         )}
 
         {/* CTA */}

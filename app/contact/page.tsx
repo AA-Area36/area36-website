@@ -3,7 +3,7 @@
 import { useState, useTransition, useCallback } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useGoogleReCaptcha } from "react-google-recaptcha-v3"
+import { GoogleReCaptchaProvider, useGoogleReCaptcha } from "react-google-recaptcha-v3"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { Mail, MapPin, Send, CheckCircle, Shield, Loader2 } from "lucide-react"
@@ -57,7 +57,7 @@ const committees = [
   { name: "Website", email: "webmaster@area36.org" },
 ]
 
-export default function ContactPage() {
+function ContactForm() {
   const [submitted, setSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -403,5 +403,19 @@ export default function ContactPage() {
       </main>
       <Footer />
     </div>
+  )
+}
+
+export default function ContactPage() {
+  const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY
+
+  if (!siteKey) {
+    return <ContactForm />
+  }
+
+  return (
+    <GoogleReCaptchaProvider reCaptchaKey={siteKey}>
+      <ContactForm />
+    </GoogleReCaptchaProvider>
   )
 }

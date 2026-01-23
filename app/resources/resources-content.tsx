@@ -5,7 +5,6 @@ import {
   FileText,
   FolderOpen,
   BookOpen,
-  Lock,
 } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
@@ -42,8 +41,6 @@ export function ResourcesContent({ resources }: ResourcesContentProps) {
         return resources.areaDocuments
       case "forms":
         return resources.forms
-      case "conference":
-        return resources.conferenceMaterials
       default:
         return []
     }
@@ -91,15 +88,6 @@ export function ResourcesContent({ resources }: ResourcesContentProps) {
             {resources.forms.length > 0 && (
               <Badge variant="secondary" className="ml-1 text-xs">
                 {resources.forms.length}
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="conference" className="gap-2">
-            <Lock className="h-4 w-4" aria-hidden="true" />
-            Conference Materials
-            {resources.conferenceMaterials.length > 0 && (
-              <Badge variant="secondary" className="ml-1 text-xs">
-                {resources.conferenceMaterials.length}
               </Badge>
             )}
           </TabsTrigger>
@@ -177,56 +165,6 @@ export function ResourcesContent({ resources }: ResourcesContentProps) {
           )}
         </TabsContent>
 
-        {/* Conference Materials */}
-        <TabsContent value="conference" className="space-y-4">
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-foreground">Conference Materials</h2>
-            <p className="text-muted-foreground mt-1">
-              General Service Conference background and related materials.
-            </p>
-            <div className="mt-4 p-4 rounded-lg bg-primary/5 border border-primary/20">
-              <h3 className="text-sm font-semibold text-foreground mb-2">
-                What is the General Service Conference?
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                The General Service Conference is the annual meeting where delegates from all 93 areas in the U.S.
-                and Canada come together to discuss matters affecting A.A. as a whole. The Conference acts as the
-                voice and conscience of the fellowship, making recommendations on policy, literature, and services.
-                Each year, Area 36&apos;s Delegate attends the Conference and brings back information to share with
-                groups throughout southern Minnesota.
-              </p>
-            </div>
-            {resources.conferenceMaterials.some(doc => doc.isProtected) && (
-              <div className="mt-4 p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-                <div className="flex items-start gap-3">
-                  <Lock className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                      Password Protected Materials
-                    </p>
-                    <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                      Some conference materials are password protected. Contact your DCM or the Delegate for access.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-          {resources.conferenceMaterials.length === 0 ? (
-            <EmptyState category="conference materials" />
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
-              {resources.conferenceMaterials.map((doc) => (
-                <ResourceItemWithViewer
-                  key={doc.id}
-                  resource={doc}
-                  icon={FileText}
-                  onView={(r) => handleView(r, "conference")}
-                />
-              ))}
-            </div>
-          )}
-        </TabsContent>
       </Tabs>
 
       {/* Resource Viewer Dialog */}

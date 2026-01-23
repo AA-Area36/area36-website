@@ -985,25 +985,33 @@ export function EventsClient({ events }: EventsClientProps) {
               </p>
               <div className="flex flex-wrap gap-3">
                 <Button asChild variant="outline" size="sm">
-                  <Link href="#" target="_blank" rel="noopener noreferrer">
+                  <Link
+                    href="https://calendar.google.com/calendar/r?cid=webcal://area36.org/api/calendar"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     Google Calendar
                     <ExternalLink className="ml-2 h-3 w-3" aria-label="(opens in new tab)" />
                   </Link>
                 </Button>
                 <Button asChild variant="outline" size="sm">
-                  <Link href="#" target="_blank" rel="noopener noreferrer">
+                  <Link href="webcal://area36.org/api/calendar">
                     Apple Calendar
                     <ExternalLink className="ml-2 h-3 w-3" aria-label="(opens in new tab)" />
                   </Link>
                 </Button>
                 <Button asChild variant="outline" size="sm">
-                  <Link href="#" target="_blank" rel="noopener noreferrer">
+                  <Link
+                    href="https://outlook.live.com/calendar/0/addfromweb?url=https%3A%2F%2Farea36.org%2Fapi%2Fcalendar&name=Area%2036%20A.A.%20Events"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     Outlook
                     <ExternalLink className="ml-2 h-3 w-3" aria-label="(opens in new tab)" />
                   </Link>
                 </Button>
                 <Button asChild variant="outline" size="sm">
-                  <Link href="#" target="_blank" rel="noopener noreferrer">
+                  <Link href="/api/calendar" download="area36-events.ics">
                     Download iCal
                     <ExternalLink className="ml-2 h-3 w-3" aria-label="(opens in new tab)" />
                   </Link>

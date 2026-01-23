@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db"
 import { events } from "@/lib/db/schema"
 import { eq, asc, gt, and, or, isNull } from "drizzle-orm"
 import { EventsClient } from "./events-client"
+import { ReCaptchaProvider } from "@/components/recaptcha-provider"
 
 export const dynamic = "force-dynamic"
 
@@ -33,9 +34,11 @@ export default async function EventsPage() {
   const approvedEvents = await getApprovedEvents()
 
   return (
-    <Suspense fallback={<EventsLoading />}>
-      <EventsClient events={approvedEvents} />
-    </Suspense>
+    <ReCaptchaProvider>
+      <Suspense fallback={<EventsLoading />}>
+        <EventsClient events={approvedEvents} />
+      </Suspense>
+    </ReCaptchaProvider>
   )
 }
 
