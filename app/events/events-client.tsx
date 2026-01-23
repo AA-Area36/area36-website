@@ -263,6 +263,86 @@ export function EventsClient({ events }: EventsClientProps) {
   const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate()
   const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay()
 
+  // Compute slot assignments for events in the current month view
+  // This ensures multi-day events maintain their vertical position
+  const eventSlots = React.useMemo(() => {
+    const slots: Map<string, number> = new Map() // eventId -> slot number
+    const monthStart = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}-01`
+    const monthEnd = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`
+    
+    // Get all events that appear in this month
+    const monthEvents = events.filter((e) => {
+      const eventStart = e.date.substring(0, 10)
+      const eventEnd = e.endDate ? e.endDate.substring(0, 10) : eventStart
+      // Event overlaps with month if: eventStart <= monthEnd AND eventEnd >= monthStart
+      return eventStart <= monthEnd && eventEnd >= monthStart
+    })
+    
+    // Sort by start date, then by end date (longer events first), then by id for consistency
+    monthEvents.sort((a, b) => {
+      const aStart = a.date.substring(0, 10)
+      const bStart = b.date.substring(0, 10)
+      if (aStart !== bStart) return aStart.localeCompare(bStart)
+      const aEnd = a.endDate?.substring(0, 10) || aStart
+      const bEnd = b.endDate?.substring(0, 10) || bStart
+      if (aEnd !== bEnd) return bEnd.localeCompare(aEnd) // Longer events first
+      return a.id.localeCompare(b.id)
+    })
+    
+    // For each day, track which slots are occupied
+    // Process events in order and assign them the first available slot
+    const daySlots: Map<string, Set<number>> = new Map() // dateStr -> Set of occupied slots
+    
+    for (const event of monthEvents) {
+      const eventStart = event.date.substring(0, 10)
+      const eventEnd = event.endDate ? event.endDate.substring(0, 10) : eventStart
+      
+      // Find the first slot that's available for ALL days this event spans
+      let slot = 0
+      let foundSlot = false
+      while (!foundSlot) {
+        foundSlot = true
+        // Check each day the event spans (within the month)
+        const checkStart = eventStart < monthStart ? monthStart : eventStart
+        const checkEnd = eventEnd > monthEnd ? monthEnd : eventEnd
+        
+        let currentDate = checkStart
+        while (currentDate <= checkEnd) {
+          const occupiedSlots = daySlots.get(currentDate) || new Set()
+          if (occupiedSlots.has(slot)) {
+            foundSlot = false
+            slot++
+            break
+          }
+          // Move to next day
+          const d = new Date(currentDate + "T00:00:00")
+          d.setDate(d.getDate() + 1)
+          currentDate = d.toISOString().substring(0, 10)
+        }
+      }
+      
+      // Assign this slot to the event
+      slots.set(event.id, slot)
+      
+      // Mark this slot as occupied for all days the event spans (within the month)
+      const markStart = eventStart < monthStart ? monthStart : eventStart
+      const markEnd = eventEnd > monthEnd ? monthEnd : eventEnd
+      let currentDate = markStart
+      while (currentDate <= markEnd) {
+        if (!daySlots.has(currentDate)) {
+          daySlots.set(currentDate, new Set())
+        }
+        daySlots.get(currentDate)!.add(slot)
+        // Move to next day
+        const d = new Date(currentDate + "T00:00:00")
+        d.setDate(d.getDate() + 1)
+        currentDate = d.toISOString().substring(0, 10)
+      }
+    }
+    
+    return slots
+  }, [events, currentMonth, daysInMonth])
+
   const prevMonth = () => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))
   }
@@ -832,8 +912,11 @@ export function EventsClient({ events }: EventsClientProps) {
                   const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
                   // Filter calendar events based on search and type filters
                   const dayEvents = events.filter((e) => {
-                    // Compare only the date part (first 10 chars of YYYY-MM-DD format)
-                    if (e.date.substring(0, 10) !== dateStr) return false
+                    // Check if this day falls within the event's date range
+                    const eventStart = e.date.substring(0, 10)
+                    const eventEnd = e.endDate ? e.endDate.substring(0, 10) : eventStart
+                    // Date is within range if: startDate <= dateStr <= endDate
+                    if (dateStr < eventStart || dateStr > eventEnd) return false
                     // Apply search filter
                     if (searchQuery) {
                       const matchesSearch =
@@ -859,21 +942,71 @@ export function EventsClient({ events }: EventsClientProps) {
                   return (
                     <div
                       key={day}
-                      className={`p-2 min-h-24 border-b border-r border-border ${isToday ? "bg-primary/5" : ""}`}
+                      className={`p-2 min-h-24 border-b border-r border-border overflow-visible relative ${isToday ? "bg-primary/5" : ""}`}
                     >
                       <span className={`text-sm font-medium ${isToday ? "text-primary" : "text-foreground"}`}>
                         {day}
                       </span>
-                      <div className="mt-1 space-y-1">
-                        {dayEvents.map((event) => (
-                          <div
-                            key={event.id}
-                            className={`text-xs p-1 rounded truncate ${eventTypeColors[event.type]}`}
-                            title={event.title}
-                          >
-                            {event.title}
-                          </div>
-                        ))}
+                      <div className="mt-1 overflow-visible">
+                        {(() => {
+                          // Sort events by their assigned slot
+                          const sortedEvents = [...dayEvents].sort((a, b) => {
+                            const slotA = eventSlots.get(a.id) ?? 0
+                            const slotB = eventSlots.get(b.id) ?? 0
+                            return slotA - slotB
+                          })
+                          
+                          // Find max slot to render empty spacers
+                          const maxSlot = sortedEvents.length > 0 
+                            ? Math.max(...sortedEvents.map(e => eventSlots.get(e.id) ?? 0))
+                            : -1
+                          
+                          // Create array of slots with events or null for empty
+                          const slotArray: (typeof sortedEvents[0] | null)[] = []
+                          for (let s = 0; s <= maxSlot; s++) {
+                            const event = sortedEvents.find(e => eventSlots.get(e.id) === s)
+                            slotArray.push(event || null)
+                          }
+                          
+                          return slotArray.map((event, slotIndex) => {
+                            if (!event) {
+                              // Empty spacer to maintain alignment
+                              return <div key={`empty-${slotIndex}`} className="h-6" />
+                            }
+                            
+                            const eventStart = event.date.substring(0, 10)
+                            const eventEnd = event.endDate ? event.endDate.substring(0, 10) : eventStart
+                            const isMultiDay = eventStart !== eventEnd
+                            const isStart = dateStr === eventStart
+                            const isEnd = dateStr === eventEnd
+                            
+                            // Determine position styling for multi-day events
+                            let positionClasses = "rounded"
+                            let marginClasses = ""
+                            if (isMultiDay) {
+                              if (isStart) {
+                                positionClasses = "rounded-l rounded-r-none"
+                                marginClasses = "-mr-2"
+                              } else if (isEnd) {
+                                positionClasses = "rounded-r rounded-l-none"
+                                marginClasses = "-ml-2"
+                              } else {
+                                positionClasses = "rounded-none"
+                                marginClasses = "-mx-2"
+                              }
+                            }
+                            
+                            return (
+                              <div
+                                key={event.id}
+                                className={`text-xs p-1 truncate relative z-10 h-6 ${eventTypeColors[event.type]} ${positionClasses} ${marginClasses}`}
+                                title={event.title}
+                              >
+                                {isStart || !isMultiDay ? event.title : "\u00A0"}
+                              </div>
+                            )
+                          })
+                        })()}
                       </div>
                     </div>
                   )
