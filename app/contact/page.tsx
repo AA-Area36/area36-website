@@ -24,7 +24,8 @@ const recipients = [
   { value: "delegate", label: "Delegate", email: "delegate@area36.org" },
   { value: "treasurer", label: "Treasurer", email: "treasurer@area36.org" },
   { value: "secretary", label: "Secretary", email: "secretary@area36.org" },
-  { value: "webmaster", label: "Website / Technical", email: "webmaster@area36.org" },
+  { value: "technology", label: "Technology Chair", email: "technology@area36.org" },
+  { value: "webmaster", label: "Webmaster", email: "webmaster@area36.org" },
   { value: "accessibility", label: "Accessibility Committee", email: "accessibility@area36.org" },
   { value: "archives", label: "Archives Committee", email: "archives@area36.org" },
   { value: "cpc", label: "CPC Committee", email: "cpc@area36.org" },
@@ -53,6 +54,7 @@ const committees = [
   { name: "Group Records", email: "grouprecords@area36.org" },
   { name: "Literature", email: "literature@area36.org" },
   { name: "Public Information", email: "pi@area36.org" },
+  { name: "Technology", email: "technology@area36.org" },
   { name: "Treatment", email: "treatment@area36.org" },
   { name: "Website", email: "webmaster@area36.org" },
 ]

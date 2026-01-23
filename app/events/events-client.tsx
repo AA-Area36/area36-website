@@ -685,10 +685,10 @@ export function EventsClient({ events }: EventsClientProps) {
                   </DialogContent>
                 </Dialog>
                 <Button asChild variant="outline">
-                  <Link href="#" target="_blank" rel="noopener noreferrer">
+                  <a href="#calendar-subscribe">
                     <Calendar className="mr-2 h-4 w-4" aria-hidden="true" />
                     Subscribe
-                  </Link>
+                  </a>
                 </Button>
               </div>
             </div>
@@ -978,7 +978,7 @@ export function EventsClient({ events }: EventsClientProps) {
             </div>
 
             {/* Calendar Subscription */}
-            <div className="mt-12 rounded-xl border border-border bg-muted/30 p-6">
+            <div id="calendar-subscribe" className="mt-12 rounded-xl border border-border bg-muted/30 p-6 scroll-mt-24">
               <h3 className="font-semibold text-foreground mb-4">Subscribe to Calendar</h3>
               <p className="text-sm text-muted-foreground mb-4">
                 Add Area 36 events directly to your calendar application.
