@@ -184,21 +184,32 @@ export async function getNewsletters(
   return withCache(
     CACHE_KEYS.newsletters,
     async () => {
-      const newsletters: Newsletter[] = []
-
-      // Get year subfolders
-      const yearFolders = await listFolders(credentials, newslettersFolderId)
-
-      for (const folder of yearFolders) {
-        const folderYear = parseInt(folder.name, 10)
-        if (isNaN(folderYear)) continue
-
-        // Get PDFs in this year folder
-        const files = await listAllFiles(credentials, folder.id, {
+      // Get year subfolders and root files in parallel
+      const [yearFolders, rootFiles] = await Promise.all([
+        listFolders(credentials, newslettersFolderId),
+        listAllFiles(credentials, newslettersFolderId, {
           mimeType: "application/pdf",
           orderBy: "name desc",
-        })
+        }),
+      ])
 
+      // Process all year folders in parallel
+      const yearResults = await Promise.all(
+        yearFolders
+          .filter((folder) => !isNaN(parseInt(folder.name, 10)))
+          .map(async (folder) => {
+            const folderYear = parseInt(folder.name, 10)
+            const files = await listAllFiles(credentials, folder.id, {
+              mimeType: "application/pdf",
+              orderBy: "name desc",
+            })
+            return { files, folderYear }
+          })
+      )
+
+      // Collect newsletters from year folders
+      const newsletters: Newsletter[] = []
+      for (const { files, folderYear } of yearResults) {
         for (const file of files) {
           const newsletter = driveFileToNewsletter(file, folderYear)
           if (newsletter) {
@@ -207,16 +218,10 @@ export async function getNewsletters(
         }
       }
 
-      // Also check root Newsletters folder for any PDFs not in subfolders
-      const rootFiles = await listAllFiles(credentials, newslettersFolderId, {
-        mimeType: "application/pdf",
-        orderBy: "name desc",
-      })
-
+      // Add root files (avoiding duplicates)
       for (const file of rootFiles) {
         const newsletter = driveFileToNewsletter(file)
         if (newsletter) {
-          // Avoid duplicates
           if (!newsletters.find((n) => n.driveId === newsletter.driveId)) {
             newsletters.push(newsletter)
           }

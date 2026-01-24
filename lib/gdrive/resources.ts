@@ -144,30 +144,42 @@ export async function getResources(
         conferenceMaterials: [],
       }
 
-      // Get category subfolders
-      const categoryFolders = await listFolders(credentials, resourcesFolderId)
+      // Get category subfolders and root files in parallel
+      const [categoryFolders, rootFiles] = await Promise.all([
+        listFolders(credentials, resourcesFolderId),
+        listAllFiles(credentials, resourcesFolderId, { orderBy: "modifiedTime desc" }),
+      ])
 
-      for (const folder of categoryFolders) {
-        const category = getCategoryFromFolderName(folder.name)
-        if (!category) {
-          console.warn(`Unknown resource category folder: ${folder.name}`)
-          continue
-        }
+      // Process all category folders in parallel
+      const categoryResults = await Promise.all(
+        categoryFolders.map(async (folder) => {
+          const category = getCategoryFromFolderName(folder.name)
+          if (!category) {
+            console.warn(`Unknown resource category folder: ${folder.name}`)
+            return null
+          }
 
-        // Get files in this category folder
-        const files = await listAllFiles(credentials, folder.id, {
-          orderBy: "modifiedTime desc",
+          const files = await listAllFiles(credentials, folder.id, {
+            orderBy: "modifiedTime desc",
+          })
+
+          // Filter to only include actual files (not folders)
+          const resourceFiles = files.filter(
+            (f) => f.mimeType !== "application/vnd.google-apps.folder"
+          )
+
+          return { category, files: resourceFiles }
         })
+      )
 
-        // Filter to only include actual files (not folders)
-        const resourceFiles = files.filter(
-          (f) => f.mimeType !== "application/vnd.google-apps.folder"
-        )
+      // Collect results from parallel processing
+      for (const categoryResult of categoryResults) {
+        if (!categoryResult) continue
 
-        for (const file of resourceFiles) {
+        const { category, files } = categoryResult
+        for (const file of files) {
           const resource = driveFileToResource(file, category)
 
-          // Add to appropriate category
           switch (category) {
             case "delegate-reports":
               result.delegateReports.push(resource)
@@ -185,27 +197,21 @@ export async function getResources(
         }
       }
 
-      // Also check root Resources folder for any files not in subfolders
-      const rootFiles = await listAllFiles(credentials, resourcesFolderId, {
-        orderBy: "modifiedTime desc",
-      })
+      // Process root files (avoiding duplicates)
+      const allIds = new Set([
+        ...result.delegateReports,
+        ...result.areaDocuments,
+        ...result.forms,
+        ...result.conferenceMaterials,
+      ].map((r) => r.driveId))
 
       for (const file of rootFiles) {
         // Skip folders
         if (file.mimeType === "application/vnd.google-apps.folder") continue
 
         // Default to area-documents for uncategorized files
-        const resource = driveFileToResource(file, "area-documents")
-
-        // Check if already added
-        const allIds = [
-          ...result.delegateReports,
-          ...result.areaDocuments,
-          ...result.forms,
-          ...result.conferenceMaterials,
-        ].map((r) => r.driveId)
-
-        if (!allIds.includes(resource.driveId)) {
+        if (!allIds.has(file.id)) {
+          const resource = driveFileToResource(file, "area-documents")
           result.areaDocuments.push(resource)
         }
       }

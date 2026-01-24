@@ -203,66 +203,82 @@ export async function getRecordings(
       const categories: CategoryInfo[] = []
       const recordings: Record<string, Recording[]> = {}
 
-      // Get category subfolders
-      const categoryFolders = await listFolders(credentials, recordingsFolderId)
+      // Get category subfolders and root files in parallel
+      const [categoryFolders, rootFiles] = await Promise.all([
+        listFolders(credentials, recordingsFolderId),
+        listAllFiles(credentials, recordingsFolderId, { orderBy: "name desc" }),
+      ])
 
-      for (const folder of categoryFolders) {
-        const categoryId = folderNameToSlug(folder.name)
-        const categoryName = formatCategoryName(folder.name)
-        const categoryRecordings: Recording[] = []
+      // Process all category folders in parallel
+      const categoryResults = await Promise.all(
+        categoryFolders.map(async (folder) => {
+          const categoryId = folderNameToSlug(folder.name)
+          const categoryName = formatCategoryName(folder.name)
+          const categoryRecordings: Recording[] = []
 
-        // Check for year subfolders within category
-        const subfolders = await listFolders(credentials, folder.id)
-        const hasYearSubfolders = subfolders.some((sf) => /^20\d{2}$/.test(sf.name))
+          // Get subfolders and direct files in parallel
+          const [subfolders, directFiles] = await Promise.all([
+            listFolders(credentials, folder.id),
+            listAllFiles(credentials, folder.id, { orderBy: "name desc" }),
+          ])
 
-        if (hasYearSubfolders) {
-          // Process year subfolders
-          for (const yearFolder of subfolders) {
-            const files = await listAllFiles(credentials, yearFolder.id, {
-              orderBy: "name desc",
-            })
+          const hasYearSubfolders = subfolders.some((sf) => /^20\d{2}$/.test(sf.name))
 
-            const audioFiles = files.filter((f) => isAudioFile(f.mimeType))
-            for (const file of audioFiles) {
-              const recording = driveFileToRecording(file, categoryId, yearFolder.name)
+          if (hasYearSubfolders) {
+            // Process all year subfolders in parallel
+            const yearResults = await Promise.all(
+              subfolders.map(async (yearFolder) => {
+                const files = await listAllFiles(credentials, yearFolder.id, {
+                  orderBy: "name desc",
+                })
+                return { files, folderName: yearFolder.name }
+              })
+            )
+
+            for (const { files, folderName } of yearResults) {
+              const audioFiles = files.filter((f) => isAudioFile(f.mimeType))
+              for (const file of audioFiles) {
+                const recording = driveFileToRecording(file, categoryId, folderName)
+                categoryRecordings.push(recording)
+              }
+            }
+          }
+
+          // Process direct files in category folder
+          const audioFiles = directFiles.filter((f) => isAudioFile(f.mimeType))
+          for (const file of audioFiles) {
+            // Check for duplicates (might already be included from year subfolder)
+            if (!categoryRecordings.some((r) => r.driveId === file.id)) {
+              const recording = driveFileToRecording(file, categoryId, folder.name)
               categoryRecordings.push(recording)
             }
           }
-        }
 
-        // Also get files directly in the category folder
-        const files = await listAllFiles(credentials, folder.id, {
-          orderBy: "name desc",
-        })
+          categoryRecordings.sort(sortRecordings)
 
-        const audioFiles = files.filter((f) => isAudioFile(f.mimeType))
-        for (const file of audioFiles) {
-          // Check for duplicates (might already be included from year subfolder)
-          if (!categoryRecordings.some((r) => r.driveId === file.id)) {
-            const recording = driveFileToRecording(file, categoryId, folder.name)
-            categoryRecordings.push(recording)
-          }
-        }
-
-        // Sort and add to results
-        categoryRecordings.sort(sortRecordings)
-
-        // Only add categories that have recordings
-        if (categoryRecordings.length > 0) {
-          categories.push({
-            id: categoryId,
-            name: categoryName,
+          return {
+            categoryId,
+            categoryName,
             folderId: folder.id,
-            count: categoryRecordings.length,
+            recordings: categoryRecordings,
+          }
+        })
+      )
+
+      // Collect results from parallel processing
+      for (const result of categoryResults) {
+        if (result.recordings.length > 0) {
+          categories.push({
+            id: result.categoryId,
+            name: result.categoryName,
+            folderId: result.folderId,
+            count: result.recordings.length,
           })
-          recordings[categoryId] = categoryRecordings
+          recordings[result.categoryId] = result.recordings
         }
       }
 
-      // Also check for audio files directly in the root recordings folder (misc category)
-      const rootFiles = await listAllFiles(credentials, recordingsFolderId, {
-        orderBy: "name desc",
-      })
+      // Process root audio files (misc category)
       const rootAudioFiles = rootFiles.filter((f) => isAudioFile(f.mimeType))
 
       if (rootAudioFiles.length > 0) {
