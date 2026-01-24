@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { useGoogleReCaptcha } from "react-google-recaptcha-v3"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
-import { Calendar, MapPin, Clock, ExternalLink, Search, Plus, X, Video, Globe, HelpCircle } from "lucide-react"
+import { Calendar, MapPin, Clock, ExternalLink, Search, Plus, X, Globe, HelpCircle } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -33,53 +33,6 @@ const locationTypeLabels: Record<LocationType, string> = {
   "in-person": "In Person",
   "hybrid": "Hybrid",
   "online": "Online",
-}
-
-function formatEventLocation(event: Event) {
-  const parts: React.ReactNode[] = []
-
-  if (event.locationType === "online") {
-    parts.push(
-      <span key="type" className="flex items-center gap-1">
-        <Globe className="h-3 w-3" />
-        Online
-      </span>
-    )
-  } else if (event.locationType === "hybrid") {
-    parts.push(
-      <span key="type" className="flex items-center gap-1">
-        <Globe className="h-3 w-3" />
-        Hybrid
-      </span>
-    )
-  }
-
-  if (event.address) {
-    if (parts.length > 0) {
-      parts.push(<span key="sep1" className="mx-1">•</span>)
-    }
-    parts.push(<span key="address">{event.address}</span>)
-  }
-
-  if (event.meetingLink) {
-    if (parts.length > 0) {
-      parts.push(<span key="sep2" className="mx-1">•</span>)
-    }
-    parts.push(
-      <a
-        key="link"
-        href={event.meetingLink}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-primary hover:underline inline-flex items-center gap-1"
-      >
-        <Video className="h-3 w-3" />
-        Join Online
-      </a>
-    )
-  }
-
-  return parts.length > 0 ? parts : "Location TBD"
 }
 
 const eventTypes = ["All", "Assembly", "Regional", "Workshop", "Meeting", "Committee", "District"]
@@ -1050,10 +1003,55 @@ export function EventsClient({ events }: EventsClientProps) {
                             <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
                             <span>{formatTimeRange(event.startTime, event.endTime, userTimezone)}</span>
                           </div>
-                          <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
-                            <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
-                            <span className="lg:text-right flex flex-wrap items-center gap-1">{formatEventLocation(event)}</span>
-                          </div>
+                          {event.address && (
+                            <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
+                              <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                              <a
+                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="lg:text-right text-primary hover:underline"
+                              >
+                                {event.address}
+                              </a>
+                            </div>
+                          )}
+                          {(event.locationType === "online" || event.locationType === "hybrid") && (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                              <Globe className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                              {event.meetingLink ? (
+                                <a
+                                  href={event.meetingLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary hover:underline"
+                                >
+                                  {event.locationType === "hybrid" ? "Join Online (Hybrid)" : "Join Online"}
+                                </a>
+                              ) : (
+                                <span>{event.locationType === "hybrid" ? "Hybrid Event" : "Online Event"}</span>
+                              )}
+                            </div>
+                          )}
+                          {!event.address && event.locationType === "in-person" && (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                              <MapPin className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                              <span>Location TBD</span>
+                            </div>
+                          )}
+                          {event.flyerUrl && (
+                            <div className="flex items-center gap-2 text-sm lg:justify-end">
+                              <ExternalLink className="h-4 w-4 flex-shrink-0 text-primary" aria-hidden="true" />
+                              <a
+                                href={event.flyerUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary hover:underline font-medium"
+                              >
+                                View Flyer
+                              </a>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </article>
@@ -1106,10 +1104,55 @@ export function EventsClient({ events }: EventsClientProps) {
                             <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
                             <span>{formatTimeRange(event.startTime, event.endTime, userTimezone)}</span>
                           </div>
-                          <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
-                            <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
-                            <span className="lg:text-right flex flex-wrap items-center gap-1">{formatEventLocation(event)}</span>
-                          </div>
+                          {event.address && (
+                            <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
+                              <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                              <a
+                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="lg:text-right text-primary hover:underline"
+                              >
+                                {event.address}
+                              </a>
+                            </div>
+                          )}
+                          {(event.locationType === "online" || event.locationType === "hybrid") && (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                              <Globe className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                              {event.meetingLink ? (
+                                <a
+                                  href={event.meetingLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary hover:underline"
+                                >
+                                  {event.locationType === "hybrid" ? "Join Online (Hybrid)" : "Join Online"}
+                                </a>
+                              ) : (
+                                <span>{event.locationType === "hybrid" ? "Hybrid Event" : "Online Event"}</span>
+                              )}
+                            </div>
+                          )}
+                          {!event.address && event.locationType === "in-person" && (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                              <MapPin className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                              <span>Location TBD</span>
+                            </div>
+                          )}
+                          {event.flyerUrl && (
+                            <div className="flex items-center gap-2 text-sm lg:justify-end">
+                              <ExternalLink className="h-4 w-4 flex-shrink-0 text-primary" aria-hidden="true" />
+                              <a
+                                href={event.flyerUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary hover:underline font-medium"
+                              >
+                                View Flyer
+                              </a>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </article>
