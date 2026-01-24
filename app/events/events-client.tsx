@@ -991,7 +991,7 @@ export function EventsClient({ events }: EventsClientProps) {
                           <h2 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                             {event.title}
                           </h2>
-                          <p className="mt-2 text-muted-foreground">{event.description}</p>
+                          <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{event.description}</p>
                         </div>
 
                         <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
@@ -1092,7 +1092,7 @@ export function EventsClient({ events }: EventsClientProps) {
                           <h4 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                             {event.title}
                           </h4>
-                          <p className="mt-2 text-muted-foreground">{event.description}</p>
+                          <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{event.description}</p>
                         </div>
 
                         <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">

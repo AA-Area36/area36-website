@@ -149,7 +149,7 @@ const districts = [
     counties: ["Wright"],
     website: "district14area36aa.org",
     meetingDay: "1st Monday",
-    meetingTime: "7:30 PM",
+    meetingTime: "7:00 PM",
     meetingLocation: "Buffalo United Methodist Church",
     meetingAddress: "609 8th St NW, Buffalo, MN 55313",
   },

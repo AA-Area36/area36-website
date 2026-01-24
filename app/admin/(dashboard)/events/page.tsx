@@ -193,7 +193,7 @@ function EventCard({
             </div>
 
             <h3 className="text-lg font-semibold">{event.title}</h3>
-            <p className="text-sm text-muted-foreground">{event.description}</p>
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{event.description}</p>
 
             <div className="flex flex-wrap gap-4 text-sm">
               <div className="flex items-center gap-2 text-muted-foreground">
