@@ -2,7 +2,8 @@ import { Suspense } from "react"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { Mic } from "lucide-react"
-import { fetchRecordings } from "./actions"
+import { fetchRecordings, getRegisteredFolders } from "./actions"
+import { getUnlockedFolders } from "@/lib/recordings/session"
 import { RecordingsClient } from "./recordings-client"
 
 // Loading skeleton
@@ -44,20 +45,57 @@ function EmptyState() {
 }
 
 async function RecordingsContent() {
-  const { categories, recordings, years } = await fetchRecordings()
+  const [{ categories, recordings, years }, registeredFolders, unlockedFolders] = await Promise.all([
+    fetchRecordings(),
+    getRegisteredFolders(),
+    getUnlockedFolders(),
+  ])
 
-  // Calculate total count from the recordings object
-  const totalCount = Object.values(recordings).flat().length
+  // Create a map of registered folder driveIds to names
+  const registeredFolderMap = new Map(
+    registeredFolders.map(f => [f.driveId, f.folderName])
+  )
 
-  if (totalCount === 0) {
+  // Filter categories to only include registered folders
+  const filteredCategories = categories.filter(cat => 
+    cat.folderId && registeredFolderMap.has(cat.folderId)
+  )
+
+  // Update category names to use registered folder names
+  const categoriesWithNames = filteredCategories.map(cat => ({
+    ...cat,
+    name: cat.folderId ? registeredFolderMap.get(cat.folderId) || cat.name : cat.name,
+  }))
+
+  // Filter recordings to only include those from registered AND unlocked folders
+  // This is critical for security - locked folder recordings should never be sent to client
+  const filteredRecordings: Record<string, typeof recordings[string]> = {}
+  for (const cat of filteredCategories) {
+    if (recordings[cat.id]) {
+      // Only include recordings if folder is unlocked (or has no folderId = public)
+      const isUnlocked = !cat.folderId || unlockedFolders.includes(cat.folderId)
+      if (isUnlocked) {
+        filteredRecordings[cat.id] = recordings[cat.id]
+      } else {
+        // For locked folders, send empty array (category visible but no recordings data)
+        filteredRecordings[cat.id] = []
+      }
+    }
+  }
+
+  // Calculate total count from the filtered recordings
+  const totalCount = Object.values(filteredRecordings).flat().length
+
+  if (totalCount === 0 && filteredCategories.length === 0) {
     return <EmptyState />
   }
 
   return (
     <RecordingsClient
-      categories={categories}
-      recordings={recordings}
+      categories={categoriesWithNames}
+      recordings={filteredRecordings}
       years={years}
+      unlockedFolders={unlockedFolders}
     />
   )
 }

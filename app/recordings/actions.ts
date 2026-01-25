@@ -3,6 +3,10 @@
 import { getGDriveCredentials } from "@/lib/gdrive/client"
 import { getRecordings, getRecordingYears } from "@/lib/gdrive/recordings"
 import type { RecordingsData, CategoryInfo, Recording } from "@/lib/gdrive/types"
+import { getDb } from "@/lib/db"
+import { recordingFolders } from "@/lib/db/schema"
+import { eq } from "drizzle-orm"
+import { setUnlockedFolder } from "@/lib/recordings/session"
 
 export interface FetchRecordingsResult {
   categories: CategoryInfo[]
@@ -69,5 +73,66 @@ export async function fetchRecordings(): Promise<FetchRecordingsResult> {
       recordings: {},
       years: [],
     }
+  }
+}
+
+/**
+ * Get registered folder IDs from database
+ */
+export async function getRegisteredFolderIds(): Promise<string[]> {
+  try {
+    const db = await getDb()
+    const folders = await db.select({ driveId: recordingFolders.driveId }).from(recordingFolders)
+    return folders.map(f => f.driveId)
+  } catch (error) {
+    console.error("Error fetching registered folders:", error)
+    return []
+  }
+}
+
+/**
+ * Get folder info from database for display
+ */
+export async function getRegisteredFolders(): Promise<{ driveId: string; folderName: string }[]> {
+  try {
+    const db = await getDb()
+    const folders = await db.select({ 
+      driveId: recordingFolders.driveId, 
+      folderName: recordingFolders.folderName 
+    }).from(recordingFolders)
+    return folders
+  } catch (error) {
+    console.error("Error fetching registered folders:", error)
+    return []
+  }
+}
+
+/**
+ * Verify password for a recording folder
+ */
+export async function verifyFolderPassword(
+  driveId: string,
+  password: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const db = await getDb()
+    const [folder] = await db
+      .select()
+      .from(recordingFolders)
+      .where(eq(recordingFolders.driveId, driveId))
+    
+    if (!folder) {
+      return { success: false, error: "Folder not found" }
+    }
+    
+    if (folder.password !== password) {
+      return { success: false, error: "Incorrect password" }
+    }
+    
+    await setUnlockedFolder(driveId)
+    return { success: true }
+  } catch (error) {
+    console.error("Error verifying folder password:", error)
+    return { success: false, error: "Verification failed" }
   }
 }

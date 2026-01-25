@@ -13,6 +13,8 @@ import {
   Calendar,
   Clock,
   Mic,
+  Lock,
+  Download,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -27,12 +29,14 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Slider } from "@/components/ui/slider"
 import { cn } from "@/lib/utils"
+import { PasswordDialog } from "@/components/password-dialog"
 import type { Recording, CategoryInfo } from "@/lib/gdrive/types"
 
 interface RecordingsClientProps {
   categories: CategoryInfo[]
   recordings: Record<string, Recording[]>
   years: number[]
+  unlockedFolders?: string[]
 }
 
 interface AudioPlayerState {
@@ -51,13 +55,16 @@ function formatTime(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, "0")}`
 }
 
-export function RecordingsClient({ categories, recordings, years }: RecordingsClientProps) {
+export function RecordingsClient({ categories, recordings, years, unlockedFolders = [] }: RecordingsClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const audioRef = React.useRef<HTMLAudioElement>(null)
 
-  // URL state - default to first category if available
-  const defaultTab = categories[0]?.id || ""
+  // URL state - default to first unlocked category if available
+  const firstUnlockedCategory = categories.find(cat => 
+    !cat.folderId || unlockedFolders.includes(cat.folderId)
+  )
+  const defaultTab = firstUnlockedCategory?.id || categories[0]?.id || ""
   const initialTab = searchParams.get("tab") || defaultTab
   const initialSearch = searchParams.get("q") || ""
   const initialYear = searchParams.get("year") || "all"
@@ -65,6 +72,13 @@ export function RecordingsClient({ categories, recordings, years }: RecordingsCl
   const [activeTab, setActiveTab] = React.useState(initialTab)
   const [searchQuery, setSearchQuery] = React.useState(initialSearch)
   const [yearFilter, setYearFilter] = React.useState(initialYear)
+  
+  // Password dialog state
+  const [passwordDialog, setPasswordDialog] = React.useState<{
+    open: boolean
+    folderId: string
+    folderName: string
+  }>({ open: false, folderId: "", folderName: "" })
 
   // Audio player state
   const [playerState, setPlayerState] = React.useState<AudioPlayerState>({
@@ -75,6 +89,11 @@ export function RecordingsClient({ categories, recordings, years }: RecordingsCl
     volume: 0.8,
     isMuted: false,
   })
+
+  // Helper to check if a category is locked
+  const isCategoryLocked = React.useCallback((category: CategoryInfo) => {
+    return category.folderId && !unlockedFolders.includes(category.folderId)
+  }, [unlockedFolders])
 
   // Update URL when filters change
   const updateURL = React.useCallback(
@@ -249,10 +268,10 @@ export function RecordingsClient({ categories, recordings, years }: RecordingsCl
 
   return (
     <div className="space-y-8">
-      {/* Hidden audio element */}
+      {/* Hidden audio element - uses proxy API to avoid CORS issues */}
       <audio ref={audioRef} preload="metadata">
         {playerState.recording && (
-          <source src={playerState.recording.streamUrl} type="audio/mpeg" />
+          <source src={`/api/recordings/stream/${playerState.recording.driveId}`} type="audio/mpeg" />
         )}
       </audio>
 
@@ -307,17 +326,38 @@ export function RecordingsClient({ categories, recordings, years }: RecordingsCl
       {categories.length > 0 ? (
         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
           <TabsList className="flex-wrap h-auto gap-2">
-            {categories.map((category) => (
-              <TabsTrigger key={category.id} value={category.id} className="gap-2">
-                <Mic className="h-4 w-4" aria-hidden="true" />
-                {category.name}
-                {category.count > 0 && (
-                  <Badge variant="secondary" className="ml-1 text-xs">
-                    {category.count}
-                  </Badge>
-                )}
-              </TabsTrigger>
-            ))}
+            {categories.map((category) => {
+              const locked = isCategoryLocked(category)
+              return (
+                <TabsTrigger 
+                  key={category.id} 
+                  value={category.id} 
+                  className="gap-2"
+                  onClick={(e) => {
+                    if (locked) {
+                      e.preventDefault()
+                      setPasswordDialog({
+                        open: true,
+                        folderId: category.folderId || "",
+                        folderName: category.name,
+                      })
+                    }
+                  }}
+                >
+                  {locked ? (
+                    <Lock className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <Mic className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  {category.name}
+                  {category.count > 0 && (
+                    <Badge variant="secondary" className="ml-1 text-xs">
+                      {category.count}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              )
+            })}
           </TabsList>
 
           {/* Results count */}
@@ -386,31 +426,38 @@ export function RecordingsClient({ categories, recordings, years }: RecordingsCl
                             playerState.recording?.id === recording.id && playerState.isPlaying
 
                           return (
-                            <button
+                            <div
                               key={recording.id}
-                              onClick={() => playRecording(recording)}
                               className={cn(
-                                "w-full text-left rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md",
+                                "w-full rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md",
                                 playerState.recording?.id === recording.id &&
                                   "border-primary bg-primary/5"
                               )}
                             >
                               <div className="flex items-center gap-4">
-                                <div
+                                {/* Play button */}
+                                <button
+                                  onClick={() => playRecording(recording)}
                                   className={cn(
                                     "flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full transition-colors",
                                     isCurrentlyPlaying
                                       ? "bg-primary text-primary-foreground"
-                                      : "bg-primary/10 text-primary"
+                                      : "bg-primary/10 text-primary hover:bg-primary/20"
                                   )}
+                                  aria-label={isCurrentlyPlaying ? "Pause" : "Play"}
                                 >
                                   {isCurrentlyPlaying ? (
                                     <Pause className="h-5 w-5" aria-hidden="true" />
                                   ) : (
                                     <Play className="h-5 w-5 ml-0.5" aria-hidden="true" />
                                   )}
-                                </div>
-                                <div className="flex-1 min-w-0">
+                                </button>
+                                
+                                {/* Track info - clickable to play */}
+                                <button
+                                  onClick={() => playRecording(recording)}
+                                  className="flex-1 min-w-0 text-left"
+                                >
                                   <h4 className="font-medium text-foreground truncate">
                                     {recording.title}
                                   </h4>
@@ -433,12 +480,25 @@ export function RecordingsClient({ categories, recordings, years }: RecordingsCl
                                       {recording.description}
                                     </p>
                                   )}
-                                </div>
+                                </button>
+                                
+                                {/* Year badge */}
                                 <Badge variant="secondary" className="text-xs flex-shrink-0">
                                   {recording.year}
                                 </Badge>
+                                
+                                {/* Download button */}
+                                <a
+                                  href={`/api/recordings/download/${recording.driveId}`}
+                                  download
+                                  className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors"
+                                  aria-label={`Download ${recording.title}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Download className="h-4 w-4" />
+                                </a>
                               </div>
-                            </button>
+                            </div>
                           )
                         })}
                       </div>
@@ -516,6 +576,18 @@ export function RecordingsClient({ categories, recordings, years }: RecordingsCl
                   aria-label="Volume"
                 />
               </div>
+
+              {/* Download button in player */}
+              {playerState.recording && (
+                <a
+                  href={`/api/recordings/download/${playerState.recording.driveId}`}
+                  download
+                  className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-muted transition-colors"
+                  aria-label="Download current recording"
+                >
+                  <Download className="h-4 w-4" />
+                </a>
+              )}
             </div>
           </div>
         </div>
@@ -523,6 +595,15 @@ export function RecordingsClient({ categories, recordings, years }: RecordingsCl
 
       {/* Spacer for fixed player */}
       {playerState.recording && <div className="h-24" />}
+
+      {/* Password Dialog for locked categories */}
+      <PasswordDialog
+        folderId={passwordDialog.folderId}
+        folderName={passwordDialog.folderName}
+        open={passwordDialog.open}
+        onOpenChange={(open) => setPasswordDialog(prev => ({ ...prev, open }))}
+        onSuccess={() => window.location.reload()}
+      />
     </div>
   )
 }
