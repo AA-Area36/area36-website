@@ -15,7 +15,8 @@ interface SubscriptionDriveSectionProps {
 
 export function SubscriptionDriveSection({ drive, leaderboard }: SubscriptionDriveSectionProps) {
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
+    // Parse as local date by appending T00:00:00 (avoids UTC interpretation)
+    const date = new Date(dateString + "T00:00:00")
     return date.toLocaleDateString("en-US", {
       month: "long",
       day: "numeric",
@@ -38,31 +39,31 @@ export function SubscriptionDriveSection({ drive, leaderboard }: SubscriptionDri
     approved: {
       label: "Approved",
       theme: {
-        light: "oklch(0.45 0.15 240)",
-        dark: "oklch(0.6 0.15 240)",
+        light: "oklch(0.45 0.18 300)",
+        dark: "oklch(0.6 0.18 300)",
       },
     },
     pending: {
       label: "Pending",
       theme: {
-        light: "oklch(0.45 0.15 240 / 0.4)",
-        dark: "oklch(0.6 0.15 240 / 0.4)",
+        light: "oklch(0.45 0.18 300 / 0.4)",
+        dark: "oklch(0.6 0.18 300 / 0.4)",
       },
     },
   } satisfies ChartConfig
 
   return (
-    <section className="py-12 sm:py-16 bg-muted/30" aria-labelledby="subscription-drive-heading">
+    <section id="drive" className="py-12 sm:py-16 bg-purple-50 dark:bg-purple-950/20" aria-labelledby="subscription-drive-heading">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <Trophy className="h-8 w-8 text-amber-500" />
+            <Trophy className="h-8 w-8 text-purple-600 dark:text-purple-400" />
             <h2 id="subscription-drive-heading" className="text-2xl font-bold text-foreground">
               {drive.name}
             </h2>
           </div>
           {drive.description && (
-            <p className="text-muted-foreground max-w-2xl mx-auto">{drive.description}</p>
+            <p className="text-muted-foreground max-w-2xl mx-auto whitespace-pre-line">{drive.description}</p>
           )}
         </div>
 
@@ -73,7 +74,7 @@ export function SubscriptionDriveSection({ drive, leaderboard }: SubscriptionDri
             <Card>
               <CardHeader className="pb-2">
                 <CardDescription className="flex items-center gap-2">
-                  <Trophy className="h-4 w-4 text-amber-500" />
+                  <Trophy className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                   Current Leader
                 </CardDescription>
                 <CardTitle>
@@ -173,10 +174,10 @@ export function SubscriptionDriveSection({ drive, leaderboard }: SubscriptionDri
           {drive.prizeDescription && (
             <div className="mb-6">
               <div className="flex items-center justify-center gap-2 mb-2">
-                <Gift className="h-5 w-5 text-primary" />
+                <Gift className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                 <h3 className="font-semibold text-foreground">Prize</h3>
               </div>
-              <p className="text-muted-foreground">{drive.prizeDescription}</p>
+              <p className="text-muted-foreground whitespace-pre-line">{drive.prizeDescription}</p>
             </div>
           )}
 

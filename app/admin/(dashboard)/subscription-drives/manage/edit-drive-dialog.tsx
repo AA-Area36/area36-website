@@ -92,6 +92,7 @@ export function EditDriveDialog({ drive }: EditDriveDialogProps) {
                 disabled={isPending}
                 rows={3}
               />
+              <p className="text-xs text-muted-foreground">Newlines will be preserved in the display.</p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -124,8 +125,9 @@ export function EditDriveDialog({ drive }: EditDriveDialogProps) {
                 value={formData.prizeDescription}
                 onChange={(e) => setFormData({ ...formData, prizeDescription: e.target.value })}
                 disabled={isPending}
-                rows={2}
+                rows={4}
               />
+              <p className="text-xs text-muted-foreground">Newlines will be preserved in the display.</p>
             </div>
             <div className="flex items-center justify-between">
               <Label htmlFor="isActive">Active</Label>

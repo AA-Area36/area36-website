@@ -128,7 +128,7 @@ export function SubmitConfirmationDialog() {
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button size="lg">
+        <Button size="lg" className="bg-purple-600 hover:bg-purple-700 dark:bg-purple-600 dark:hover:bg-purple-500">
           <Upload className="h-4 w-4 mr-2" />
           Submit Confirmation
         </Button>
