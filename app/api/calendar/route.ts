@@ -19,10 +19,12 @@ function escapeICalText(text: string): string {
  * Format a date and time as iCal DATETIME format
  * Returns format: YYYYMMDDTHHMMSS
  */
-function formatICalDateTime(date: string, time: string): string {
+function formatICalDateTime(date: string, time: string | null): string {
   // date format: YYYY-MM-DD, time format: HH:MM
   const [year, month, day] = date.split("-")
-  const [hour, minute] = time.split(":")
+  // Default to 00:00 if time is not provided (TBD)
+  const timeStr = time || "00:00"
+  const [hour, minute] = timeStr.split(":")
   return `${year}${month}${day}T${hour}${minute}00`
 }
 

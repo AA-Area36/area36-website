@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import {
   FileText,
   FolderOpen,
@@ -15,6 +16,9 @@ interface ResourcesContentProps {
   resources: ResourcesByCategory
 }
 
+const validTabs = ["delegate", "area", "forms"] as const
+type TabValue = (typeof validTabs)[number]
+
 // Empty state
 function EmptyState({ category }: { category: string }) {
   return (
@@ -28,9 +32,18 @@ function EmptyState({ category }: { category: string }) {
 }
 
 export function ResourcesContent({ resources }: ResourcesContentProps) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  
+  // Get initial tab from URL or default to "delegate"
+  const tabFromUrl = searchParams.get("tab")
+  const initialTab: TabValue = validTabs.includes(tabFromUrl as TabValue) 
+    ? (tabFromUrl as TabValue) 
+    : "delegate"
+  
   const [viewerOpen, setViewerOpen] = React.useState(false)
   const [selectedResource, setSelectedResource] = React.useState<Resource | null>(null)
-  const [currentCategory, setCurrentCategory] = React.useState<string>("delegate")
+  const [currentCategory, setCurrentCategory] = React.useState<string>(initialTab)
 
   // Get the current list of resources based on category
   const getCurrentResources = (): Resource[] => {
@@ -56,12 +69,25 @@ export function ResourcesContent({ resources }: ResourcesContentProps) {
     setSelectedResource(resource)
   }
 
+  // Update URL when tab changes
+  const handleTabChange = (value: string) => {
+    setCurrentCategory(value)
+    const params = new URLSearchParams(searchParams.toString())
+    if (value === "delegate") {
+      params.delete("tab")
+    } else {
+      params.set("tab", value)
+    }
+    const queryString = params.toString()
+    router.replace(`/resources${queryString ? `?${queryString}` : ""}`, { scroll: false })
+  }
+
   return (
     <>
       <Tabs
-        defaultValue="delegate"
+        value={currentCategory}
         className="space-y-8"
-        onValueChange={setCurrentCategory}
+        onValueChange={handleTabChange}
       >
         <TabsList className="flex-wrap h-auto gap-2">
           <TabsTrigger value="delegate" className="gap-2">

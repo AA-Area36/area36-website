@@ -2,7 +2,7 @@
 
 import { auth } from "@/lib/auth"
 import { getDb } from "@/lib/db"
-import { events, type LocationType, type EventType } from "@/lib/db/schema"
+import { events, eventToTypes, type LocationType, type EventType } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { sendDenialEmailToSubmitter, sendDenialEmailToChair } from "@/lib/email"
@@ -11,15 +11,18 @@ export interface UpdateEventData {
   title: string
   date: string
   endDate?: string | null
-  startTime: string
+  startTime?: string | null
   endTime?: string | null
   timezone: string
   locationType: LocationType
   address?: string | null
   meetingLink?: string | null
   description: string
-  type: EventType
+  types: EventType[]
   flyerUrl?: string | null
+  timeTBD?: boolean
+  addressTBD?: boolean
+  meetingLinkTBD?: boolean
 }
 
 export async function approveEvent(eventId: string): Promise<void> {
@@ -119,24 +122,45 @@ export async function updateEvent(eventId: string, data: UpdateEventData): Promi
 
   try {
     const db = await getDb()
+    
+    // Use first type for backward compatibility with legacy `type` column
+    const primaryType = data.types[0] || null
+
     await db
       .update(events)
       .set({
         title: data.title,
         date: data.date,
         endDate: data.endDate || null,
-        startTime: data.startTime,
+        startTime: data.startTime || null,
         endTime: data.endTime || null,
         timezone: data.timezone,
         locationType: data.locationType,
         address: data.address || null,
         meetingLink: data.meetingLink || null,
         description: data.description,
-        type: data.type,
+        type: primaryType, // For backward compatibility
         flyerUrl: data.flyerUrl || null,
+        timeTBD: data.timeTBD ?? false,
+        addressTBD: data.addressTBD ?? false,
+        meetingLinkTBD: data.meetingLinkTBD ?? false,
         updatedAt: new Date().toISOString(),
       })
       .where(eq(events.id, eventId))
+
+    // Update event types in junction table
+    // First, delete existing types
+    await db.delete(eventToTypes).where(eq(eventToTypes.eventId, eventId))
+    
+    // Then insert new types
+    if (data.types.length > 0) {
+      await db.insert(eventToTypes).values(
+        data.types.map((type) => ({
+          eventId,
+          type,
+        }))
+      )
+    }
 
     revalidatePath("/admin/events")
     revalidatePath("/events")

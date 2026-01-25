@@ -1,6 +1,6 @@
 import { Suspense } from "react"
 import { getDb } from "@/lib/db"
-import { events } from "@/lib/db/schema"
+import { events, eventToTypes, eventFlyers, type EventType, type EventFlyer } from "@/lib/db/schema"
 import { eq, asc, gt, and, or, isNull } from "drizzle-orm"
 import { EventsClient } from "./events-client"
 import { ReCaptchaProvider } from "@/components/recaptcha-provider"
@@ -20,7 +20,8 @@ async function getApprovedEvents() {
   yesterday.setDate(yesterday.getDate() - 1)
   const yesterdayStr = yesterday.toLocaleDateString("en-CA", { timeZone: "America/Chicago" })
 
-  return db
+  // Get approved events
+  const eventsData = await db
     .select()
     .from(events)
     .where(
@@ -33,6 +34,41 @@ async function getApprovedEvents() {
       )
     )
     .orderBy(asc(events.date))
+
+  // Get all event types from junction table
+  const eventTypesData = await db
+    .select()
+    .from(eventToTypes)
+  
+  // Create a map of eventId -> types array
+  const typesMap = new Map<string, EventType[]>()
+  for (const row of eventTypesData) {
+    const existing = typesMap.get(row.eventId) || []
+    existing.push(row.type)
+    typesMap.set(row.eventId, existing)
+  }
+
+  // Get all event flyers
+  const flyersData = await db
+    .select()
+    .from(eventFlyers)
+    .orderBy(eventFlyers.order)
+  
+  // Create a map of eventId -> flyers array
+  const flyersMap = new Map<string, EventFlyer[]>()
+  for (const row of flyersData) {
+    const existing = flyersMap.get(row.eventId) || []
+    existing.push(row)
+    flyersMap.set(row.eventId, existing)
+  }
+
+  // Merge types and flyers into events
+  // If event has types in junction table, use those; otherwise fall back to legacy `type` column
+  return eventsData.map((event) => ({
+    ...event,
+    types: typesMap.get(event.id) || (event.type ? [event.type] : []),
+    flyers: flyersMap.get(event.id) || [],
+  }))
 }
 
 export default async function EventsPage() {

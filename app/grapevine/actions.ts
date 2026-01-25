@@ -128,59 +128,64 @@ export async function submitDriveConfirmation(formData: FormData) {
     }
   }
 
-  if (!recaptchaToken) {
-    return {
-      success: false,
-      error: "reCAPTCHA verification failed. Please try again.",
-    }
-  }
-
-  // Verify reCAPTCHA token
-  const secretKey = await getRecaptchaSecretKey()
-  if (!secretKey) {
-    console.error("RECAPTCHA_SECRET_KEY is not configured")
-    return {
-      success: false,
-      error: "Server configuration error. Please try again later.",
-    }
-  }
-
-  try {
-    const verifyResponse = await fetch("https://www.google.com/recaptcha/api/siteverify", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        secret: secretKey,
-        response: recaptchaToken,
-      }),
-    })
-
-    const verifyResult: ReCaptchaResponse = await verifyResponse.json()
-    console.log("reCAPTCHA verify result:", verifyResult)
-
-    if (!verifyResult.success) {
-      console.error("reCAPTCHA verification failed:", verifyResult["error-codes"])
+  // Skip reCAPTCHA verification in development/localhost
+  const isDevelopment = process.env.NODE_ENV === "development"
+  
+  if (!isDevelopment) {
+    if (!recaptchaToken) {
       return {
         success: false,
-        error: `reCAPTCHA verification failed: ${verifyResult["error-codes"]?.join(", ") || "unknown error"}`,
+        error: "reCAPTCHA verification failed. Please try again.",
       }
     }
 
-    // Check the score (v3 returns a score from 0.0 to 1.0)
-    if (verifyResult.score !== undefined && verifyResult.score < RECAPTCHA_SCORE_THRESHOLD) {
-      console.warn("reCAPTCHA score too low:", verifyResult.score)
+    // Verify reCAPTCHA token
+    const secretKey = await getRecaptchaSecretKey()
+    if (!secretKey) {
+      console.error("RECAPTCHA_SECRET_KEY is not configured")
       return {
         success: false,
-        error: "Suspicious activity detected. Please try again or contact us directly.",
+        error: "Server configuration error. Please try again later.",
       }
     }
-  } catch (error) {
-    console.error("reCAPTCHA verification error:", error)
-    return {
-      success: false,
-      error: "reCAPTCHA verification failed. Please try again.",
+
+    try {
+      const verifyResponse = await fetch("https://www.google.com/recaptcha/api/siteverify", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          secret: secretKey,
+          response: recaptchaToken,
+        }),
+      })
+
+      const verifyResult: ReCaptchaResponse = await verifyResponse.json()
+      console.log("reCAPTCHA verify result:", verifyResult)
+
+      if (!verifyResult.success) {
+        console.error("reCAPTCHA verification failed:", verifyResult["error-codes"])
+        return {
+          success: false,
+          error: `reCAPTCHA verification failed: ${verifyResult["error-codes"]?.join(", ") || "unknown error"}`,
+        }
+      }
+
+      // Check the score (v3 returns a score from 0.0 to 1.0)
+      if (verifyResult.score !== undefined && verifyResult.score < RECAPTCHA_SCORE_THRESHOLD) {
+        console.warn("reCAPTCHA score too low:", verifyResult.score)
+        return {
+          success: false,
+          error: "Suspicious activity detected. Please try again or contact us directly.",
+        }
+      }
+    } catch (error) {
+      console.error("reCAPTCHA verification error:", error)
+      return {
+        success: false,
+        error: "reCAPTCHA verification failed. Please try again.",
+      }
     }
   }
 

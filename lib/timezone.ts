@@ -30,10 +30,13 @@ export function formatTimeForDisplay(time: string, timezone: string): string {
 }
 
 export function formatTimeRange(
-  startTime: string,
+  startTime: string | null | undefined,
   endTime: string | null | undefined,
   timezone: string
 ): string {
+  if (!startTime) {
+    return "Time TBD"
+  }
   const start = formatTimeForDisplay(startTime, timezone)
   if (!endTime) {
     return start

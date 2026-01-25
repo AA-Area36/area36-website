@@ -110,7 +110,7 @@ export function MultiSelect({
                   checked={isSelected}
                   className={cn(
                     "pointer-events-none",
-                    isSelected && "border-primary-foreground data-[state=checked]:bg-primary-foreground data-[state=checked]:text-primary"
+                    isSelected && "border-primary-foreground data-[state=checked]:bg-primary-foreground data-[state=checked]:text-primary dark:border-white dark:data-[state=checked]:bg-white dark:data-[state=checked]:text-primary"
                   )}
                 />
                 <span className="flex-1 text-sm">{option.label}</span>

@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { useGoogleReCaptcha } from "react-google-recaptcha-v3"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
-import { Calendar, MapPin, Clock, ExternalLink, Search, Plus, X, Globe, HelpCircle } from "lucide-react"
+import { Calendar, CalendarPlus, MapPin, Clock, ExternalLink, Search, Plus, X, Globe, HelpCircle } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,11 +21,20 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
 import { MultiSelect } from "@/components/multi-select"
 import { DateRangePicker } from "@/components/date-range-picker"
+import { FlyerUpload, type FlyerFile } from "@/components/flyer-upload"
 import { DateRange } from "react-day-picker"
 import { submitEvent } from "./actions"
-import type { Event, LocationType } from "@/lib/db/schema"
+import { uploadEventFlyer } from "./flyer-actions"
+import type { Event, LocationType, EventType, EventFlyer } from "@/lib/db/schema"
+
+// Event with types array and flyers (from junction tables)
+export interface EventWithTypes extends Event {
+  types: EventType[]
+  flyers: EventFlyer[]
+}
 import { locationTypes } from "@/lib/db/schema"
 import { formatTimeRange, getUserTimezone, TIMEZONES, DEFAULT_TIMEZONE } from "@/lib/timezone"
 
@@ -44,6 +53,42 @@ const eventTypeColors: Record<string, string> = {
   Meeting: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
   Committee: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
   District: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
+}
+
+// Generate Google Calendar URL for individual events
+function generateGoogleCalendarUrl(event: Event): string {
+  // Format dates for Google Calendar: YYYYMMDDTHHMMSS
+  const formatDateTime = (date: string, time: string | null) => {
+    const datePart = date.replace(/-/g, '')
+    if (!time) return datePart
+    const timePart = time.replace(':', '') + '00'
+    return `${datePart}T${timePart}`
+  }
+
+  const startDateTime = formatDateTime(event.date, event.startTime)
+  const endDate = event.endDate || event.date
+  const endDateTime = event.endTime 
+    ? formatDateTime(endDate, event.endTime)
+    : formatDateTime(endDate, event.startTime) // If no end time, use start time
+
+  // Build location string
+  let location = ''
+  if (event.address) {
+    location = event.address
+  } else if (event.meetingLink) {
+    location = event.meetingLink
+  }
+
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: event.title,
+    dates: `${startDateTime}/${endDateTime}`,
+    details: event.description,
+    location: location,
+    ctz: event.timezone,
+  })
+
+  return `https://calendar.google.com/calendar/render?${params.toString()}`
 }
 
 // Parse date string as local date to avoid timezone issues
@@ -83,7 +128,7 @@ const eventTypeOptions = eventTypes
   }))
 
 interface EventsClientProps {
-  events: Event[]
+  events: EventWithTypes[]
 }
 
 export function EventsClient({ events }: EventsClientProps) {
@@ -112,6 +157,14 @@ export function EventsClient({ events }: EventsClientProps) {
   const [userTimezone, setUserTimezone] = React.useState(DEFAULT_TIMEZONE)
   const [selectedTimezone, setSelectedTimezone] = React.useState(DEFAULT_TIMEZONE)
   const [locationType, setLocationType] = React.useState<LocationType>("in-person")
+  // TBD flags
+  const [timeTBD, setTimeTBD] = React.useState(false)
+  const [addressTBD, setAddressTBD] = React.useState(false)
+  const [meetingLinkTBD, setMeetingLinkTBD] = React.useState(false)
+  // Selected event types for submission form
+  const [submissionEventTypes, setSubmissionEventTypes] = React.useState<string[]>([])
+  // Flyer files for submission form
+  const [flyerFiles, setFlyerFiles] = React.useState<FlyerFile[]>([])
   const tabsRef = React.useRef<HTMLDivElement>(null)
   const formRef = React.useRef<HTMLFormElement>(null)
 
@@ -122,6 +175,11 @@ export function EventsClient({ events }: EventsClientProps) {
     setFieldErrors({})
     setSelectedTimezone(DEFAULT_TIMEZONE)
     setLocationType("in-person")
+    setTimeTBD(false)
+    setAddressTBD(false)
+    setMeetingLinkTBD(false)
+    setSubmissionEventTypes([])
+    setFlyerFiles([])
   }, [])
 
   // Detect user timezone
@@ -177,24 +235,30 @@ export function EventsClient({ events }: EventsClientProps) {
   const nonDistrictSelectedTypes = selectedTypes.filter(t => t !== "District")
   const isDistrictSelected = selectedTypes.includes("District")
 
+  // Helper to check if an event has any of the specified types
+  const eventHasType = (event: EventWithTypes, types: string[]) => {
+    return event.types.some(t => types.includes(t))
+  }
+
   // Main list: NEVER shows District events
   const filteredEvents = events.filter((event) => {
-    // Always exclude District from main list
-    if (event.type === "District") return false
+    // Always exclude District from main list (if it's the ONLY type)
+    const isDistrictOnly = event.types.length === 1 && event.types[0] === "District"
+    if (isDistrictOnly) return false
 
     if (!applyCommonFilters(event)) return false
 
     // If no types selected, show all non-District events
-    // If types selected (excluding District), filter by those types
-    const matchesType = nonDistrictSelectedTypes.length === 0 || nonDistrictSelectedTypes.includes(event.type)
+    // If types selected (excluding District), filter by events that have at least one matching type
+    const matchesType = nonDistrictSelectedTypes.length === 0 || eventHasType(event, nonDistrictSelectedTypes)
 
     return matchesType
   })
 
-  // District list: ONLY shows District events
+  // District list: ONLY shows events that include District type
   const filteredDistrictEvents = events.filter((event) => {
-    // Only include District events
-    if (event.type !== "District") return false
+    // Only include events with District type
+    if (!event.types.includes("District")) return false
 
     if (!applyCommonFilters(event)) return false
 
@@ -331,22 +395,41 @@ export function EventsClient({ events }: EventsClientProps) {
         locationType: locationType,
         address: formData.get("eventAddress") as string,
         meetingLink: formData.get("eventMeetingLink") as string,
-        type: formData.get("eventType") as "Assembly" | "Regional" | "Workshop" | "Meeting" | "Committee" | "District",
+        types: submissionEventTypes as ("Assembly" | "Regional" | "Workshop" | "Meeting" | "Committee" | "District")[],
         description: formData.get("eventDescription") as string,
         submitterEmail: formData.get("submitterEmail") as string,
-        flyerUrl: formData.get("eventFlyerUrl") as string,
+        flyerUrl: "", // Deprecated - now using flyer uploads
         recaptchaToken,
+        timeTBD,
+        addressTBD,
+        meetingLinkTBD,
       }
 
       const result = await submitEvent(data)
       console.log("Server result:", result)
 
-      if (result.success) {
+      if (result.success && result.eventId) {
+        // Upload flyers if any were selected
+        if (flyerFiles.length > 0) {
+          for (const flyer of flyerFiles) {
+            if (flyer.file) {
+              const flyerFormData = new FormData()
+              flyerFormData.append("file", flyer.file)
+              await uploadEventFlyer(result.eventId, flyerFormData)
+            }
+          }
+        }
+
         // Reset form but keep the success message visible
         formRef.current?.reset()
         setFieldErrors({})
         setSelectedTimezone(DEFAULT_TIMEZONE)
         setLocationType("in-person")
+        setTimeTBD(false)
+        setAddressTBD(false)
+        setMeetingLinkTBD(false)
+        setSubmissionEventTypes([])
+        setFlyerFiles([])
         setSubmitMessage({ type: "success", text: result.message! })
       } else {
         setSubmitMessage({ type: "error", text: result.error! })
@@ -545,12 +628,23 @@ export function EventsClient({ events }: EventsClientProps) {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
-                            <Label htmlFor="startTime">Start Time *</Label>
+                            <div className="flex items-center justify-between">
+                              <Label htmlFor="startTime">Start Time {!timeTBD && "*"}</Label>
+                              <div className="flex items-center gap-2">
+                                <Checkbox
+                                  id="timeTBD"
+                                  checked={timeTBD}
+                                  onCheckedChange={(checked) => setTimeTBD(checked === true)}
+                                />
+                                <Label htmlFor="timeTBD" className="text-sm font-normal cursor-pointer">TBD</Label>
+                              </div>
+                            </div>
                             <Input
                               type="time"
                               id="startTime"
                               name="startTime"
-                              required
+                              disabled={timeTBD}
+                              required={!timeTBD}
                               aria-invalid={!!fieldErrors.startTime}
                             />
                             {fieldErrors.startTime && (
@@ -558,11 +652,14 @@ export function EventsClient({ events }: EventsClientProps) {
                             )}
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="endTime">End Time</Label>
+                            <div className="flex items-center h-[24px]">
+                              <Label htmlFor="endTime">End Time</Label>
+                            </div>
                             <Input
                               type="time"
                               id="endTime"
                               name="endTime"
+                              disabled={timeTBD}
                               aria-invalid={!!fieldErrors.endTime}
                             />
                             {fieldErrors.endTime && (
@@ -608,11 +705,22 @@ export function EventsClient({ events }: EventsClientProps) {
                         </div>
                         {(locationType === "in-person" || locationType === "hybrid") && (
                           <div className="space-y-2">
-                            <Label htmlFor="eventAddress">Address *</Label>
+                            <div className="flex items-center justify-between">
+                              <Label htmlFor="eventAddress">Address {!addressTBD && "*"}</Label>
+                              <div className="flex items-center gap-2">
+                                <Checkbox
+                                  id="addressTBD"
+                                  checked={addressTBD}
+                                  onCheckedChange={(checked) => setAddressTBD(checked === true)}
+                                />
+                                <Label htmlFor="addressTBD" className="text-sm font-normal cursor-pointer">TBD</Label>
+                              </div>
+                            </div>
                             <Input
                               id="eventAddress"
                               name="eventAddress"
                               placeholder="e.g., 123 Main St, City, MN 55555"
+                              disabled={addressTBD}
                               aria-invalid={!!fieldErrors.address}
                             />
                             {fieldErrors.address ? (
@@ -626,14 +734,23 @@ export function EventsClient({ events }: EventsClientProps) {
                         )}
                         {(locationType === "hybrid" || locationType === "online") && (
                           <div className="space-y-2">
-                            <Label htmlFor="eventMeetingLink">
-                              Meeting Link *
-                            </Label>
+                            <div className="flex items-center justify-between">
+                              <Label htmlFor="eventMeetingLink">Meeting Link {!meetingLinkTBD && "*"}</Label>
+                              <div className="flex items-center gap-2">
+                                <Checkbox
+                                  id="meetingLinkTBD"
+                                  checked={meetingLinkTBD}
+                                  onCheckedChange={(checked) => setMeetingLinkTBD(checked === true)}
+                                />
+                                <Label htmlFor="meetingLinkTBD" className="text-sm font-normal cursor-pointer">TBD</Label>
+                              </div>
+                            </div>
                             <Input
                               id="eventMeetingLink"
                               name="eventMeetingLink"
                               type="url"
                               placeholder="https://zoom.us/j/..."
+                              disabled={meetingLinkTBD}
                               aria-invalid={!!fieldErrors.meetingLink}
                             />
                             {fieldErrors.meetingLink ? (
@@ -646,24 +763,20 @@ export function EventsClient({ events }: EventsClientProps) {
                           </div>
                         )}
                         <div className="space-y-2">
-                          <Label htmlFor="eventType">Event Type</Label>
-                          <Select name="eventType" required>
-                            <SelectTrigger id="eventType" aria-invalid={!!fieldErrors.type}>
-                              <SelectValue placeholder="Select type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {eventTypes
-                                .filter((t) => t !== "All")
-                                .map((type) => (
-                                  <SelectItem key={type} value={type}>
-                                    {type}
-                                  </SelectItem>
-                                ))}
-                            </SelectContent>
-                          </Select>
-                          {fieldErrors.type && (
-                            <p className="text-sm text-destructive">{fieldErrors.type}</p>
+                          <Label>Event Type(s) *</Label>
+                          <MultiSelect
+                            options={eventTypeOptions}
+                            value={submissionEventTypes}
+                            onChange={setSubmissionEventTypes}
+                            placeholder="Select event type(s)"
+                            aria-invalid={!!fieldErrors.types}
+                          />
+                          {fieldErrors.types && (
+                            <p className="text-sm text-destructive">{fieldErrors.types}</p>
                           )}
+                          <p className="text-xs text-muted-foreground">
+                            Select one or more event types
+                          </p>
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="eventDescription">Description</Label>
@@ -680,21 +793,13 @@ export function EventsClient({ events }: EventsClientProps) {
                           )}
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="eventFlyerUrl">Flyer URL (Optional)</Label>
-                          <Input
-                            id="eventFlyerUrl"
-                            name="eventFlyerUrl"
-                            type="url"
-                            placeholder="https://..."
-                            aria-invalid={!!fieldErrors.flyerUrl}
+                          <Label>Event Flyers (Optional)</Label>
+                          <FlyerUpload
+                            value={flyerFiles}
+                            onChange={setFlyerFiles}
+                            maxFiles={5}
+                            disabled={isSubmitting}
                           />
-                          {fieldErrors.flyerUrl ? (
-                            <p className="text-sm text-destructive">{fieldErrors.flyerUrl}</p>
-                          ) : (
-                            <p className="text-xs text-muted-foreground">
-                              Link to an image or PDF flyer for your event
-                            </p>
-                          )}
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="submitterEmail">Your Email</Label>
@@ -876,8 +981,8 @@ export function EventsClient({ events }: EventsClientProps) {
                         (e.address?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
                       if (!matchesSearch) return false
                     }
-                    // Apply type filter
-                    if (selectedTypes.length > 0 && !selectedTypes.includes(e.type)) {
+                    // Apply type filter - event must have at least one matching type
+                    if (selectedTypes.length > 0 && !eventHasType(e, selectedTypes)) {
                       return false
                     }
                     return true
@@ -947,10 +1052,13 @@ export function EventsClient({ events }: EventsClientProps) {
                               }
                             }
                             
+                            // Use first type for color (events with multiple types show primary type color)
+                            const primaryType = event.types[0]
+                            
                             return (
                               <div
                                 key={event.id}
-                                className={`text-xs p-1 truncate relative z-10 h-6 ${eventTypeColors[event.type]} ${positionClasses} ${marginClasses}`}
+                                className={`text-xs p-1 truncate relative z-10 h-6 ${primaryType ? eventTypeColors[primaryType] : ''} ${positionClasses} ${marginClasses}`}
                                 title={event.title}
                               >
                                 {isStart || !isMultiDay ? event.title : "\u00A0"}
@@ -983,11 +1091,15 @@ export function EventsClient({ events }: EventsClientProps) {
                     >
                       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                         <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-3">
-                            <Badge variant="secondary" className={eventTypeColors[event.type]}>
-                              {event.type}
-                            </Badge>
-                          </div>
+                          {event.types.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-2 mb-3">
+                              {event.types.map((type) => (
+                                <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
+                                  {type}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
                           <h2 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                             {event.title}
                           </h2>
@@ -1001,9 +1113,9 @@ export function EventsClient({ events }: EventsClientProps) {
                           </div>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
                             <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                            <span>{formatTimeRange(event.startTime, event.endTime, userTimezone)}</span>
+                            <span>{event.timeTBD ? "Time TBD" : formatTimeRange(event.startTime, event.endTime, userTimezone)}</span>
                           </div>
-                          {event.address && (
+                          {event.address ? (
                             <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
                               <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
                               <a
@@ -1014,6 +1126,11 @@ export function EventsClient({ events }: EventsClientProps) {
                               >
                                 {event.address}
                               </a>
+                            </div>
+                          ) : (event.locationType === "in-person" || event.locationType === "hybrid") && (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                              <MapPin className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                              <span>Location TBD</span>
                             </div>
                           )}
                           {(event.locationType === "online" || event.locationType === "hybrid") && (
@@ -1029,17 +1146,27 @@ export function EventsClient({ events }: EventsClientProps) {
                                   {event.locationType === "hybrid" ? "Join Online (Hybrid)" : "Join Online"}
                                 </a>
                               ) : (
-                                <span>{event.locationType === "hybrid" ? "Hybrid Event" : "Online Event"}</span>
+                                <span>Meeting Link TBD</span>
                               )}
                             </div>
                           )}
-                          {!event.address && event.locationType === "in-person" && (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
-                              <MapPin className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                              <span>Location TBD</span>
+                          {/* Show flyers - prioritize uploaded flyers, fall back to legacy flyerUrl */}
+                          {event.flyers.length > 0 ? (
+                            <div className="flex flex-wrap items-center gap-2 text-sm lg:justify-end">
+                              {event.flyers.map((flyer, index) => (
+                                <a
+                                  key={flyer.id}
+                                  href={`/api/flyers/${flyer.fileKey}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                                >
+                                  <ExternalLink className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                  {event.flyers.length > 1 ? `Flyer ${index + 1}` : "View Flyer"}
+                                </a>
+                              ))}
                             </div>
-                          )}
-                          {event.flyerUrl && (
+                          ) : event.flyerUrl && (
                             <div className="flex items-center gap-2 text-sm lg:justify-end">
                               <ExternalLink className="h-4 w-4 flex-shrink-0 text-primary" aria-hidden="true" />
                               <a
@@ -1052,6 +1179,18 @@ export function EventsClient({ events }: EventsClientProps) {
                               </a>
                             </div>
                           )}
+                          <div className="flex items-center gap-2 text-sm lg:justify-end pt-2">
+                            <Button variant="outline" size="sm" asChild>
+                              <a
+                                href={generateGoogleCalendarUrl(event)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <CalendarPlus className="h-4 w-4 mr-2" aria-hidden="true" />
+                                Add to Calendar
+                              </a>
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </article>
@@ -1084,11 +1223,15 @@ export function EventsClient({ events }: EventsClientProps) {
                     >
                       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                         <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-3">
-                            <Badge variant="secondary" className={eventTypeColors[event.type]}>
-                              {event.type}
-                            </Badge>
-                          </div>
+                          {event.types.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-2 mb-3">
+                              {event.types.map((type) => (
+                                <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
+                                  {type}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
                           <h4 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                             {event.title}
                           </h4>
@@ -1102,9 +1245,9 @@ export function EventsClient({ events }: EventsClientProps) {
                           </div>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
                             <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                            <span>{formatTimeRange(event.startTime, event.endTime, userTimezone)}</span>
+                            <span>{event.timeTBD ? "Time TBD" : formatTimeRange(event.startTime, event.endTime, userTimezone)}</span>
                           </div>
-                          {event.address && (
+                          {event.address ? (
                             <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
                               <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
                               <a
@@ -1115,6 +1258,11 @@ export function EventsClient({ events }: EventsClientProps) {
                               >
                                 {event.address}
                               </a>
+                            </div>
+                          ) : (event.locationType === "in-person" || event.locationType === "hybrid") && (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                              <MapPin className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                              <span>Location TBD</span>
                             </div>
                           )}
                           {(event.locationType === "online" || event.locationType === "hybrid") && (
@@ -1130,17 +1278,27 @@ export function EventsClient({ events }: EventsClientProps) {
                                   {event.locationType === "hybrid" ? "Join Online (Hybrid)" : "Join Online"}
                                 </a>
                               ) : (
-                                <span>{event.locationType === "hybrid" ? "Hybrid Event" : "Online Event"}</span>
+                                <span>Meeting Link TBD</span>
                               )}
                             </div>
                           )}
-                          {!event.address && event.locationType === "in-person" && (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
-                              <MapPin className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                              <span>Location TBD</span>
+                          {/* Show flyers - prioritize uploaded flyers, fall back to legacy flyerUrl */}
+                          {event.flyers.length > 0 ? (
+                            <div className="flex flex-wrap items-center gap-2 text-sm lg:justify-end">
+                              {event.flyers.map((flyer, index) => (
+                                <a
+                                  key={flyer.id}
+                                  href={`/api/flyers/${flyer.fileKey}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                                >
+                                  <ExternalLink className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                  {event.flyers.length > 1 ? `Flyer ${index + 1}` : "View Flyer"}
+                                </a>
+                              ))}
                             </div>
-                          )}
-                          {event.flyerUrl && (
+                          ) : event.flyerUrl && (
                             <div className="flex items-center gap-2 text-sm lg:justify-end">
                               <ExternalLink className="h-4 w-4 flex-shrink-0 text-primary" aria-hidden="true" />
                               <a
@@ -1153,6 +1311,18 @@ export function EventsClient({ events }: EventsClientProps) {
                               </a>
                             </div>
                           )}
+                          <div className="flex items-center gap-2 text-sm lg:justify-end pt-2">
+                            <Button variant="outline" size="sm" asChild>
+                              <a
+                                href={generateGoogleCalendarUrl(event)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <CalendarPlus className="h-4 w-4 mr-2" aria-hidden="true" />
+                                Add to Calendar
+                              </a>
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </article>

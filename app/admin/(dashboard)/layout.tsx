@@ -2,7 +2,7 @@ import { auth, signOut } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { CalendarDays, LogOut, Shield, TrendingUp } from "lucide-react"
+import { CalendarDays, LogOut, Shield, TrendingUp, Mic } from "lucide-react"
 
 export default async function DashboardLayout({
   children,
@@ -40,6 +40,13 @@ export default async function DashboardLayout({
                 >
                   <TrendingUp className="h-4 w-4" />
                   Subscription Drives
+                </Link>
+                <Link
+                  href="/admin/recordings"
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Mic className="h-4 w-4" />
+                  Recordings
                 </Link>
               </nav>
             </div>

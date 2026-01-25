@@ -1,5 +1,5 @@
 import { getDb } from "@/lib/db"
-import { events, type EventStatus } from "@/lib/db/schema"
+import { events, eventToTypes, eventFlyers, type EventStatus, type EventType, type EventFlyer } from "@/lib/db/schema"
 import { desc } from "drizzle-orm"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -7,6 +7,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Calendar, Clock, MapPin, Mail, ExternalLink, Check, Trash2, Video, Globe } from "lucide-react"
 import type { Event, LocationType } from "@/lib/db/schema"
+
+// Event with types array and flyers (from junction tables)
+interface EventWithTypes extends Event {
+  types: EventType[]
+  flyers: EventFlyer[]
+}
 
 const locationTypeLabels: Record<LocationType, string> = {
   "in-person": "In Person",
@@ -64,7 +70,36 @@ function formatDate(dateString: string) {
 
 export default async function AdminEventsPage() {
   const db = await getDb()
-  const allEvents = await db.select().from(events).orderBy(desc(events.createdAt))
+  const eventsData = await db.select().from(events).orderBy(desc(events.createdAt))
+
+  // Get all event types from junction table
+  const eventTypesData = await db.select().from(eventToTypes)
+  
+  // Create a map of eventId -> types array
+  const typesMap = new Map<string, EventType[]>()
+  for (const row of eventTypesData) {
+    const existing = typesMap.get(row.eventId) || []
+    existing.push(row.type)
+    typesMap.set(row.eventId, existing)
+  }
+
+  // Get all event flyers
+  const flyersData = await db.select().from(eventFlyers).orderBy(eventFlyers.order)
+  
+  // Create a map of eventId -> flyers array
+  const flyersMap = new Map<string, EventFlyer[]>()
+  for (const row of flyersData) {
+    const existing = flyersMap.get(row.eventId) || []
+    existing.push(row)
+    flyersMap.set(row.eventId, existing)
+  }
+
+  // Merge types and flyers into events
+  const allEvents: EventWithTypes[] = eventsData.map((event) => ({
+    ...event,
+    types: typesMap.get(event.id) || (event.type ? [event.type] : []),
+    flyers: flyersMap.get(event.id) || [],
+  }))
 
   const pendingEvents = allEvents.filter((e) => e.status === "pending")
   const approvedEvents = allEvents.filter((e) => e.status === "approved")
@@ -175,7 +210,7 @@ function EventCard({
   event,
   showActions = false,
 }: {
-  event: typeof events.$inferSelect
+  event: EventWithTypes
   showActions?: boolean
 }) {
   return (
@@ -184,9 +219,11 @@ function EventCard({
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
           <div className="flex-1 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary" className={eventTypeColors[event.type]}>
-                {event.type}
-              </Badge>
+              {event.types.map((type) => (
+                <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
+                  {type}
+                </Badge>
+              ))}
               <Badge variant="secondary" className={statusColors[event.status]}>
                 {event.status.charAt(0).toUpperCase() + event.status.slice(1)}
               </Badge>
