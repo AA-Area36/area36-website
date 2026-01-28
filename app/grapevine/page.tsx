@@ -4,15 +4,15 @@ import { BookOpen, ExternalLink, Mail, PenLine, Users } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { getActiveDrive, getDriveLeaderboard } from "./actions"
-import { SubscriptionDriveSection } from "./subscription-drive-section"
-import { ReCaptchaProvider } from "@/components/recaptcha-provider"
+// import { getActiveDrive, getDriveLeaderboard } from "./actions"
+// import { SubscriptionDriveSection } from "./subscription-drive-section"
+// import { ReCaptchaProvider } from "@/components/recaptcha-provider"
 
 export const dynamic = "force-dynamic"
 
 export default async function GrapevinePage() {
-  const activeDrive = await getActiveDrive()
-  const leaderboard = activeDrive ? await getDriveLeaderboard(activeDrive.id) : []
+  // const activeDrive = await getActiveDrive()
+  // const leaderboard = activeDrive ? await getDriveLeaderboard(activeDrive.id) : []
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
@@ -225,11 +225,11 @@ export default async function GrapevinePage() {
         </section>
 
         {/* Subscription Drive Section */}
-        {activeDrive && (
+        {/* {activeDrive && (
           <ReCaptchaProvider>
             <SubscriptionDriveSection drive={activeDrive} leaderboard={leaderboard} />
           </ReCaptchaProvider>
-        )}
+        )} */}
 
         {/* CTA */}
         <section className="py-12 sm:py-16 bg-primary text-primary-foreground">
