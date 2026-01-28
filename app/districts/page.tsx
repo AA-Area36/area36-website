@@ -179,9 +179,10 @@ const districts = [
   {
     number: 17,
     name: "District 17",
-    dcmName: "Aaron L.",
+    dcmName: null,
     dcmEmail: "dist17@area36.org",
     counties: ["Carver", "McLeod", "Sibley"],
+    unrepresented: true,
     website: "district17aa.net",
     meetingDay: "2nd Tuesday",
     meetingTime: "7:30 PM",
