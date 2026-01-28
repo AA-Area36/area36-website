@@ -82,7 +82,6 @@ const committees = [
     additionalContacts: [
       { role: "Temporary Contact Coordinator", name: "Brian M.", email: "ctcp@area36.org" },
       { role: "Pink Can Coordinator", name: "Patrick W.", email: "pinkcanplan@area36.org" },
-      { role: "Statewide Corrections Chair", name: "Carter L.", email: "correctionsmn@area36.org" },
     ],
     description:
       "Coordinates the work of A.A. groups in carrying the A.A. message to alcoholics in correctional facilities. Manages the Temporary Contact Program and the Pink Can Plan for literature distribution.",
