@@ -148,13 +148,13 @@ export default function ResourcesPage() {
                     Help newcomers make their first meeting by becoming a temporary contact or requesting a contact for
                     someone you know.
                   </p>
-                  <Link href="/temporary-contact" className="flex items-center gap-2 text-sm text-primary hover:underline">
+                  <Link href="/temporary-contact-programs" className="flex items-center gap-2 text-sm text-primary hover:underline">
                     Learn About TCP →
                   </Link>
-                  <Link href="/temporary-contact/treatment" className="flex items-center gap-2 text-sm text-primary hover:underline">
+                  <Link href="/treatment-temporary-contact-program" className="flex items-center gap-2 text-sm text-primary hover:underline">
                     Treatment TCP →
                   </Link>
-                  <Link href="/temporary-contact/corrections" className="flex items-center gap-2 text-sm text-primary hover:underline">
+                  <Link href="/corrections-temporary-contact-program" className="flex items-center gap-2 text-sm text-primary hover:underline">
                     Corrections TCP →
                   </Link>
                 </CardContent>

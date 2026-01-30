@@ -27,7 +27,7 @@ export function TCPHighlight() {
             </p>
             <div className="mt-6">
               <Button asChild>
-                <Link href="/temporary-contact">
+                <Link href="/temporary-contact-programs">
                   Learn More
                   <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
                 </Link>
@@ -37,7 +37,7 @@ export function TCPHighlight() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Link
-              href="/temporary-contact/corrections"
+              href="/corrections-temporary-contact-program"
               className="group flex flex-col rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/50 hover:shadow-lg"
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
@@ -54,7 +54,7 @@ export function TCPHighlight() {
             </Link>
 
             <Link
-              href="/temporary-contact/treatment"
+              href="/treatment-temporary-contact-program"
               className="group flex flex-col rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/50 hover:shadow-lg"
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">

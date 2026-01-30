@@ -5,7 +5,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
-export default function TemporaryContactPage() {
+export default function TemporaryContactProgramsPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
@@ -128,7 +128,7 @@ export default function TemporaryContactPage() {
                     corrections, this program is for you.
                   </p>
                   <Button asChild className="w-full">
-                    <Link href="/temporary-contact/corrections">
+                    <Link href="/corrections-temporary-contact-program">
                       Corrections TCP
                       <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
                     </Link>
@@ -154,7 +154,7 @@ export default function TemporaryContactPage() {
                     program is for you.
                   </p>
                   <Button asChild className="w-full">
-                    <Link href="/temporary-contact/treatment">
+                    <Link href="/treatment-temporary-contact-program">
                       Treatment TCP
                       <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
                     </Link>
@@ -177,7 +177,7 @@ export default function TemporaryContactPage() {
             </p>
             <div className="flex flex-wrap justify-center gap-4">
               <Button asChild variant="secondary">
-                <Link href="/temporary-contact/corrections">
+                <Link href="/corrections-temporary-contact-program">
                   Corrections Volunteers
                 </Link>
               </Button>
@@ -186,7 +186,7 @@ export default function TemporaryContactPage() {
                 variant="outline"
                 className="bg-transparent border-primary-foreground/30 hover:bg-primary-foreground/10"
               >
-                <Link href="/temporary-contact/treatment">
+                <Link href="/treatment-temporary-contact-program">
                   Treatment Volunteers
                 </Link>
               </Button>

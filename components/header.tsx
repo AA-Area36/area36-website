@@ -33,7 +33,7 @@ const navigation = [
       { name: "Recordings", href: "/recordings" },
       { name: "General Service Conference", href: "/general-service-conference" },
       { name: "Service Basics", href: "/service" },
-      { name: "Temporary Contact Program", href: "/temporary-contact" },
+      { name: "Temporary Contact Program", href: "/temporary-contact-programs" },
       { name: "For Professionals", href: "/professionals" },
       { name: "Grapevine & La Viña", href: "/grapevine" },
     ],

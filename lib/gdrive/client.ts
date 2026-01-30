@@ -46,7 +46,7 @@ async function driveRequest<T>(
 
   // Handle 401 by clearing cache and retrying once
   if (response.status === 401 && retryOn401) {
-    clearTokenCache()
+    await clearTokenCache()
     return driveRequest(credentials, endpoint, false)
   }
 

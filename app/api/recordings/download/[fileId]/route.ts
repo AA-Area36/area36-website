@@ -6,7 +6,9 @@ import {
   getGDriveCredentials,
 } from "@/lib/recordings/access"
 
-export const runtime = "edge"
+// Use nodejs runtime for better compatibility with Cloudflare Workers via OpenNext
+// Edge runtime causes token caching issues and CPU limit problems
+export const runtime = "nodejs"
 
 export async function GET(
   request: NextRequest,

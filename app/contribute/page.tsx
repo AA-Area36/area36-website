@@ -221,7 +221,7 @@ export default function ContributePage() {
                 <CardContent className="space-y-4">
                   <Button asChild className="w-full">
                     <Link
-                      href="https://www.paypal.com/donate?token=-CJeteg7cQKEn9zd6-aPJfZIxoxotgX8H3N5Es6yL-QV_e6x_akZ0sFT1arDdazpHB8IkUqaLSXabZem"
+                      href="https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=RBJBLHJQP9WZC"
                       target="_blank"
                       rel="noopener noreferrer"
                     >

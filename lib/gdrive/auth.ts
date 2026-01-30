@@ -3,14 +3,69 @@
 
 import type { GDriveCredentials } from "./types"
 
-// Token cache (module-level for persistence across requests in same isolate)
-let tokenCache: {
+// In-memory token cache (fallback for local dev and same-isolate reuse)
+let memoryTokenCache: {
   accessToken: string
   expiresAt: number
 } | null = null
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 const SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
+const TOKEN_CACHE_KEY = "https://cache.internal/gdrive-token"
+
+/**
+ * Get token from Cloudflare Cache API
+ */
+async function getTokenFromCache(): Promise<{ accessToken: string; expiresAt: number } | null> {
+  // Check memory cache first (for same-isolate reuse)
+  if (memoryTokenCache && memoryTokenCache.expiresAt > Date.now() + 5 * 60 * 1000) {
+    return memoryTokenCache
+  }
+
+  // Try Cloudflare Cache API
+  try {
+    const cache = await caches.open("gdrive-auth")
+    const response = await cache.match(TOKEN_CACHE_KEY)
+    if (response) {
+      const data = await response.json() as { accessToken: string; expiresAt: number }
+      // Verify token is still valid (with 5 minute buffer)
+      if (data.expiresAt > Date.now() + 5 * 60 * 1000) {
+        // Also store in memory for faster subsequent access
+        memoryTokenCache = data
+        return data
+      }
+    }
+  } catch {
+    // Cache API not available (local dev)
+  }
+
+  return null
+}
+
+/**
+ * Store token in Cloudflare Cache API
+ */
+async function setTokenInCache(accessToken: string, expiresAt: number): Promise<void> {
+  const data = { accessToken, expiresAt }
+
+  // Store in memory cache
+  memoryTokenCache = data
+
+  // Store in Cloudflare Cache API
+  try {
+    const cache = await caches.open("gdrive-auth")
+    const ttl = Math.floor((expiresAt - Date.now()) / 1000)
+    const response = new Response(JSON.stringify(data), {
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": `public, max-age=${Math.max(ttl - 300, 60)}`, // Cache for TTL minus 5 minute buffer
+      },
+    })
+    await cache.put(TOKEN_CACHE_KEY, response)
+  } catch {
+    // Cache API not available (local dev)
+  }
+}
 
 /**
  * Convert PEM-encoded private key to ArrayBuffer for Web Crypto API
@@ -136,10 +191,10 @@ async function exchangeJWTForToken(jwt: string): Promise<{ accessToken: string; 
  * Get a valid access token, using cache when possible
  */
 export async function getAccessToken(credentials: GDriveCredentials): Promise<string> {
-  // Check if cached token is still valid (with 5 minute buffer)
-  const now = Date.now()
-  if (tokenCache && tokenCache.expiresAt > now + 5 * 60 * 1000) {
-    return tokenCache.accessToken
+  // Check if cached token is still valid
+  const cached = await getTokenFromCache()
+  if (cached) {
+    return cached.accessToken
   }
 
   // Create new JWT and exchange for access token
@@ -147,10 +202,8 @@ export async function getAccessToken(credentials: GDriveCredentials): Promise<st
   const { accessToken, expiresIn } = await exchangeJWTForToken(jwt)
 
   // Cache the token
-  tokenCache = {
-    accessToken,
-    expiresAt: now + expiresIn * 1000,
-  }
+  const expiresAt = Date.now() + expiresIn * 1000
+  await setTokenInCache(accessToken, expiresAt)
 
   return accessToken
 }
@@ -158,6 +211,14 @@ export async function getAccessToken(credentials: GDriveCredentials): Promise<st
 /**
  * Clear the token cache (useful for handling 401 errors)
  */
-export function clearTokenCache(): void {
-  tokenCache = null
+export async function clearTokenCache(): Promise<void> {
+  memoryTokenCache = null
+
+  // Also clear from Cloudflare Cache API
+  try {
+    const cache = await caches.open("gdrive-auth")
+    await cache.delete(TOKEN_CACHE_KEY)
+  } catch {
+    // Cache API not available
+  }
 }
