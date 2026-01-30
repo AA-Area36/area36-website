@@ -9,6 +9,7 @@ export interface FileMetadataRecord {
   driveId: string
   displayName: string
   password: string | null
+  category: string | null
 }
 
 /**
@@ -35,6 +36,7 @@ export async function getFileMetadataByDriveIds(
           driveId: r.driveId,
           displayName: r.displayName,
           password: r.password,
+          category: r.category,
         },
       ])
     )
@@ -86,6 +88,7 @@ export async function enrichCommitteeFilesWithMetadata(
       ...file,
       name: meta.displayName,
       isProtected: !!meta.password,
+      category: meta.category,
     }
   })
 }

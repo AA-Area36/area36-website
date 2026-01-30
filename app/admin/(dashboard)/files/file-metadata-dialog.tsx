@@ -32,6 +32,7 @@ export function FileMetadataDialog({
   const [displayName, setDisplayName] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [hasPassword, setHasPassword] = React.useState(false)
+  const [category, setCategory] = React.useState("")
   const [isPending, startTransition] = useTransition()
   const [isDeleting, startDeleteTransition] = useTransition()
   const [error, setError] = React.useState<string | null>(null)
@@ -42,9 +43,10 @@ export function FileMetadataDialog({
       setDisplayName(file.displayName || file.name.replace(/\.[^.]+$/, ""))
       setHasPassword(file.isProtected || false)
       setPassword("")
+      setCategory(file.category || "")
       setError(null)
 
-      // Load full metadata including password
+      // Load full metadata including password and category
       if (file.hasMetadata) {
         getFileMetadataById(file.id).then((meta) => {
           if (meta) {
@@ -53,6 +55,7 @@ export function FileMetadataDialog({
             if (meta.password) {
               setPassword(meta.password)
             }
+            setCategory(meta.category || "")
           }
         })
       }
@@ -81,6 +84,7 @@ export function FileMetadataDialog({
           parentFolderId: file.parentId,
           displayName: displayName.trim(),
           password: hasPassword ? password.trim() : null,
+          category: category.trim() || null,
         })
         onOpenChange(false)
       } catch (err) {
@@ -131,6 +135,19 @@ export function FileMetadataDialog({
             />
             <p className="text-xs text-muted-foreground">
               This name will be shown instead of the filename
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="category">Category (Optional)</Label>
+            <Input
+              id="category"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder="e.g., History Form, Pink Can Plan"
+            />
+            <p className="text-xs text-muted-foreground">
+              Used to group files under a custom header in committees
             </p>
           </div>
 

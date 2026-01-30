@@ -13,6 +13,7 @@ export interface CommitteeFile {
   size?: string
   mimeType: string
   isProtected?: boolean
+  category?: string | null
 }
 
 export interface CommitteeFiles {

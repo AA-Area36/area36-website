@@ -202,6 +202,7 @@ export const fileMetadata = sqliteTable("file_metadata", {
   parentFolderId: text("parent_folder_id").notNull(), // Parent folder ID for querying
   displayName: text("display_name").notNull(),
   password: text("password"), // null = no password protection
+  category: text("category"), // null = no category, used for grouping files
   createdAt: text("created_at")
     .notNull()
     .default(sql`(datetime('now'))`),

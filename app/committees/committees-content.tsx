@@ -6,11 +6,35 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { CommitteeFilesSection } from "@/components/committees/committee-files"
 import { CommitteeInfoCard } from "@/components/committees/committee-info-card"
 import type { CommitteeData } from "./page"
-import type { CommitteeFiles } from "@/lib/gdrive/committees"
+import type { CommitteeFiles, CommitteeFile } from "@/lib/gdrive/committees"
 
 interface CommitteesContentProps {
   committees: CommitteeData[]
   committeeFiles: CommitteeFiles
+}
+
+// Group files by category, returning categories sorted alphabetically
+function groupFilesByCategory(files: CommitteeFile[]) {
+  const categorized: Record<string, CommitteeFile[]> = {}
+  const uncategorized: CommitteeFile[] = []
+
+  for (const file of files) {
+    if (file.category) {
+      if (!categorized[file.category]) {
+        categorized[file.category] = []
+      }
+      categorized[file.category].push(file)
+    } else {
+      uncategorized.push(file)
+    }
+  }
+
+  // Sort categories alphabetically
+  const sortedCategories = Object.keys(categorized).sort((a, b) => 
+    a.localeCompare(b, undefined, { sensitivity: 'base' })
+  )
+
+  return { categorized, uncategorized, sortedCategories }
 }
 
 export function CommitteesContent({ committees, committeeFiles }: CommitteesContentProps) {
@@ -20,10 +44,31 @@ export function CommitteesContent({ committees, committeeFiles }: CommitteesCont
         // Get files for this committee based on slug
         const files = committeeFiles[committee.slug] || []
         
-        // Separate forms and other files based on filename patterns
-        const formPatterns = /form|questionnaire|order/i
-        const forms = files.filter((f) => formPatterns.test(f.name))
-        const otherFiles = files.filter((f) => !formPatterns.test(f.name))
+        // Group files by category
+        const { categorized, uncategorized, sortedCategories } = groupFilesByCategory(files)
+        
+        // Check if this is the corrections committee for special handling
+        const isCorrections = committee.slug === "corrections"
+        
+        // For corrections, handle Pink Can Plan specially
+        const pinkCanPlanFiles = categorized["Pink Can Plan"] || []
+        const otherSortedCategories = sortedCategories.filter(cat => cat !== "Pink Can Plan")
+        
+        // Find the database card index for corrections
+        const databaseCardIndex = committee.infoCards?.findIndex(
+          card => card.title === "Corrections Database"
+        ) ?? -1
+        
+        // Split info cards for corrections: before database, database, after database
+        const cardsBeforeDatabase = isCorrections && databaseCardIndex > 0
+          ? committee.infoCards?.slice(0, databaseCardIndex)
+          : null
+        const databaseCard = isCorrections && databaseCardIndex >= 0
+          ? committee.infoCards?.[databaseCardIndex]
+          : null
+        const cardsAfterDatabase = isCorrections && databaseCardIndex >= 0
+          ? committee.infoCards?.slice(databaseCardIndex + 1)
+          : null
 
         return (
           <AccordionItem
@@ -110,33 +155,100 @@ export function CommitteesContent({ committees, committeeFiles }: CommitteesCont
                   </div>
                 )}
 
-                {/* Forms Section */}
-                {forms.length > 0 && (
-                  <CommitteeFilesSection
-                    title={committee.formsLabel || "Forms"}
-                    files={forms}
-                  />
-                )}
+                {isCorrections ? (
+                  <>
+                    {/* Pink Can Plan Forms section - special placement for corrections */}
+                    {pinkCanPlanFiles.length > 0 && (
+                      <CommitteeFilesSection
+                        title="Pink Can Plan Forms"
+                        files={pinkCanPlanFiles}
+                      />
+                    )}
+                    
+                    {/* Info Cards before database */}
+                    {cardsBeforeDatabase?.map((card, index) => (
+                      <CommitteeInfoCard
+                        key={index}
+                        title={card.title}
+                        content={card.content}
+                        email={card.email}
+                        address={card.address}
+                        link={card.link}
+                      />
+                    ))}
+                    
+                    {/* Database Card */}
+                    {databaseCard && (
+                      <CommitteeInfoCard
+                        title={databaseCard.title}
+                        content={databaseCard.content}
+                        email={databaseCard.email}
+                        address={databaseCard.address}
+                        link={databaseCard.link}
+                      />
+                    )}
+                    
+                    {/* Other categorized files (alphabetically) */}
+                    {otherSortedCategories.map((category) => (
+                      <CommitteeFilesSection
+                        key={category}
+                        title={category}
+                        files={categorized[category]}
+                      />
+                    ))}
+                    
+                    {/* Resources Section (uncategorized) - always last */}
+                    {uncategorized.length > 0 && (
+                      <CommitteeFilesSection
+                        title="Resources"
+                        files={uncategorized}
+                      />
+                    )}
+                    
+                    {/* Info Cards after database */}
+                    {cardsAfterDatabase?.map((card, index) => (
+                      <CommitteeInfoCard
+                        key={`after-${index}`}
+                        title={card.title}
+                        content={card.content}
+                        email={card.email}
+                        address={card.address}
+                        link={card.link}
+                      />
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    {/* Categorized files - alphabetically sorted */}
+                    {sortedCategories.map((category) => (
+                      <CommitteeFilesSection
+                        key={category}
+                        title={category}
+                        files={categorized[category]}
+                      />
+                    ))}
 
-                {/* Files Section */}
-                {otherFiles.length > 0 && (
-                  <CommitteeFilesSection
-                    title={committee.filesLabel || "Resources"}
-                    files={otherFiles}
-                  />
-                )}
+                    {/* Resources Section (uncategorized) - always last */}
+                    {uncategorized.length > 0 && (
+                      <CommitteeFilesSection
+                        title="Resources"
+                        files={uncategorized}
+                      />
+                    )}
 
-                {/* Info Cards */}
-                {committee.infoCards?.map((card, index) => (
-                  <CommitteeInfoCard
-                    key={index}
-                    title={card.title}
-                    content={card.content}
-                    email={card.email}
-                    address={card.address}
-                    link={card.link}
-                  />
-                ))}
+                    {/* Info Cards */}
+                    {committee.infoCards?.map((card, index) => (
+                      <CommitteeInfoCard
+                        key={index}
+                        title={card.title}
+                        content={card.content}
+                        email={card.email}
+                        address={card.address}
+                        link={card.link}
+                      />
+                    ))}
+                  </>
+                )}
               </div>
             </AccordionContent>
           </AccordionItem>

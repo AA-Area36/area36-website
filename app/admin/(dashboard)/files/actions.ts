@@ -28,6 +28,7 @@ export interface FileNode {
   hasMetadata?: boolean
   isProtected?: boolean
   displayName?: string
+  category?: string | null
 }
 
 export type TreeNode = FolderNode | FileNode
@@ -62,7 +63,7 @@ async function buildFolderTree(
   credentials: ReturnType<typeof getGDriveCredentials>,
   folderId: string,
   folderName: string,
-  metadataMap: Map<string, { displayName: string; password: string | null }>
+  metadataMap: Map<string, { displayName: string; password: string | null; category: string | null }>
 ): Promise<FolderNode> {
   // Get subfolders and files in parallel
   const [subfolders, files] = await Promise.all([
@@ -100,6 +101,7 @@ async function buildFolderTree(
       hasMetadata: !!meta,
       isProtected: !!meta?.password,
       displayName: meta?.displayName,
+      category: meta?.category,
     })
   }
 
@@ -131,7 +133,7 @@ export async function getFolderStructure(): Promise<FolderNode[]> {
   const db = await getDb()
   const allMetadata = await db.select().from(fileMetadata)
   const metadataMap = new Map(
-    allMetadata.map((m) => [m.driveId, { displayName: m.displayName, password: m.password }])
+    allMetadata.map((m) => [m.driveId, { displayName: m.displayName, password: m.password, category: m.category }])
   )
 
   const folders: FolderNode[] = []
@@ -200,6 +202,7 @@ export async function upsertFileMetadata(data: {
   parentFolderId: string
   displayName: string
   password?: string | null
+  category?: string | null
 }) {
   const session = await auth()
   if (!session?.user?.email) {
@@ -222,6 +225,7 @@ export async function upsertFileMetadata(data: {
       .set({
         displayName: data.displayName,
         password: data.password ?? null,
+        category: data.category ?? null,
         parentFolderId: data.parentFolderId,
         updatedAt: sql`datetime('now')`,
       })
@@ -234,6 +238,7 @@ export async function upsertFileMetadata(data: {
       parentFolderId: data.parentFolderId,
       displayName: data.displayName,
       password: data.password ?? null,
+      category: data.category ?? null,
     })
   }
 
