@@ -9,7 +9,7 @@ import {
 } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { ResourceViewer, ResourceItemWithViewer } from "./resource-viewer"
+import { ResourceViewerWithPassword, ResourceItemWithViewer } from "./resource-viewer"
 import type { Resource, ResourcesByCategory } from "@/lib/gdrive/types"
 
 interface ResourcesContentProps {
@@ -194,7 +194,7 @@ export function ResourcesContent({ resources }: ResourcesContentProps) {
       </Tabs>
 
       {/* Resource Viewer Dialog */}
-      <ResourceViewer
+      <ResourceViewerWithPassword
         resource={selectedResource}
         resources={getCurrentResources()}
         open={viewerOpen}

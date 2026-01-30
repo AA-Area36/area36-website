@@ -245,3 +245,55 @@ export async function getResourcesByCategory(
       return []
   }
 }
+
+/**
+ * Fetch old conference reports from the "Old Reports" subfolder within Conference Materials
+ * These are pre-2023 reports not available on aa.org
+ */
+export async function getOldConferenceReports(
+  credentials: GDriveCredentials,
+  resourcesFolderId: string
+): Promise<Resource[]> {
+  const cacheKey = "old-conference-reports"
+  
+  return withCache(
+    cacheKey,
+    async () => {
+      try {
+        // Find Conference Materials folder
+        const categoryFolders = await listFolders(credentials, resourcesFolderId)
+        const conferenceMaterialsFolder = categoryFolders.find(
+          (f) => f.name.toLowerCase().includes("conference")
+        )
+        
+        if (!conferenceMaterialsFolder) {
+          return []
+        }
+        
+        // Find "Old Reports" subfolder
+        const subfolders = await listFolders(credentials, conferenceMaterialsFolder.id)
+        const oldReportsFolder = subfolders.find(
+          (f) => f.name.toLowerCase().includes("old") || f.name.toLowerCase().includes("report")
+        )
+        
+        if (!oldReportsFolder) {
+          return []
+        }
+        
+        // Get files from old reports folder
+        const files = await listAllFiles(credentials, oldReportsFolder.id, {
+          orderBy: "name desc",
+        })
+        
+        // Filter to PDF files and convert to resources
+        return files
+          .filter((f) => f.mimeType === "application/pdf")
+          .map((f) => driveFileToResource(f, "conference-materials"))
+      } catch (error) {
+        console.error("Error fetching old conference reports:", error)
+        return []
+      }
+    },
+    { ttl: 5 * 60 }
+  )
+}

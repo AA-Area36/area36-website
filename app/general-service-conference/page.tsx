@@ -2,11 +2,11 @@ import { Suspense } from "react"
 import Link from "next/link"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
-import { ExternalLink, Lock, FileText, Download } from "lucide-react"
+import { ExternalLink, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { fetchConferenceMaterials } from "./actions"
+import { fetchConferenceMaterials, fetchOldConferenceReports } from "./actions"
 import { ConferenceMaterialsContent } from "./conference-materials-content"
+import { FinalReportsContent } from "./final-reports-content"
 
 // Loading skeleton
 function MaterialsSkeleton() {
@@ -22,6 +22,11 @@ function MaterialsSkeleton() {
 async function ConferenceMaterialsWrapper() {
   const materials = await fetchConferenceMaterials()
   return <ConferenceMaterialsContent materials={materials} />
+}
+
+async function FinalReportsWrapper() {
+  const oldReports = await fetchOldConferenceReports()
+  return <FinalReportsContent oldReports={oldReports} />
 }
 
 export default function GeneralServiceConferencePage() {
@@ -118,191 +123,9 @@ export default function GeneralServiceConferencePage() {
               Complete final reports from past General Service Conferences, available in multiple languages.
             </p>
 
-            <div className="space-y-8">
-              {/* 2024 Reports */}
-              <div>
-                <h3 className="text-lg font-semibold text-foreground mb-4">2024</h3>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <Link
-                    href="https://www.aa.org/2024-general-service-conference-final-report"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
-                  >
-                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <FileText className="h-6 w-6" aria-hidden="true" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-medium text-foreground group-hover:text-primary transition-colors">
-                        2024 Final Report (English)
-                      </h4>
-                      <p className="text-sm text-muted-foreground">AA.org</p>
-                    </div>
-                    <ExternalLink className="h-4 w-4 text-muted-foreground" aria-label="(opens in new tab)" />
-                  </Link>
-                </div>
-              </div>
-
-              {/* 2023 Reports */}
-              <div>
-                <h3 className="text-lg font-semibold text-foreground mb-4">2023</h3>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <Link
-                    href="https://www.aa.org/2023-general-service-conference-final-report"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
-                  >
-                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <FileText className="h-6 w-6" aria-hidden="true" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-medium text-foreground group-hover:text-primary transition-colors">
-                        2023 Final Report (English)
-                      </h4>
-                      <p className="text-sm text-muted-foreground">AA.org</p>
-                    </div>
-                    <ExternalLink className="h-4 w-4 text-muted-foreground" aria-label="(opens in new tab)" />
-                  </Link>
-
-                  <Link
-                    href="https://www.aa.org/es/informe-final-de-la-conferencia-de-servicios-generales-de-2023"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
-                  >
-                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <FileText className="h-6 w-6" aria-hidden="true" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-medium text-foreground group-hover:text-primary transition-colors">
-                        2023 Informe Final (Espanol)
-                      </h4>
-                      <p className="text-sm text-muted-foreground">AA.org</p>
-                    </div>
-                    <ExternalLink className="h-4 w-4 text-muted-foreground" aria-label="(opens in new tab)" />
-                  </Link>
-                </div>
-              </div>
-
-              {/* 2022 Reports */}
-              <div>
-                <h3 className="text-lg font-semibold text-foreground mb-4">2022</h3>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <Link
-                    href="https://www.aa.org/2022-general-service-conference-final-report"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
-                  >
-                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <FileText className="h-6 w-6" aria-hidden="true" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-medium text-foreground group-hover:text-primary transition-colors">
-                        2022 Final Report (English)
-                      </h4>
-                      <p className="text-sm text-muted-foreground">AA.org</p>
-                    </div>
-                    <ExternalLink className="h-4 w-4 text-muted-foreground" aria-label="(opens in new tab)" />
-                  </Link>
-
-                  <Link
-                    href="https://www.aa.org/es/informe-final-de-la-conferencia-de-servicios-generales-de-2022"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
-                  >
-                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <FileText className="h-6 w-6" aria-hidden="true" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-medium text-foreground group-hover:text-primary transition-colors">
-                        2022 Informe Final (Espanol)
-                      </h4>
-                      <p className="text-sm text-muted-foreground">AA.org</p>
-                    </div>
-                    <ExternalLink className="h-4 w-4 text-muted-foreground" aria-label="(opens in new tab)" />
-                  </Link>
-
-                  <Link
-                    href="https://www.aa.org/fr/rapport-final-de-la-conference-des-services-generaux-de-2022"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
-                  >
-                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <FileText className="h-6 w-6" aria-hidden="true" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-medium text-foreground group-hover:text-primary transition-colors">
-                        2022 Rapport Final (Francais)
-                      </h4>
-                      <p className="text-sm text-muted-foreground">AA.org</p>
-                    </div>
-                    <ExternalLink className="h-4 w-4 text-muted-foreground" aria-label="(opens in new tab)" />
-                  </Link>
-                </div>
-              </div>
-
-              {/* 2021 Reports */}
-              <div>
-                <h3 className="text-lg font-semibold text-foreground mb-4">2021</h3>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <Link
-                    href="https://www.aa.org/2021-general-service-conference-final-report"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
-                  >
-                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <FileText className="h-6 w-6" aria-hidden="true" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-medium text-foreground group-hover:text-primary transition-colors">
-                        2021 Final Report (English)
-                      </h4>
-                      <p className="text-sm text-muted-foreground">AA.org</p>
-                    </div>
-                    <ExternalLink className="h-4 w-4 text-muted-foreground" aria-label="(opens in new tab)" />
-                  </Link>
-
-                  <Link
-                    href="https://www.aa.org/es/informe-final-de-la-conferencia-de-servicios-generales-de-2021"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
-                  >
-                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <FileText className="h-6 w-6" aria-hidden="true" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-medium text-foreground group-hover:text-primary transition-colors">
-                        2021 Informe Final (Espanol)
-                      </h4>
-                      <p className="text-sm text-muted-foreground">AA.org</p>
-                    </div>
-                    <ExternalLink className="h-4 w-4 text-muted-foreground" aria-label="(opens in new tab)" />
-                  </Link>
-                </div>
-              </div>
-            </div>
-
-            {/* Link to AA.org for more reports */}
-            <div className="mt-8 pt-6 border-t border-border">
-              <p className="text-muted-foreground">
-                For earlier reports and additional materials, visit{" "}
-                <Link
-                  href="https://www.aa.org/general-service-conference"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline inline-flex items-center gap-1"
-                >
-                  AA.org General Service Conference
-                  <ExternalLink className="h-3 w-3" aria-label="(opens in new tab)" />
-                </Link>
-              </p>
-            </div>
+            <Suspense fallback={<MaterialsSkeleton />}>
+              <FinalReportsWrapper />
+            </Suspense>
           </div>
         </section>
       </main>

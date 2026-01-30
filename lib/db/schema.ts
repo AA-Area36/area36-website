@@ -194,3 +194,21 @@ export const recordingFolders = sqliteTable("recording_folders", {
 
 export type RecordingFolder = typeof recordingFolders.$inferSelect
 export type NewRecordingFolder = typeof recordingFolders.$inferInsert
+
+// File Metadata table (custom display names and password protection for files)
+export const fileMetadata = sqliteTable("file_metadata", {
+  id: text("id").primaryKey(),
+  driveId: text("drive_id").notNull().unique(), // Google Drive file ID
+  parentFolderId: text("parent_folder_id").notNull(), // Parent folder ID for querying
+  displayName: text("display_name").notNull(),
+  password: text("password"), // null = no password protection
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+})
+
+export type FileMetadata = typeof fileMetadata.$inferSelect
+export type NewFileMetadata = typeof fileMetadata.$inferInsert

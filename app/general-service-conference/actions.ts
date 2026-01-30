@@ -1,7 +1,7 @@
 "use server"
 
 import { getGDriveCredentials } from "@/lib/gdrive/client"
-import { getResourcesByCategory } from "@/lib/gdrive/resources"
+import { getResourcesByCategory, getOldConferenceReports } from "@/lib/gdrive/resources"
 import type { Resource } from "@/lib/gdrive/types"
 
 /**
@@ -45,6 +45,26 @@ export async function fetchConferenceMaterials(): Promise<Resource[]> {
     return getResourcesByCategory(credentials, env.GDRIVE_RESOURCES_FOLDER_ID, "conference-materials")
   } catch (error) {
     console.error("Error fetching conference materials:", error)
+    return []
+  }
+}
+
+/**
+ * Fetch old conference reports (2021, 2022) from Google Drive subfolder
+ */
+export async function fetchOldConferenceReports(): Promise<Resource[]> {
+  try {
+    const env = await getEnv()
+
+    // Check if Drive is configured
+    if (!env.GDRIVE_SERVICE_ACCOUNT_EMAIL || !env.GDRIVE_RESOURCES_FOLDER_ID) {
+      return []
+    }
+
+    const credentials = getGDriveCredentials(env)
+    return getOldConferenceReports(credentials, env.GDRIVE_RESOURCES_FOLDER_ID)
+  } catch (error) {
+    console.error("Error fetching old conference reports:", error)
     return []
   }
 }

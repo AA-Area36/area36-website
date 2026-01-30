@@ -2,6 +2,7 @@
 
 import { getGDriveCredentials } from "@/lib/gdrive/client"
 import { getResources } from "@/lib/gdrive/resources"
+import { enrichResourcesWithMetadata } from "@/lib/files/metadata"
 import type { ResourcesByCategory } from "@/lib/gdrive/types"
 
 /**
@@ -30,6 +31,7 @@ async function getEnv() {
 
 /**
  * Fetch all resources from Google Drive organized by category
+ * Enriches resources with custom display names and password protection from database
  */
 export async function fetchResources(): Promise<ResourcesByCategory> {
   try {
@@ -47,7 +49,22 @@ export async function fetchResources(): Promise<ResourcesByCategory> {
     }
 
     const credentials = getGDriveCredentials(env)
-    return getResources(credentials, env.GDRIVE_RESOURCES_FOLDER_ID)
+    const resources = await getResources(credentials, env.GDRIVE_RESOURCES_FOLDER_ID)
+
+    // Enrich all categories with metadata from database
+    const [delegateReports, areaDocuments, forms, conferenceMaterials] = await Promise.all([
+      enrichResourcesWithMetadata(resources.delegateReports),
+      enrichResourcesWithMetadata(resources.areaDocuments),
+      enrichResourcesWithMetadata(resources.forms),
+      enrichResourcesWithMetadata(resources.conferenceMaterials),
+    ])
+
+    return {
+      delegateReports,
+      areaDocuments,
+      forms,
+      conferenceMaterials,
+    }
   } catch (error) {
     console.error("Error fetching resources:", error)
     return {

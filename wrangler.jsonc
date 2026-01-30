@@ -22,13 +22,15 @@
     "GDRIVE_NEWSLETTERS_FOLDER_ID": "1ux5PcUF8KkROir3GrL_4F6POPz81_rQN",
     "GDRIVE_RESOURCES_FOLDER_ID": "1SxpurNxZUh5tObUo2JxqMSHYMjDqdoyb",
     "GDRIVE_RECORDINGS_FOLDER_ID": "1Br1EC8YmVz5yX4UsmTkTlKXUSKCufakD",
+    "GDRIVE_COMMITTEES_FOLDER_ID": "1gtwNjoFO3phENdJ-aCXq0ps7sTDDen0U",
     "GMAIL_SENDER_EMAIL": "webmaster@area36.org"
   },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "area36-events",
-      "database_id": "646074b4-8660-4ab4-98aa-54511636bc0e"
+      "database_id": "646074b4-8660-4ab4-98aa-54511636bc0e",
+      "migrations_dir": "lib/db/migrations"
     }
   ],
   "r2_buckets": [
