@@ -1,9 +1,7 @@
-import { Suspense } from "react"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import {
   ExternalLink,
-  FolderOpen,
   Briefcase,
   Hand,
   Accessibility,
@@ -11,34 +9,9 @@ import {
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { fetchResources } from "./actions"
-import { ResourcesContent } from "./resources-content"
+import { ResourcesLoader } from "./resources-loader"
 
-// ISR: Revalidate every 30 minutes - serves stale while refreshing in background
-export const revalidate = 1800
-
-// Loading skeleton
-function ResourcesSkeleton() {
-  return (
-    <div className="space-y-8">
-      <div className="flex gap-2">
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-10 w-32 bg-muted rounded animate-pulse" />
-        ))}
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-24 bg-muted rounded-lg animate-pulse" />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-async function ResourcesContentWrapper() {
-  const resources = await fetchResources()
-  return <ResourcesContent resources={resources} />
-}
+// Page loads instantly - GDrive data is lazy loaded on client
 
 export default function ResourcesPage() {
   return (
@@ -86,12 +59,10 @@ export default function ResourcesPage() {
           </div>
         </section>
 
-        {/* Documents Tabs */}
+        {/* Documents Tabs - lazy loads from API */}
         <section className="py-12 sm:py-16" aria-label="Documents and forms">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <Suspense fallback={<ResourcesSkeleton />}>
-              <ResourcesContentWrapper />
-            </Suspense>
+            <ResourcesLoader />
           </div>
         </section>
 

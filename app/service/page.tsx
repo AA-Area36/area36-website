@@ -4,11 +4,9 @@ import { Footer } from "@/components/footer"
 import { BookOpen, Users, MessageSquare, ArrowRight, ExternalLink } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { ServiceResources } from "./service-resources"
-import { fetchServiceResources } from "./actions"
+import { ServiceResourcesLoader } from "./service-resources-loader"
 
-// ISR: Revalidate every 30 minutes
-export const revalidate = 1800
+// Page loads instantly - GDrive data is lazy loaded on client
 
 const servicePositions = [
   {
@@ -64,8 +62,7 @@ const gsoResources = [
   },
 ]
 
-export default async function ServicePage() {
-  const serviceResources = await fetchServiceResources()
+export default function ServicePage() {
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
@@ -179,7 +176,7 @@ export default async function ServicePage() {
             <p className="mt-4 text-muted-foreground mb-6">
               Download these guides and materials to help you get started in service.
             </p>
-            <ServiceResources resources={serviceResources} />
+            <ServiceResourcesLoader />
             <div className="mt-8">
               <Link
                 href="/resources"

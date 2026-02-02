@@ -1,36 +1,11 @@
-import { Suspense } from "react"
 import Link from "next/link"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { ExternalLink, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { fetchConferenceMaterials, fetchOldConferenceReports } from "./actions"
-import { ConferenceMaterialsContent } from "./conference-materials-content"
-import { FinalReportsContent } from "./final-reports-content"
+import { ConferenceMaterialsLoader, FinalReportsLoader } from "./conference-materials-loader"
 
-// ISR: Revalidate every 30 minutes
-export const revalidate = 1800
-
-// Loading skeleton
-function MaterialsSkeleton() {
-  return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      {[...Array(4)].map((_, i) => (
-        <div key={i} className="h-24 bg-muted rounded-lg animate-pulse" />
-      ))}
-    </div>
-  )
-}
-
-async function ConferenceMaterialsWrapper() {
-  const materials = await fetchConferenceMaterials()
-  return <ConferenceMaterialsContent materials={materials} />
-}
-
-async function FinalReportsWrapper() {
-  const oldReports = await fetchOldConferenceReports()
-  return <FinalReportsContent oldReports={oldReports} />
-}
+// Page loads instantly - GDrive data is lazy loaded on client
 
 export default function GeneralServiceConferencePage() {
   return (
@@ -100,7 +75,7 @@ export default function GeneralServiceConferencePage() {
           </div>
         </section>
 
-        {/* Conference Materials from Google Drive */}
+        {/* Conference Materials from Google Drive - lazy loads from API */}
         <section className="py-12 sm:py-16 bg-muted/30" aria-labelledby="materials-heading">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <h2 id="materials-heading" className="text-2xl font-bold text-foreground mb-6">
@@ -110,13 +85,11 @@ export default function GeneralServiceConferencePage() {
               Advisory actions and agenda items from recent General Service Conferences.
             </p>
 
-            <Suspense fallback={<MaterialsSkeleton />}>
-              <ConferenceMaterialsWrapper />
-            </Suspense>
+            <ConferenceMaterialsLoader />
           </div>
         </section>
 
-        {/* Final Reports */}
+        {/* Final Reports - lazy loads from API */}
         <section className="py-12 sm:py-16" aria-labelledby="reports-heading">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <h2 id="reports-heading" className="text-2xl font-bold text-foreground mb-6">
@@ -126,9 +99,7 @@ export default function GeneralServiceConferencePage() {
               Complete final reports from past General Service Conferences, available in multiple languages.
             </p>
 
-            <Suspense fallback={<MaterialsSkeleton />}>
-              <FinalReportsWrapper />
-            </Suspense>
+            <FinalReportsLoader />
           </div>
         </section>
       </main>

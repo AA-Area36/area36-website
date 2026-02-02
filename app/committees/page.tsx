@@ -1,14 +1,11 @@
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
-import { Mail, Users, Info, ArrowRight } from "lucide-react"
+import { Mail, Info } from "lucide-react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { fetchCommitteeFiles } from "./actions"
-import { CommitteesContent } from "./committees-content"
+import { CommitteesLoader } from "./committees-loader"
 
-// ISR: Revalidate every 30 minutes
-export const revalidate = 1800
+// Page loads instantly - GDrive data is lazy loaded on client
 
 const officers = [
   {
@@ -260,10 +257,7 @@ const committees: CommitteeData[] = [
   },
 ]
 
-export default async function CommitteesPage() {
-  // Fetch committee files from Google Drive
-  const committeeFiles = await fetchCommitteeFiles()
-
+export default function CommitteesPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
@@ -334,7 +328,7 @@ export default async function CommitteesPage() {
               </p>
             </div>
 
-            <CommitteesContent committees={committees} committeeFiles={committeeFiles} />
+            <CommitteesLoader committees={committees} />
           </div>
         </section>
 

@@ -1,56 +1,8 @@
-import { Suspense } from "react"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
-import { FileText } from "lucide-react"
-import { fetchNewsletters } from "./actions"
-import { NewsletterViewer } from "./newsletter-viewer"
+import { NewsletterLoader } from "./newsletter-loader"
 
-// ISR: Revalidate every 30 minutes - serves stale while refreshing in background
-export const revalidate = 1800
-
-// Loading skeleton for the viewer
-function ViewerSkeleton() {
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="h-10 flex-1 bg-muted rounded animate-pulse" />
-        <div className="h-10 w-[140px] bg-muted rounded animate-pulse" />
-      </div>
-      <div className="h-5 w-32 bg-muted rounded animate-pulse" />
-      <div className="space-y-3">
-        {[...Array(5)].map((_, i) => (
-          <div key={i} className="h-24 bg-muted rounded-lg animate-pulse" />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// Empty state when no newsletters are available
-function EmptyState() {
-  return (
-    <div className="text-center py-16">
-      <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-      <h2 className="text-xl font-semibold text-foreground mb-2">
-        No Newsletters Available
-      </h2>
-      <p className="text-muted-foreground max-w-md mx-auto">
-        Newsletter archives are being prepared. Please check back soon or contact
-        the Newsletter Chair for more information.
-      </p>
-    </div>
-  )
-}
-
-async function NewsletterContent() {
-  const { newsletters, years } = await fetchNewsletters()
-
-  if (newsletters.length === 0) {
-    return <EmptyState />
-  }
-
-  return <NewsletterViewer newsletters={newsletters} years={years} />
-}
+// Page loads instantly - GDrive data is lazy loaded on client
 
 export default function NewsletterPage() {
   return (
@@ -89,12 +41,10 @@ export default function NewsletterPage() {
           </div>
         </section>
 
-        {/* Newsletter Viewer */}
+        {/* Newsletter Viewer - lazy loads from API */}
         <section className="py-8 sm:py-12" aria-label="Newsletter viewer">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <Suspense fallback={<ViewerSkeleton />}>
-              <NewsletterContent />
-            </Suspense>
+            <NewsletterLoader />
           </div>
         </section>
 
