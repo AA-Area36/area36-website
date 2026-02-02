@@ -6,6 +6,10 @@ import { fetchRecordings, getRegisteredFolders } from "./actions"
 import { getUnlockedFolders } from "@/lib/recordings/session"
 import { RecordingsClient } from "./recordings-client"
 
+// ISR: Revalidate every 30 minutes - serves stale while refreshing in background
+// This prevents blocking requests when cache expires
+export const revalidate = 1800
+
 // Loading skeleton
 function RecordingsSkeleton() {
   return (

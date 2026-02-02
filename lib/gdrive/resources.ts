@@ -218,7 +218,7 @@ export async function getResources(
 
       return result
     },
-    { ttl: 5 * 60 } // 5 minute cache
+    { ttl: 60 * 60 } // 1 hour cache (resources don't change often)
   )
 }
 
@@ -294,6 +294,6 @@ export async function getOldConferenceReports(
         return []
       }
     },
-    { ttl: 5 * 60 }
+    { ttl: 60 * 60 } // 1 hour cache
   )
 }

@@ -304,7 +304,7 @@ export async function getRecordings(
 
       return { categories, recordings }
     },
-    { ttl: 5 * 60 } // 5 minute cache
+    { ttl: 60 * 60 } // 1 hour cache (recordings don't change often)
   )
 }
 

@@ -14,6 +14,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { fetchResources } from "./actions"
 import { ResourcesContent } from "./resources-content"
 
+// ISR: Revalidate every 30 minutes - serves stale while refreshing in background
+export const revalidate = 1800
+
 // Loading skeleton
 function ResourcesSkeleton() {
   return (

@@ -5,6 +5,9 @@ import { FileText } from "lucide-react"
 import { fetchNewsletters } from "./actions"
 import { NewsletterViewer } from "./newsletter-viewer"
 
+// ISR: Revalidate every 30 minutes - serves stale while refreshing in background
+export const revalidate = 1800
+
 // Loading skeleton for the viewer
 function ViewerSkeleton() {
   return (

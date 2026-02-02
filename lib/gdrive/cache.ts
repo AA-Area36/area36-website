@@ -2,10 +2,12 @@
 // Uses Cloudflare Cache API for edge caching
 
 const CACHE_PREFIX = "gdrive:"
-const DEFAULT_TTL = 5 * 60 // 5 minutes in seconds
+const DEFAULT_TTL = 60 * 60 // 1 hour in seconds (increased from 5 min)
+const STALE_TTL = 24 * 60 * 60 // 24 hours - how long stale data can be served
 
 export interface CacheOptions {
   ttl?: number // Time to live in seconds
+  staleWhileRevalidate?: boolean // Return stale data while fetching fresh
 }
 
 /**
@@ -73,23 +75,62 @@ export async function deleteFromCache(key: string): Promise<boolean> {
 
 /**
  * Cache wrapper - get from cache or fetch and cache
+ * Supports stale-while-revalidate pattern for better performance
  */
 export async function withCache<T>(
   key: string,
   fetcher: () => Promise<T>,
   options: CacheOptions = {}
 ): Promise<T> {
+  const { staleWhileRevalidate = true } = options
+  
   // Try to get from cache first
   const cached = await getFromCache<T>(key)
   if (cached !== null) {
     return cached
   }
 
-  // Fetch fresh data
+  // Check for stale cache (with longer TTL)
+  if (staleWhileRevalidate) {
+    const staleData = await getFromCache<T>(`${key}:stale`)
+    if (staleData !== null) {
+      // Return stale data immediately, refresh in background
+      // Use waitUntil if available (Cloudflare Workers)
+      const refreshPromise = (async () => {
+        try {
+          const freshData = await fetcher()
+          await Promise.all([
+            setInCache(key, freshData, options),
+            setInCache(`${key}:stale`, freshData, { ttl: STALE_TTL }),
+          ])
+        } catch (error) {
+          console.error(`Background refresh failed for ${key}:`, error)
+        }
+      })()
+      
+      // Try to use waitUntil for background execution
+      try {
+        const { getCloudflareContext } = await import("@opennextjs/cloudflare")
+        const ctx = await getCloudflareContext({ async: true })
+        if (ctx.ctx?.waitUntil) {
+          ctx.ctx.waitUntil(refreshPromise)
+        }
+      } catch {
+        // Not in Cloudflare context, fire and forget
+      }
+      
+      return staleData
+    }
+  }
+
+  // No cache at all - must fetch
   const data = await fetcher()
 
-  // Store in cache (don't await to avoid blocking)
-  setInCache(key, data, options).catch(() => {
+  // Store in both regular and stale cache
+  Promise.all([
+    setInCache(key, data, options),
+    setInCache(`${key}:stale`, data, { ttl: STALE_TTL }),
+  ]).catch(() => {
     // Ignore cache errors
   })
 

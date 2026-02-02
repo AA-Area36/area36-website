@@ -236,7 +236,7 @@ export async function getNewsletters(
 
       return newsletters
     },
-    { ttl: 5 * 60 } // 5 minute cache
+    { ttl: 60 * 60 } // 1 hour cache (newsletters don't change often)
   )
 }
 
