@@ -7,6 +7,9 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { fetchCommitteeFiles } from "./actions"
 import { CommitteesContent } from "./committees-content"
 
+// ISR: Revalidate every 30 minutes
+export const revalidate = 1800
+
 const officers = [
   {
     role: "Delegate",

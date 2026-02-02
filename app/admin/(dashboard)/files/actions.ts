@@ -213,6 +213,10 @@ export async function upsertFileMetadata(data: {
 
   const db = await getDb()
 
+  // Convert empty strings to null for optional fields
+  const password = data.password?.trim() || null
+  const category = data.category?.trim() || null
+
   // Check if metadata already exists
   const existing = await db
     .select()
@@ -226,8 +230,8 @@ export async function upsertFileMetadata(data: {
       .update(fileMetadata)
       .set({
         displayName: data.displayName,
-        password: data.password ?? null,
-        category: data.category ?? null,
+        password,
+        category,
         parentFolderId: data.parentFolderId,
         updatedAt: sql`datetime('now')`,
       })
@@ -239,8 +243,8 @@ export async function upsertFileMetadata(data: {
       driveId: data.driveId,
       parentFolderId: data.parentFolderId,
       displayName: data.displayName,
-      password: data.password ?? null,
-      category: data.category ?? null,
+      password,
+      category,
     })
   }
 

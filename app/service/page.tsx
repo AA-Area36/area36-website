@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/button"
 import { ServiceResources } from "./service-resources"
 import { fetchServiceResources } from "./actions"
 
+// ISR: Revalidate every 30 minutes
+export const revalidate = 1800
+
 const servicePositions = [
   {
     title: "General Service Representative (GSR)",

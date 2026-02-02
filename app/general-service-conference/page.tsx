@@ -8,6 +8,9 @@ import { fetchConferenceMaterials, fetchOldConferenceReports } from "./actions"
 import { ConferenceMaterialsContent } from "./conference-materials-content"
 import { FinalReportsContent } from "./final-reports-content"
 
+// ISR: Revalidate every 30 minutes
+export const revalidate = 1800
+
 // Loading skeleton
 function MaterialsSkeleton() {
   return (
