@@ -1,9 +1,11 @@
 import type React from "react"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
-import { BookOpen, Users, MessageSquare, ArrowRight, ExternalLink, Download } from "lucide-react"
+import { BookOpen, Users, MessageSquare, ArrowRight, ExternalLink } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { ServiceResources } from "./service-resources"
+import { fetchServiceResources } from "./actions"
 
 const servicePositions = [
   {
@@ -32,7 +34,7 @@ const servicePositions = [
   },
 ]
 
-const resources = [
+const gsoResources = [
   {
     title: "The A.A. Service Manual",
     href: "https://www.aa.org/aa-service-manualtwelve-concepts-world-services",
@@ -59,13 +61,8 @@ const resources = [
   },
 ]
 
-const localResources = [
-  { title: "GSR Kit - Getting Started", size: "1.2 MB" },
-  { title: "DCM Handbook", size: "890 KB" },
-  { title: "Area 36 Service Manual", size: "512 KB" },
-]
-
-export default function ServicePage() {
+export default async function ServicePage() {
+  const serviceResources = await fetchServiceResources()
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
@@ -170,73 +167,60 @@ export default function ServicePage() {
           </div>
         </section>
 
+        {/* Area 36 Resources */}
         <section className="py-12 sm:py-16" aria-labelledby="local-resources-heading">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="grid gap-12 lg:grid-cols-2">
-              <div>
-                <h2 id="local-resources-heading" className="text-3xl font-bold text-foreground">
-                  Area 36 Resources
-                </h2>
-                <p className="mt-4 text-muted-foreground">Download these guides to help you get started in service.</p>
-                <ul className="mt-6 space-y-3" role="list">
-                  {localResources.map((resource) => (
-                    <li key={resource.title}>
-                      <button className="group flex items-center justify-between w-full rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md text-left">
-                        <span className="font-medium text-foreground group-hover:text-primary transition-colors">
-                          {resource.title}
-                        </span>
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm text-muted-foreground">{resource.size}</span>
-                          <Download
-                            className="h-4 w-4 text-muted-foreground group-hover:text-primary"
-                            aria-hidden="true"
-                          />
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-6">
-                  <Link
-                    href="/resources"
-                    className="inline-flex items-center gap-2 text-primary font-medium hover:underline"
-                  >
-                    View all resources
-                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </Link>
-                </div>
-              </div>
-
-              <div>
-                <h2 className="text-3xl font-bold text-foreground">GSO Resources</h2>
-                <p className="mt-4 text-muted-foreground">
-                  These resources from the General Service Office can help you learn more about service in A.A.
-                </p>
-                <ul className="mt-6 space-y-3" role="list">
-                  {resources.map((resource) => (
-                    <li key={resource.title}>
-                      <Link
-                        href={resource.href}
-                        target={resource.external ? "_blank" : undefined}
-                        rel={resource.external ? "noopener noreferrer" : undefined}
-                        className="group flex items-center justify-between rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
-                      >
-                        <div>
-                          <span className="font-medium text-foreground group-hover:text-primary transition-colors block">
-                            {resource.title}
-                          </span>
-                          <span className="text-sm text-muted-foreground">{resource.description}</span>
-                        </div>
-                        <ExternalLink
-                          className="h-4 w-4 text-muted-foreground group-hover:text-primary flex-shrink-0"
-                          aria-label="(opens in new tab)"
-                        />
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+            <h2 id="local-resources-heading" className="text-3xl font-bold text-foreground">
+              Area 36 Resources
+            </h2>
+            <p className="mt-4 text-muted-foreground mb-6">
+              Download these guides and materials to help you get started in service.
+            </p>
+            <ServiceResources resources={serviceResources} />
+            <div className="mt-8">
+              <Link
+                href="/resources"
+                className="inline-flex items-center gap-2 text-primary font-medium hover:underline"
+              >
+                View all resources
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </Link>
             </div>
+          </div>
+        </section>
+
+        {/* GSO Resources */}
+        <section className="py-12 sm:py-16 bg-muted/30" aria-labelledby="gso-resources-heading">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <h2 id="gso-resources-heading" className="text-3xl font-bold text-foreground">
+              GSO Resources
+            </h2>
+            <p className="mt-4 text-muted-foreground">
+              These resources from the General Service Office can help you learn more about service in A.A.
+            </p>
+            <ul className="mt-6 space-y-3" role="list">
+              {gsoResources.map((resource) => (
+                <li key={resource.title}>
+                  <Link
+                    href={resource.href}
+                    target={resource.external ? "_blank" : undefined}
+                    rel={resource.external ? "noopener noreferrer" : undefined}
+                    className="group flex items-center justify-between rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
+                  >
+                    <div>
+                      <span className="font-medium text-foreground group-hover:text-primary transition-colors block">
+                        {resource.title}
+                      </span>
+                      <span className="text-sm text-muted-foreground">{resource.description}</span>
+                    </div>
+                    <ExternalLink
+                      className="h-4 w-4 text-muted-foreground group-hover:text-primary flex-shrink-0"
+                      aria-label="(opens in new tab)"
+                    />
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
 

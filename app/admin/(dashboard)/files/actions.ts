@@ -53,6 +53,7 @@ async function getEnv() {
     GDRIVE_COMMITTEES_FOLDER_ID: process.env.GDRIVE_COMMITTEES_FOLDER_ID || "",
     GDRIVE_NEWSLETTERS_FOLDER_ID: process.env.GDRIVE_NEWSLETTERS_FOLDER_ID || "",
     GDRIVE_RECORDINGS_FOLDER_ID: process.env.GDRIVE_RECORDINGS_FOLDER_ID || "",
+    GDRIVE_SERVICE_RESOURCES_FOLDER_ID: process.env.GDRIVE_SERVICE_RESOURCES_FOLDER_ID || "",
   }
 }
 
@@ -144,6 +145,7 @@ export async function getFolderStructure(): Promise<FolderNode[]> {
     { id: env.GDRIVE_COMMITTEES_FOLDER_ID, name: "Committees" },
     { id: env.GDRIVE_NEWSLETTERS_FOLDER_ID, name: "Newsletters" },
     { id: env.GDRIVE_RECORDINGS_FOLDER_ID, name: "Recordings" },
+    { id: env.GDRIVE_SERVICE_RESOURCES_FOLDER_ID, name: "Service Resources" },
   ].filter((f) => f.id)
 
   for (const config of folderConfigs) {
@@ -246,6 +248,7 @@ export async function upsertFileMetadata(data: {
   revalidatePath("/resources")
   revalidatePath("/committees")
   revalidatePath("/general-service-conference")
+  revalidatePath("/service")
 
   return { success: true }
 }
@@ -266,6 +269,7 @@ export async function deleteFileMetadata(driveId: string) {
   revalidatePath("/resources")
   revalidatePath("/committees")
   revalidatePath("/general-service-conference")
+  revalidatePath("/service")
 
   return { success: true }
 }

@@ -38,6 +38,7 @@ interface CloudflareEnv {
   GDRIVE_RESOURCES_FOLDER_ID: string
   GDRIVE_RECORDINGS_FOLDER_ID: string
   GDRIVE_COMMITTEES_FOLDER_ID: string
+  GDRIVE_SERVICE_RESOURCES_FOLDER_ID: string
   // Gmail API (uses same service account as Google Drive)
   GMAIL_SENDER_EMAIL: string
 }

@@ -5,6 +5,7 @@ import {
   getGDriveEnv,
   getGDriveCredentials,
 } from "@/lib/recordings/access"
+import { createRequestLogger } from "@/lib/logger"
 
 // Use nodejs runtime for better compatibility with Cloudflare Workers via OpenNext
 // Edge runtime causes token caching issues and CPU limit problems
@@ -15,15 +16,21 @@ export async function GET(
   { params }: { params: Promise<{ fileId: string }> }
 ) {
   const { fileId } = await params
+  const log = createRequestLogger("/api/recordings/stream", "GET")
 
   if (!fileId) {
+    log.tracker.finish(400)
     return NextResponse.json({ error: "File ID required" }, { status: 400 })
   }
 
+  log.info("Starting audio stream", { fileId })
+
   try {
-    const env = await getGDriveEnv()
+    const env = await log.tracker.time("getGDriveEnv", () => getGDriveEnv())
 
     if (!env.GDRIVE_SERVICE_ACCOUNT_EMAIL) {
+      log.error("Drive not configured")
+      log.tracker.finish(500)
       return NextResponse.json(
         { error: "Drive not configured" },
         { status: 500 }
@@ -33,13 +40,20 @@ export async function GET(
     const credentials = getGDriveCredentials(env)
 
     // Validate user has access to this file's folder
-    const { valid } = await validateRecordingAccess(fileId, credentials)
+    const { valid } = await log.tracker.time(
+      "validateAccess",
+      () => validateRecordingAccess(fileId, credentials),
+      { fileId }
+    )
     if (!valid) {
+      log.warn("Access denied", { fileId })
+      log.tracker.finish(403)
       return NextResponse.json({ error: "Access denied" }, { status: 403 })
     }
 
     // Get access token for Google Drive API
-    const accessToken = await getAccessToken(credentials)
+    const accessToken = await log.tracker.time("getAccessToken", () => getAccessToken(credentials))
+    log.tracker.trackSubrequest()
 
     // Fetch file content from Google Drive
     // Use alt=media to get the actual file content
@@ -54,14 +68,16 @@ export async function GET(
       headers["Range"] = rangeHeader
     }
 
-    const driveResponse = await fetch(driveUrl, { headers })
+    const driveResponse = await log.tracker.time(
+      "fetchFromDrive",
+      () => fetch(driveUrl, { headers }),
+      { hasRange: !!rangeHeader }
+    )
 
     if (!driveResponse.ok) {
-      console.error(
-        "Drive API error:",
-        driveResponse.status,
-        await driveResponse.text()
-      )
+      const errorText = await driveResponse.text()
+      log.error("Drive API error", new Error(`${driveResponse.status}: ${errorText}`))
+      log.tracker.finish(driveResponse.status)
       return NextResponse.json(
         { error: "Failed to fetch audio" },
         { status: driveResponse.status }
@@ -96,13 +112,24 @@ export async function GET(
     // Cache for 1 hour (audio files don't change often)
     responseHeaders.set("Cache-Control", "private, max-age=3600")
 
+    // Add request ID for tracing
+    responseHeaders.set("x-request-id", log.requestId)
+
+    log.info("Streaming audio", {
+      fileId,
+      contentLength,
+      isRangeRequest: !!rangeHeader,
+    })
+    log.tracker.finish(driveResponse.status)
+
     // Return the stream
     return new NextResponse(driveResponse.body, {
       status: driveResponse.status, // Will be 206 for range requests
       headers: responseHeaders,
     })
   } catch (error) {
-    console.error("Error streaming audio:", error)
+    log.error("Error streaming audio", error)
+    log.tracker.finish(500)
     return NextResponse.json({ error: "Stream failed" }, { status: 500 })
   }
 }

@@ -2,8 +2,12 @@
 
 import { getAccessToken, clearTokenCache } from "./auth"
 import type { DriveFile, DriveListResponse, GDriveCredentials } from "./types"
+import { logger, PerformanceTracker } from "@/lib/logger"
 
 const DRIVE_API_BASE = "https://www.googleapis.com/drive/v3"
+
+// Track API call counts for resource limit debugging
+let globalApiCallCount = 0
 
 export interface ListFilesOptions {
   mimeType?: string
@@ -30,32 +34,65 @@ export function getGDriveCredentials(env: {
 
 /**
  * Make an authenticated request to the Google Drive API
+ * Includes performance tracking for resource limit debugging
  */
 async function driveRequest<T>(
   credentials: GDriveCredentials,
   endpoint: string,
-  retryOn401 = true
+  retryOn401 = true,
+  tracker?: PerformanceTracker
 ): Promise<T> {
-  const accessToken = await getAccessToken(credentials)
+  globalApiCallCount++
+  const callNum = globalApiCallCount
+  const startTime = performance.now()
+  
+  // Extract operation type from endpoint for better tracking
+  const opType = endpoint.includes("/files?") ? "list" : "get"
+  
+  tracker?.trackSubrequest()
+  const endOp = tracker?.startOperation(`gdrive.${opType}`, { endpoint: endpoint.slice(0, 100), callNum })
 
-  const response = await fetch(`${DRIVE_API_BASE}${endpoint}`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  })
+  try {
+    const accessToken = await getAccessToken(credentials)
 
-  // Handle 401 by clearing cache and retrying once
-  if (response.status === 401 && retryOn401) {
-    await clearTokenCache()
-    return driveRequest(credentials, endpoint, false)
+    const response = await fetch(`${DRIVE_API_BASE}${endpoint}`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+
+    // Handle 401 by clearing cache and retrying once
+    if (response.status === 401 && retryOn401) {
+      await clearTokenCache()
+      endOp?.()
+      return driveRequest(credentials, endpoint, false, tracker)
+    }
+
+    if (!response.ok) {
+      const error = await response.text()
+      const duration = performance.now() - startTime
+      logger.error(`Drive API error after ${Math.round(duration)}ms`, new Error(`${response.status} - ${error}`), {
+        endpoint: endpoint.slice(0, 100),
+        callNum,
+      })
+      throw new Error(`Drive API error: ${response.status} - ${error}`)
+    }
+
+    const duration = performance.now() - startTime
+    if (duration > 1000) {
+      logger.warn("Slow Google Drive API call", {
+        endpoint: endpoint.slice(0, 100),
+        durationMs: Math.round(duration),
+        callNum,
+      })
+    }
+
+    endOp?.()
+    return response.json() as Promise<T>
+  } catch (error) {
+    endOp?.()
+    throw error
   }
-
-  if (!response.ok) {
-    const error = await response.text()
-    throw new Error(`Drive API error: ${response.status} - ${error}`)
-  }
-
-  return response.json() as Promise<T>
 }
 
 /**
@@ -64,7 +101,8 @@ async function driveRequest<T>(
 export async function listFiles(
   credentials: GDriveCredentials,
   folderId: string,
-  options: ListFilesOptions = {}
+  options: ListFilesOptions = {},
+  tracker?: PerformanceTracker
 ): Promise<DriveListResponse> {
   const {
     mimeType,
@@ -92,7 +130,7 @@ export async function listFiles(
     params.set("pageToken", pageToken)
   }
 
-  return driveRequest<DriveListResponse>(credentials, `/files?${params.toString()}`)
+  return driveRequest<DriveListResponse>(credentials, `/files?${params.toString()}`, true, tracker)
 }
 
 /**
@@ -101,15 +139,23 @@ export async function listFiles(
 export async function listAllFiles(
   credentials: GDriveCredentials,
   folderId: string,
-  options: Omit<ListFilesOptions, "pageToken"> = {}
+  options: Omit<ListFilesOptions, "pageToken"> = {},
+  tracker?: PerformanceTracker
 ): Promise<DriveFile[]> {
   const allFiles: DriveFile[] = []
   let pageToken: string | undefined
+  let pageCount = 0
 
   do {
-    const response = await listFiles(credentials, folderId, { ...options, pageToken })
+    pageCount++
+    const response = await listFiles(credentials, folderId, { ...options, pageToken }, tracker)
     allFiles.push(...response.files)
     pageToken = response.nextPageToken
+    
+    // Log progress every 5 pages to track pagination-heavy requests
+    if (pageCount % 5 === 0) {
+      logger.info("Pagination progress", { folderId, pageCount, filesFound: allFiles.length })
+    }
   } while (pageToken)
 
   return allFiles
@@ -120,12 +166,13 @@ export async function listAllFiles(
  */
 export async function listFolders(
   credentials: GDriveCredentials,
-  parentId: string
+  parentId: string,
+  tracker?: PerformanceTracker
 ): Promise<DriveFile[]> {
   return listAllFiles(credentials, parentId, {
     mimeType: "application/vnd.google-apps.folder",
     orderBy: "name",
-  })
+  }, tracker)
 }
 
 /**
@@ -133,44 +180,99 @@ export async function listFolders(
  */
 export async function getFileMetadata(
   credentials: GDriveCredentials,
-  fileId: string
+  fileId: string,
+  tracker?: PerformanceTracker
 ): Promise<DriveFile> {
   const fields = "id,name,mimeType,description,createdTime,modifiedTime,size,webContentLink,webViewLink,thumbnailLink,parents"
-  return driveRequest<DriveFile>(credentials, `/files/${fileId}?fields=${fields}`)
+  return driveRequest<DriveFile>(credentials, `/files/${fileId}?fields=${fields}`, true, tracker)
 }
 
 /**
  * List files recursively from a folder and its subfolders
+ * WARNING: This function can make many API calls and may hit resource limits
+ * Use the tracker parameter to monitor performance
  */
 export async function listFilesRecursive(
   credentials: GDriveCredentials,
   folderId: string,
-  options: Omit<ListFilesOptions, "pageToken" | "mimeType"> = {}
+  options: Omit<ListFilesOptions, "pageToken" | "mimeType"> = {},
+  tracker?: PerformanceTracker
 ): Promise<{ files: DriveFile[]; folderMap: Map<string, string> }> {
   const allFiles: DriveFile[] = []
   const folderMap = new Map<string, string>() // folderId -> folderName
+  let folderCount = 0
+  const maxFolders = 50 // Safety limit to prevent runaway recursion
+  const startTime = performance.now()
 
-  async function processFolder(currentFolderId: string, folderName?: string): Promise<void> {
+  async function processFolder(currentFolderId: string, folderName?: string, depth = 0): Promise<void> {
+    folderCount++
+    
+    // Safety check: prevent unbounded recursion
+    if (folderCount > maxFolders) {
+      logger.warn("listFilesRecursive: Max folder limit reached", {
+        folderId,
+        folderCount,
+        maxFolders,
+        elapsedMs: Math.round(performance.now() - startTime),
+      })
+      return
+    }
+
+    // Log progress periodically
+    if (folderCount % 10 === 0) {
+      const elapsed = performance.now() - startTime
+      logger.info("listFilesRecursive progress", {
+        folderCount,
+        filesFound: allFiles.length,
+        depth,
+        elapsedMs: Math.round(elapsed),
+      })
+      tracker?.logProgress(`Processed ${folderCount} folders`)
+    }
+
     if (folderName) {
       folderMap.set(currentFolderId, folderName)
     }
 
     // Get subfolders
-    const subfolders = await listFolders(credentials, currentFolderId)
+    const subfolders = await listFolders(credentials, currentFolderId, tracker)
     for (const subfolder of subfolders) {
-      await processFolder(subfolder.id, subfolder.name)
+      await processFolder(subfolder.id, subfolder.name, depth + 1)
     }
 
     // Get files (exclude folders)
     const files = await listAllFiles(credentials, currentFolderId, {
       ...options,
-    })
+    }, tracker)
     const nonFolderFiles = files.filter((f) => f.mimeType !== "application/vnd.google-apps.folder")
     allFiles.push(...nonFolderFiles)
   }
 
-  await processFolder(folderId)
-  return { files: allFiles, folderMap }
+  const endOp = tracker?.startOperation("gdrive.listFilesRecursive", { folderId })
+  
+  try {
+    await processFolder(folderId)
+    
+    const totalTime = performance.now() - startTime
+    logger.info("listFilesRecursive completed", {
+      folderId,
+      totalFolders: folderCount,
+      totalFiles: allFiles.length,
+      durationMs: Math.round(totalTime),
+    })
+    
+    endOp?.()
+    return { files: allFiles, folderMap }
+  } catch (error) {
+    endOp?.()
+    logger.error("listFilesRecursive failed", error, {
+      folderId,
+      foldersProcessed: folderCount,
+      filesFound: allFiles.length,
+      elapsedMs: Math.round(performance.now() - startTime),
+    })
+    throw error
+  }
 }
 
 /**
