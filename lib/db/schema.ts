@@ -58,10 +58,16 @@ export const eventTypes = [
 
 export const eventStatuses = ["pending", "approved", "denied"] as const
 export const locationTypes = ["in-person", "hybrid", "online"] as const
+export const recurrenceTypes = ["none", "weekly", "monthly"] as const
+export const monthlyPatternTypes = ["dayOfMonth", "dayOfWeek"] as const
+export const exceptionTypes = ["cancelled", "modified"] as const
 
 export type EventType = (typeof eventTypes)[number]
 export type EventStatus = (typeof eventStatuses)[number]
 export type LocationType = (typeof locationTypes)[number]
+export type RecurrenceType = (typeof recurrenceTypes)[number]
+export type MonthlyPatternType = (typeof monthlyPatternTypes)[number]
+export type ExceptionType = (typeof exceptionTypes)[number]
 
 export const events = sqliteTable("events", {
   id: text("id").primaryKey(),
@@ -84,6 +90,13 @@ export const events = sqliteTable("events", {
   timeTBD: integer("time_tbd", { mode: "boolean" }).notNull().default(false),
   addressTBD: integer("address_tbd", { mode: "boolean" }).notNull().default(false),
   meetingLinkTBD: integer("meeting_link_tbd", { mode: "boolean" }).notNull().default(false),
+  // Recurrence fields
+  isRecurring: integer("is_recurring", { mode: "boolean" }).notNull().default(false),
+  recurrenceType: text("recurrence_type").$type<RecurrenceType>().default("none"),
+  recurrencePattern: text("recurrence_pattern"), // JSON: weekly days [0-6] array
+  monthlyPatternType: text("monthly_pattern_type").$type<MonthlyPatternType>(),
+  monthlyPatternValue: text("monthly_pattern_value"), // JSON: day number or {week, day}
+  recurUntil: text("recur_until"), // YYYY-MM-DD end date for recurrence
   createdAt: text("created_at")
     .notNull()
     .default(sql`(datetime('now'))`),
@@ -130,6 +143,35 @@ export const eventToTypes = sqliteTable(
 
 export type EventToType = typeof eventToTypes.$inferSelect
 export type NewEventToType = typeof eventToTypes.$inferInsert
+
+// Event Exceptions table (for recurring events - modified or cancelled occurrences)
+export const eventExceptions = sqliteTable("event_exceptions", {
+  id: text("id").primaryKey(),
+  eventId: text("event_id")
+    .notNull()
+    .references(() => events.id, { onDelete: "cascade" }),
+  occurrenceDate: text("occurrence_date").notNull(), // YYYY-MM-DD - the specific occurrence this exception applies to
+  exceptionType: text("exception_type").notNull().$type<ExceptionType>(),
+  // Override fields (null = use parent event value)
+  title: text("title"),
+  startTime: text("start_time"),
+  endTime: text("end_time"),
+  endDate: text("end_date"), // For multi-day occurrence overrides
+  locationType: text("location_type").$type<LocationType>(),
+  address: text("address"),
+  meetingLink: text("meeting_link"),
+  description: text("description"),
+  timeTBD: integer("time_tbd", { mode: "boolean" }),
+  addressTBD: integer("address_tbd", { mode: "boolean" }),
+  meetingLinkTBD: integer("meeting_link_tbd", { mode: "boolean" }),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  createdBy: text("created_by"),
+})
+
+export type EventException = typeof eventExceptions.$inferSelect
+export type NewEventException = typeof eventExceptions.$inferInsert
 
 // Subscription Drives tables
 export const driveSubmissionStatuses = ["pending", "approved", "denied"] as const

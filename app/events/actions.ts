@@ -1,8 +1,9 @@
 "use server"
 
-import { eventSubmissionSchema, type EventSubmissionData } from "@/lib/schemas/event"
+import { eventSubmissionWithRecurrenceSchema, type EventSubmissionWithRecurrenceData } from "@/lib/schemas/event"
 import { getDb } from "@/lib/db"
-import { events, eventToTypes } from "@/lib/db/schema"
+import { events, eventToTypes, type MonthlyPatternType, type RecurrenceType } from "@/lib/db/schema"
+import { serializeWeeklyPattern, serializeMonthlyPatternValue } from "@/lib/utils/recurrence"
 
 interface ReCaptchaResponse {
   success: boolean
@@ -34,9 +35,9 @@ async function getRecaptchaSecretKey(): Promise<string | undefined> {
   return process.env.RECAPTCHA_SECRET_KEY
 }
 
-export async function submitEvent(data: EventSubmissionData) {
+export async function submitEvent(data: EventSubmissionWithRecurrenceData) {
   // Validate the form data
-  const result = eventSubmissionSchema.safeParse(data)
+  const result = eventSubmissionWithRecurrenceSchema.safeParse(data)
 
   if (!result.success) {
     // Build field-level errors
@@ -124,6 +125,20 @@ export async function submitEvent(data: EventSubmissionData) {
     // Insert event into database
     // Use first type for backward compatibility with legacy `type` column
     const primaryType = result.data.types[0]
+
+    // Serialize recurrence patterns for database storage
+    let recurrencePattern: string | null = null
+    let monthlyPatternType: MonthlyPatternType | null = null
+    let monthlyPatternValue: string | null = null
+
+    if (result.data.isRecurring) {
+      if (result.data.recurrenceType === "weekly" && result.data.weeklyPattern) {
+        recurrencePattern = serializeWeeklyPattern(result.data.weeklyPattern)
+      } else if (result.data.recurrenceType === "monthly" && result.data.monthlyPattern) {
+        monthlyPatternType = result.data.monthlyPattern.type as MonthlyPatternType
+        monthlyPatternValue = serializeMonthlyPatternValue(result.data.monthlyPattern)
+      }
+    }
     
     await db.insert(events).values({
       id: eventId,
@@ -144,6 +159,13 @@ export async function submitEvent(data: EventSubmissionData) {
       timeTBD: result.data.timeTBD,
       addressTBD: result.data.addressTBD,
       meetingLinkTBD: result.data.meetingLinkTBD,
+      // Recurrence fields
+      isRecurring: result.data.isRecurring,
+      recurrenceType: result.data.recurrenceType,
+      recurrencePattern,
+      monthlyPatternType,
+      monthlyPatternValue,
+      recurUntil: result.data.recurUntil || null,
     })
 
     // Insert all event types into the junction table

@@ -1,7 +1,8 @@
 import { z } from "zod"
-import { eventTypes, locationTypes, type EventType } from "@/lib/db/schema"
+import { eventTypes, locationTypes, recurrenceTypes, type EventType } from "@/lib/db/schema"
 
 const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/
+const dateRegex = /^\d{4}-\d{2}-\d{2}$/
 
 // Helper for multi-select event types - accepts array of valid event types
 const eventTypesArray = z.array(z.enum(eventTypes)).min(1, "Please select at least one event type")
@@ -117,3 +118,141 @@ export const eventSubmissionSchema = z.object({
 )
 
 export type EventSubmissionData = z.infer<typeof eventSubmissionSchema>
+
+// Weekly recurrence pattern schema
+export const weeklyPatternSchema = z.object({
+  daysOfWeek: z.array(z.number().min(0).max(6)).min(1, "Select at least one day"),
+})
+
+// Monthly recurrence pattern schemas
+export const monthlyDayOfMonthSchema = z.object({
+  type: z.literal("dayOfMonth"),
+  dayOfMonth: z.number().min(1).max(31),
+})
+
+export const monthlyDayOfWeekSchema = z.object({
+  type: z.literal("dayOfWeek"),
+  weekOfMonth: z.number().min(1).max(5), // 5 = "last"
+  dayOfWeek: z.number().min(0).max(6),
+})
+
+export const monthlyPatternSchema = z.discriminatedUnion("type", [
+  monthlyDayOfMonthSchema,
+  monthlyDayOfWeekSchema,
+])
+
+// Recurrence configuration schema
+export const recurrenceConfigSchema = z.object({
+  isRecurring: z.boolean().default(false),
+  recurrenceType: z.enum(recurrenceTypes).default("none"),
+  weeklyPattern: weeklyPatternSchema.optional(),
+  monthlyPattern: monthlyPatternSchema.optional(),
+  recurUntil: z.string().regex(dateRegex, "Invalid date format").optional(),
+})
+
+export type RecurrenceConfigData = z.infer<typeof recurrenceConfigSchema>
+export type WeeklyPatternData = z.infer<typeof weeklyPatternSchema>
+export type MonthlyPatternData = z.infer<typeof monthlyPatternSchema>
+
+// Extended event submission schema with recurrence
+export const eventSubmissionWithRecurrenceSchema = eventSubmissionSchema.and(
+  recurrenceConfigSchema
+).refine(
+  (data) => {
+    // If recurring, recurrence type must not be "none"
+    if (data.isRecurring && data.recurrenceType === "none") {
+      return false
+    }
+    return true
+  },
+  {
+    message: "Please select a recurrence pattern",
+    path: ["recurrenceType"],
+  }
+).refine(
+  (data) => {
+    // If weekly recurrence, weeklyPattern is required
+    if (data.isRecurring && data.recurrenceType === "weekly" && !data.weeklyPattern) {
+      return false
+    }
+    return true
+  },
+  {
+    message: "Please select at least one day of the week",
+    path: ["weeklyPattern"],
+  }
+).refine(
+  (data) => {
+    // If monthly recurrence, monthlyPattern is required
+    if (data.isRecurring && data.recurrenceType === "monthly" && !data.monthlyPattern) {
+      return false
+    }
+    return true
+  },
+  {
+    message: "Please configure the monthly recurrence pattern",
+    path: ["monthlyPattern"],
+  }
+).refine(
+  (data) => {
+    // If recurring, recurUntil is required
+    if (data.isRecurring && !data.recurUntil) {
+      return false
+    }
+    return true
+  },
+  {
+    message: "End date is required for recurring events",
+    path: ["recurUntil"],
+  }
+).refine(
+  (data) => {
+    // recurUntil must be after start date
+    if (data.isRecurring && data.recurUntil && data.date) {
+      return data.recurUntil > data.date
+    }
+    return true
+  },
+  {
+    message: "Recurring end date must be after the start date",
+    path: ["recurUntil"],
+  }
+).refine(
+  (data) => {
+    // Limit recurring events to max 2 years
+    if (data.isRecurring && data.recurUntil && data.date) {
+      const start = new Date(data.date)
+      const end = new Date(data.recurUntil)
+      const twoYearsMs = 2 * 365 * 24 * 60 * 60 * 1000
+      return (end.getTime() - start.getTime()) <= twoYearsMs
+    }
+    return true
+  },
+  {
+    message: "Recurring events can span a maximum of 2 years",
+    path: ["recurUntil"],
+  }
+)
+
+export type EventSubmissionWithRecurrenceData = z.infer<typeof eventSubmissionWithRecurrenceSchema>
+
+// Exception creation schema (for modifying/cancelling individual occurrences)
+export const eventExceptionSchema = z.object({
+  eventId: z.string().min(1),
+  occurrenceDate: z.string().regex(dateRegex, "Invalid date format"),
+  exceptionType: z.enum(["cancelled", "modified"]),
+  // For modified exceptions - all optional (null = use parent value)
+  title: z.string().optional(),
+  startTime: z.string().regex(timeRegex).optional().nullable(),
+  endTime: z.string().regex(timeRegex).optional().nullable(),
+  endDate: z.string().regex(dateRegex).optional().nullable(),
+  locationType: z.enum(locationTypes).optional(),
+  address: z.string().optional().nullable(),
+  meetingLink: z.string().url().optional().nullable(),
+  description: z.string().optional(),
+  timeTBD: z.boolean().optional(),
+  addressTBD: z.boolean().optional(),
+  meetingLinkTBD: z.boolean().optional(),
+})
+
+export type EventExceptionData = z.infer<typeof eventExceptionSchema>

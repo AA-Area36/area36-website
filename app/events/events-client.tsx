@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { useGoogleReCaptcha } from "react-google-recaptcha-v3"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
-import { Calendar, CalendarPlus, MapPin, Clock, ExternalLink, Search, Plus, X, Globe, HelpCircle } from "lucide-react"
+import { Calendar, CalendarPlus, MapPin, Clock, ExternalLink, Search, Plus, X, Globe, HelpCircle, Repeat, ChevronDown } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,10 +25,13 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { MultiSelect } from "@/components/multi-select"
 import { DateRangePicker } from "@/components/date-range-picker"
 import { FlyerUpload, type FlyerFile } from "@/components/flyer-upload"
+import { RecurrenceOptions } from "@/components/recurrence-options"
 import { DateRange } from "react-day-picker"
+import type { RecurrenceConfig } from "@/lib/types/recurrence"
 import { submitEvent } from "./actions"
 import { uploadEventFlyer } from "./flyer-actions"
 import type { Event, LocationType, EventType, EventFlyer } from "@/lib/db/schema"
+import type { DisplayEvent } from "@/lib/types/recurrence"
 
 // Event with types array and flyers (from junction tables)
 export interface EventWithTypes extends Event {
@@ -56,7 +59,7 @@ const eventTypeColors: Record<string, string> = {
 }
 
 // Generate Google Calendar URL for individual events
-function generateGoogleCalendarUrl(event: Event): string {
+function generateGoogleCalendarUrl(event: DisplayEvent): string {
   // Format dates for Google Calendar: YYYYMMDDTHHMMSS
   const formatDateTime = (date: string, time: string | null) => {
     const datePart = date.replace(/-/g, '')
@@ -127,8 +130,61 @@ const eventTypeOptions = eventTypes
     color: eventTypeColors[type],
   }))
 
+// Type for grouped events (recurring series or single event)
+interface EventGroup {
+  type: "single" | "recurring"
+  // For single events
+  event?: DisplayEvent
+  // For recurring events
+  parentEventId?: string
+  occurrences?: DisplayEvent[]
+  recurrenceDescription?: string
+}
+
+// Group events: recurring events grouped by parentEventId, single events standalone
+function groupEvents(events: DisplayEvent[]): EventGroup[] {
+  const groups: EventGroup[] = []
+  const recurringGroups = new Map<string, DisplayEvent[]>()
+
+  for (const event of events) {
+    if (event.isRecurringInstance && event.parentEventId) {
+      // Add to recurring group
+      const existing = recurringGroups.get(event.parentEventId) || []
+      existing.push(event)
+      recurringGroups.set(event.parentEventId, existing)
+    } else if (event.isRecurring && !event.isRecurringInstance) {
+      // This is a parent recurring event without occurrences in range - skip
+      // (occurrences should be generated as instances)
+    } else {
+      // Single non-recurring event
+      groups.push({ type: "single", event })
+    }
+  }
+
+  // Add recurring groups
+  for (const [parentEventId, occurrences] of recurringGroups) {
+    // Sort occurrences by date
+    occurrences.sort((a, b) => a.date.localeCompare(b.date))
+    groups.push({
+      type: "recurring",
+      parentEventId,
+      occurrences,
+      recurrenceDescription: occurrences[0]?.recurrenceDescription,
+    })
+  }
+
+  // Sort groups by the first/only event date
+  groups.sort((a, b) => {
+    const dateA = a.type === "single" ? a.event!.date : a.occurrences![0].date
+    const dateB = b.type === "single" ? b.event!.date : b.occurrences![0].date
+    return dateA.localeCompare(dateB)
+  })
+
+  return groups
+}
+
 interface EventsClientProps {
-  events: EventWithTypes[]
+  events: DisplayEvent[]
 }
 
 export function EventsClient({ events }: EventsClientProps) {
@@ -165,8 +221,30 @@ export function EventsClient({ events }: EventsClientProps) {
   const [submissionEventTypes, setSubmissionEventTypes] = React.useState<string[]>([])
   // Flyer files for submission form
   const [flyerFiles, setFlyerFiles] = React.useState<FlyerFile[]>([])
+  // Recurrence config for submission form
+  const [recurrenceConfig, setRecurrenceConfig] = React.useState<RecurrenceConfig>({
+    isRecurring: false,
+    recurrenceType: "none",
+  })
+  // Track the start date for recurrence options
+  const [formStartDate, setFormStartDate] = React.useState("")
+  // Track which recurring event groups are expanded
+  const [expandedGroups, setExpandedGroups] = React.useState<Set<string>>(new Set())
   const tabsRef = React.useRef<HTMLDivElement>(null)
   const formRef = React.useRef<HTMLFormElement>(null)
+
+  // Toggle expansion of a recurring event group
+  const toggleGroupExpansion = (parentEventId: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(parentEventId)) {
+        next.delete(parentEventId)
+      } else {
+        next.add(parentEventId)
+      }
+      return next
+    })
+  }
 
   // Reset form to initial state
   const resetForm = React.useCallback(() => {
@@ -180,6 +258,8 @@ export function EventsClient({ events }: EventsClientProps) {
     setMeetingLinkTBD(false)
     setSubmissionEventTypes([])
     setFlyerFiles([])
+    setRecurrenceConfig({ isRecurring: false, recurrenceType: "none" })
+    setFormStartDate("")
   }, [])
 
   // Detect user timezone
@@ -216,7 +296,7 @@ export function EventsClient({ events }: EventsClientProps) {
   }
 
   // Common filter logic for search and date
-  const applyCommonFilters = (event: Event) => {
+  const applyCommonFilters = (event: DisplayEvent) => {
     const matchesSearch =
       event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       event.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -236,15 +316,15 @@ export function EventsClient({ events }: EventsClientProps) {
   const isDistrictSelected = selectedTypes.includes("District")
 
   // Helper to check if an event has any of the specified types
-  const eventHasType = (event: EventWithTypes, types: string[]) => {
+  const eventHasType = (event: DisplayEvent, types: string[]) => {
     return event.types.some(t => types.includes(t))
   }
 
-  // Main list: NEVER shows District events
+  // Main list: NEVER shows District events (District events are in a separate section)
   const filteredEvents = events.filter((event) => {
-    // Always exclude District from main list (if it's the ONLY type)
-    const isDistrictOnly = event.types.length === 1 && event.types[0] === "District"
-    if (isDistrictOnly) return false
+    // Exclude any event that has District as one of its types
+    // District events are intentionally separate from Area events
+    if (event.types.includes("District")) return false
 
     if (!applyCommonFilters(event)) return false
 
@@ -403,6 +483,12 @@ export function EventsClient({ events }: EventsClientProps) {
         timeTBD,
         addressTBD,
         meetingLinkTBD,
+        // Recurrence fields
+        isRecurring: recurrenceConfig.isRecurring,
+        recurrenceType: recurrenceConfig.recurrenceType,
+        weeklyPattern: recurrenceConfig.weeklyPattern,
+        monthlyPattern: recurrenceConfig.monthlyPattern,
+        recurUntil: recurrenceConfig.recurUntil,
       }
 
       const result = await submitEvent(data)
@@ -430,6 +516,8 @@ export function EventsClient({ events }: EventsClientProps) {
         setMeetingLinkTBD(false)
         setSubmissionEventTypes([])
         setFlyerFiles([])
+        setRecurrenceConfig({ isRecurring: false, recurrenceType: "none" })
+        setFormStartDate("")
         setSubmitMessage({ type: "success", text: result.message! })
       } else {
         setSubmitMessage({ type: "error", text: result.error! })
@@ -608,6 +696,7 @@ export function EventsClient({ events }: EventsClientProps) {
                               type="date"
                               required
                               aria-invalid={!!fieldErrors.date}
+                              onChange={(e) => setFormStartDate(e.target.value)}
                             />
                             {fieldErrors.date && (
                               <p className="text-sm text-destructive">{fieldErrors.date}</p>
@@ -814,6 +903,21 @@ export function EventsClient({ events }: EventsClientProps) {
                           {fieldErrors.submitterEmail && (
                             <p className="text-sm text-destructive">{fieldErrors.submitterEmail}</p>
                           )}
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Recurrence (Optional)</Label>
+                          <RecurrenceOptions
+                            value={recurrenceConfig}
+                            onChange={setRecurrenceConfig}
+                            startDate={formStartDate}
+                            disabled={isSubmitting}
+                            errors={{
+                              recurrenceType: fieldErrors.recurrenceType,
+                              weeklyPattern: fieldErrors.weeklyPattern,
+                              monthlyPattern: fieldErrors.monthlyPattern,
+                              recurUntil: fieldErrors.recurUntil,
+                            }}
+                          />
                         </div>
                         <div className="text-sm text-muted-foreground text-center py-2">
                           This form is protected by Google reCAPTCHA v3.
@@ -1084,117 +1188,274 @@ export function EventsClient({ events }: EventsClientProps) {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {filteredEvents.map((event) => (
-                    <article
-                      key={event.id}
-                      className="group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md"
-                    >
-                      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
-                        <div className="flex-1">
-                          {event.types.length > 0 && (
-                            <div className="flex flex-wrap items-center gap-2 mb-3">
-                              {event.types.map((type) => (
-                                <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
-                                  {type}
-                                </Badge>
-                              ))}
-                            </div>
-                          )}
-                          <h2 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
-                            {event.title}
-                          </h2>
-                          <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{event.description}</p>
-                        </div>
-
-                        <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
-                          <div className="flex items-center gap-2 text-sm text-foreground lg:justify-end">
-                            <Calendar className="h-4 w-4 text-primary flex-shrink-0" aria-hidden="true" />
-                            <span className="font-medium">{formatDateRange(event.date, event.endDate)}</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
-                            <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                            <span>{event.timeTBD ? "Time TBD" : formatTimeRange(event.startTime, event.endTime, userTimezone)}</span>
-                          </div>
-                          {event.address ? (
-                            <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
-                              <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
-                              <a
-                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="lg:text-right text-primary hover:underline"
-                              >
-                                {event.address}
-                              </a>
-                            </div>
-                          ) : (event.locationType === "in-person" || event.locationType === "hybrid") && (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
-                              <MapPin className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                              <span>Location TBD</span>
-                            </div>
-                          )}
-                          {(event.locationType === "online" || event.locationType === "hybrid") && (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
-                              <Globe className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                              {event.meetingLink ? (
-                                <a
-                                  href={event.meetingLink}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-primary hover:underline"
-                                >
-                                  {event.locationType === "hybrid" ? "Join Online (Hybrid)" : "Join Online"}
-                                </a>
-                              ) : (
-                                <span>Meeting Link TBD</span>
+                  {groupEvents(filteredEvents).map((group) => {
+                    if (group.type === "single" && group.event) {
+                      const event = group.event
+                      return (
+                        <article
+                          key={event.id}
+                          className="group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md"
+                        >
+                          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+                            <div className="flex-1">
+                              {event.types.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-2 mb-3">
+                                  {event.types.map((type) => (
+                                    <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
+                                      {type}
+                                    </Badge>
+                                  ))}
+                                </div>
                               )}
+                              <h2 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
+                                {event.title}
+                              </h2>
+                              <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{event.description}</p>
                             </div>
-                          )}
-                          {/* Show flyers - prioritize uploaded flyers, fall back to legacy flyerUrl */}
-                          {event.flyers.length > 0 ? (
-                            <div className="flex flex-wrap items-center gap-2 text-sm lg:justify-end">
-                              {event.flyers.map((flyer, index) => (
-                                <a
-                                  key={flyer.id}
-                                  href={`/api/flyers/${flyer.fileKey}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
-                                >
-                                  <ExternalLink className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                                  {event.flyers.length > 1 ? `Flyer ${index + 1}` : "View Flyer"}
-                                </a>
-                              ))}
+
+                            <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
+                              <div className="flex items-center gap-2 text-sm text-foreground lg:justify-end">
+                                <Calendar className="h-4 w-4 text-primary flex-shrink-0" aria-hidden="true" />
+                                <span className="font-medium">{formatDateRange(event.date, event.endDate)}</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                <span>{event.timeTBD ? "Time TBD" : formatTimeRange(event.startTime, event.endTime, userTimezone)}</span>
+                              </div>
+                              {event.address ? (
+                                <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
+                                  <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                                  <a
+                                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="lg:text-right text-primary hover:underline"
+                                  >
+                                    {event.address}
+                                  </a>
+                                </div>
+                              ) : (event.locationType === "in-person" || event.locationType === "hybrid") && (
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                  <MapPin className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                  <span>Location TBD</span>
+                                </div>
+                              )}
+                              {(event.locationType === "online" || event.locationType === "hybrid") && (
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                  <Globe className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                  {event.meetingLink ? (
+                                    <a
+                                      href={event.meetingLink}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-primary hover:underline"
+                                    >
+                                      {event.locationType === "hybrid" ? "Join Online (Hybrid)" : "Join Online"}
+                                    </a>
+                                  ) : (
+                                    <span>Meeting Link TBD</span>
+                                  )}
+                                </div>
+                              )}
+                              {/* Show flyers */}
+                              {event.flyers.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-2 text-sm lg:justify-end">
+                                  {event.flyers.map((flyer, index) => (
+                                    <a
+                                      key={flyer.id}
+                                      href={`/api/flyers/${flyer.fileKey}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                                    >
+                                      <ExternalLink className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                      {event.flyers.length > 1 ? `Flyer ${index + 1}` : "View Flyer"}
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="flex items-center gap-2 text-sm lg:justify-end pt-2">
+                                <Button variant="outline" size="sm" asChild>
+                                  <a
+                                    href={generateGoogleCalendarUrl(event)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <CalendarPlus className="h-4 w-4 mr-2" aria-hidden="true" />
+                                    Add to Calendar
+                                  </a>
+                                </Button>
+                              </div>
                             </div>
-                          ) : event.flyerUrl && (
-                            <div className="flex items-center gap-2 text-sm lg:justify-end">
-                              <ExternalLink className="h-4 w-4 flex-shrink-0 text-primary" aria-hidden="true" />
-                              <a
-                                href={event.flyerUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-primary hover:underline font-medium"
-                              >
-                                View Flyer
-                              </a>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-2 text-sm lg:justify-end pt-2">
-                            <Button variant="outline" size="sm" asChild>
-                              <a
-                                href={generateGoogleCalendarUrl(event)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                <CalendarPlus className="h-4 w-4 mr-2" aria-hidden="true" />
-                                Add to Calendar
-                              </a>
-                            </Button>
                           </div>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
+                        </article>
+                      )
+                    }
+
+                    // Recurring event group
+                    if (group.type === "recurring" && group.occurrences && group.parentEventId) {
+                      const firstOccurrence = group.occurrences[0]
+                      const remainingOccurrences = group.occurrences.slice(1)
+                      const isExpanded = expandedGroups.has(group.parentEventId)
+
+                      return (
+                        <article
+                          key={group.parentEventId}
+                          className="rounded-xl border border-border bg-card overflow-hidden"
+                        >
+                          {/* Main event card (first occurrence) */}
+                          <div className="p-6 transition-all hover:bg-muted/30">
+                            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+                              <div className="flex-1">
+                                {firstOccurrence.types.length > 0 && (
+                                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                                    {firstOccurrence.types.map((type) => (
+                                      <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
+                                        {type}
+                                      </Badge>
+                                    ))}
+                                    <Badge variant="outline" className="flex items-center gap-1">
+                                      <Repeat className="h-3 w-3" />
+                                      {group.recurrenceDescription}
+                                    </Badge>
+                                  </div>
+                                )}
+                                <h2 className="text-xl font-semibold text-foreground">
+                                  {firstOccurrence.title}
+                                </h2>
+                                <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{firstOccurrence.description}</p>
+                              </div>
+
+                              <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
+                                <div className="flex items-center gap-2 text-sm text-foreground lg:justify-end">
+                                  <Calendar className="h-4 w-4 text-primary flex-shrink-0" aria-hidden="true" />
+                                  <span className="font-medium">Next: {formatDateRange(firstOccurrence.date, firstOccurrence.endDate)}</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                  <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                  <span>{firstOccurrence.timeTBD ? "Time TBD" : formatTimeRange(firstOccurrence.startTime, firstOccurrence.endTime, userTimezone)}</span>
+                                </div>
+                                {firstOccurrence.address ? (
+                                  <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
+                                    <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                                    <a
+                                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(firstOccurrence.address)}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="lg:text-right text-primary hover:underline"
+                                    >
+                                      {firstOccurrence.address}
+                                    </a>
+                                  </div>
+                                ) : (firstOccurrence.locationType === "in-person" || firstOccurrence.locationType === "hybrid") && (
+                                  <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                    <MapPin className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                    <span>Location TBD</span>
+                                  </div>
+                                )}
+                                {(firstOccurrence.locationType === "online" || firstOccurrence.locationType === "hybrid") && (
+                                  <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                    <Globe className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                    {firstOccurrence.meetingLink ? (
+                                      <a
+                                        href={firstOccurrence.meetingLink}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-primary hover:underline"
+                                      >
+                                        {firstOccurrence.locationType === "hybrid" ? "Join Online (Hybrid)" : "Join Online"}
+                                      </a>
+                                    ) : (
+                                      <span>Meeting Link TBD</span>
+                                    )}
+                                  </div>
+                                )}
+                                {/* Show flyers */}
+                                {firstOccurrence.flyers.length > 0 && (
+                                  <div className="flex flex-wrap items-center gap-2 text-sm lg:justify-end">
+                                    {firstOccurrence.flyers.map((flyer, index) => (
+                                      <a
+                                        key={flyer.id}
+                                        href={`/api/flyers/${flyer.fileKey}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                                      >
+                                        <ExternalLink className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                        {firstOccurrence.flyers.length > 1 ? `Flyer ${index + 1}` : "View Flyer"}
+                                      </a>
+                                    ))}
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-2 text-sm lg:justify-end pt-2">
+                                  <Button variant="outline" size="sm" asChild>
+                                    <a
+                                      href={generateGoogleCalendarUrl(firstOccurrence)}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      <CalendarPlus className="h-4 w-4 mr-2" aria-hidden="true" />
+                                      Add to Calendar
+                                    </a>
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Expandable section for additional occurrences */}
+                          {remainingOccurrences.length > 0 && (
+                            <>
+                              <button
+                                onClick={() => toggleGroupExpansion(group.parentEventId!)}
+                                className="w-full px-6 py-3 flex items-center justify-between bg-muted/30 hover:bg-muted/50 transition-colors border-t border-border"
+                              >
+                                <span className="text-sm font-medium text-muted-foreground">
+                                  {remainingOccurrences.length} more occurrence{remainingOccurrences.length > 1 ? "s" : ""} in this series
+                                </span>
+                                <ChevronDown 
+                                  className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`} 
+                                />
+                              </button>
+                              
+                              {isExpanded && (
+                                <div className="border-t border-border divide-y divide-border">
+                                  {remainingOccurrences.map((occurrence) => (
+                                    <div key={occurrence.id} className="p-4 bg-muted/10 hover:bg-muted/20 transition-colors">
+                                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                        <div className="flex items-center gap-3">
+                                          <Calendar className="h-4 w-4 text-primary flex-shrink-0" aria-hidden="true" />
+                                          <span className="font-medium text-sm">{formatDateRange(occurrence.date, occurrence.endDate)}</span>
+                                          <span className="text-sm text-muted-foreground">
+                                            {occurrence.timeTBD ? "Time TBD" : formatTimeRange(occurrence.startTime, occurrence.endTime, userTimezone)}
+                                          </span>
+                                          {occurrence.isModified && (
+                                            <Badge variant="outline" className="text-xs">Modified</Badge>
+                                          )}
+                                        </div>
+                                        <Button variant="ghost" size="sm" asChild>
+                                          <a
+                                            href={generateGoogleCalendarUrl(occurrence)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                          >
+                                            <CalendarPlus className="h-4 w-4 mr-1" aria-hidden="true" />
+                                            Add
+                                          </a>
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </article>
+                      )
+                    }
+
+                    return null
+                  })}
                 </div>
               )}
             </div>
@@ -1216,117 +1477,274 @@ export function EventsClient({ events }: EventsClientProps) {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {filteredDistrictEvents.map((event) => (
-                    <article
-                      key={event.id}
-                      className="group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md"
-                    >
-                      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
-                        <div className="flex-1">
-                          {event.types.length > 0 && (
-                            <div className="flex flex-wrap items-center gap-2 mb-3">
-                              {event.types.map((type) => (
-                                <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
-                                  {type}
-                                </Badge>
-                              ))}
-                            </div>
-                          )}
-                          <h4 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
-                            {event.title}
-                          </h4>
-                          <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{event.description}</p>
-                        </div>
-
-                        <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
-                          <div className="flex items-center gap-2 text-sm text-foreground lg:justify-end">
-                            <Calendar className="h-4 w-4 text-primary flex-shrink-0" aria-hidden="true" />
-                            <span className="font-medium">{formatDateRange(event.date, event.endDate)}</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
-                            <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                            <span>{event.timeTBD ? "Time TBD" : formatTimeRange(event.startTime, event.endTime, userTimezone)}</span>
-                          </div>
-                          {event.address ? (
-                            <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
-                              <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
-                              <a
-                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="lg:text-right text-primary hover:underline"
-                              >
-                                {event.address}
-                              </a>
-                            </div>
-                          ) : (event.locationType === "in-person" || event.locationType === "hybrid") && (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
-                              <MapPin className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                              <span>Location TBD</span>
-                            </div>
-                          )}
-                          {(event.locationType === "online" || event.locationType === "hybrid") && (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
-                              <Globe className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                              {event.meetingLink ? (
-                                <a
-                                  href={event.meetingLink}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-primary hover:underline"
-                                >
-                                  {event.locationType === "hybrid" ? "Join Online (Hybrid)" : "Join Online"}
-                                </a>
-                              ) : (
-                                <span>Meeting Link TBD</span>
+                  {groupEvents(filteredDistrictEvents).map((group) => {
+                    if (group.type === "single" && group.event) {
+                      const event = group.event
+                      return (
+                        <article
+                          key={event.id}
+                          className="group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md"
+                        >
+                          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+                            <div className="flex-1">
+                              {event.types.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-2 mb-3">
+                                  {event.types.map((type) => (
+                                    <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
+                                      {type}
+                                    </Badge>
+                                  ))}
+                                </div>
                               )}
+                              <h4 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
+                                {event.title}
+                              </h4>
+                              <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{event.description}</p>
                             </div>
-                          )}
-                          {/* Show flyers - prioritize uploaded flyers, fall back to legacy flyerUrl */}
-                          {event.flyers.length > 0 ? (
-                            <div className="flex flex-wrap items-center gap-2 text-sm lg:justify-end">
-                              {event.flyers.map((flyer, index) => (
-                                <a
-                                  key={flyer.id}
-                                  href={`/api/flyers/${flyer.fileKey}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
-                                >
-                                  <ExternalLink className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                                  {event.flyers.length > 1 ? `Flyer ${index + 1}` : "View Flyer"}
-                                </a>
-                              ))}
+
+                            <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
+                              <div className="flex items-center gap-2 text-sm text-foreground lg:justify-end">
+                                <Calendar className="h-4 w-4 text-primary flex-shrink-0" aria-hidden="true" />
+                                <span className="font-medium">{formatDateRange(event.date, event.endDate)}</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                <span>{event.timeTBD ? "Time TBD" : formatTimeRange(event.startTime, event.endTime, userTimezone)}</span>
+                              </div>
+                              {event.address ? (
+                                <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
+                                  <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                                  <a
+                                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="lg:text-right text-primary hover:underline"
+                                  >
+                                    {event.address}
+                                  </a>
+                                </div>
+                              ) : (event.locationType === "in-person" || event.locationType === "hybrid") && (
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                  <MapPin className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                  <span>Location TBD</span>
+                                </div>
+                              )}
+                              {(event.locationType === "online" || event.locationType === "hybrid") && (
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                  <Globe className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                  {event.meetingLink ? (
+                                    <a
+                                      href={event.meetingLink}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-primary hover:underline"
+                                    >
+                                      {event.locationType === "hybrid" ? "Join Online (Hybrid)" : "Join Online"}
+                                    </a>
+                                  ) : (
+                                    <span>Meeting Link TBD</span>
+                                  )}
+                                </div>
+                              )}
+                              {/* Show flyers */}
+                              {event.flyers.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-2 text-sm lg:justify-end">
+                                  {event.flyers.map((flyer, index) => (
+                                    <a
+                                      key={flyer.id}
+                                      href={`/api/flyers/${flyer.fileKey}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                                    >
+                                      <ExternalLink className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                      {event.flyers.length > 1 ? `Flyer ${index + 1}` : "View Flyer"}
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="flex items-center gap-2 text-sm lg:justify-end pt-2">
+                                <Button variant="outline" size="sm" asChild>
+                                  <a
+                                    href={generateGoogleCalendarUrl(event)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <CalendarPlus className="h-4 w-4 mr-2" aria-hidden="true" />
+                                    Add to Calendar
+                                  </a>
+                                </Button>
+                              </div>
                             </div>
-                          ) : event.flyerUrl && (
-                            <div className="flex items-center gap-2 text-sm lg:justify-end">
-                              <ExternalLink className="h-4 w-4 flex-shrink-0 text-primary" aria-hidden="true" />
-                              <a
-                                href={event.flyerUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-primary hover:underline font-medium"
-                              >
-                                View Flyer
-                              </a>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-2 text-sm lg:justify-end pt-2">
-                            <Button variant="outline" size="sm" asChild>
-                              <a
-                                href={generateGoogleCalendarUrl(event)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                <CalendarPlus className="h-4 w-4 mr-2" aria-hidden="true" />
-                                Add to Calendar
-                              </a>
-                            </Button>
                           </div>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
+                        </article>
+                      )
+                    }
+
+                    // Recurring event group
+                    if (group.type === "recurring" && group.occurrences && group.parentEventId) {
+                      const firstOccurrence = group.occurrences[0]
+                      const remainingOccurrences = group.occurrences.slice(1)
+                      const isExpanded = expandedGroups.has(group.parentEventId)
+
+                      return (
+                        <article
+                          key={group.parentEventId}
+                          className="rounded-xl border border-border bg-card overflow-hidden"
+                        >
+                          {/* Main event card (first occurrence) */}
+                          <div className="p-6 transition-all hover:bg-muted/30">
+                            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+                              <div className="flex-1">
+                                {firstOccurrence.types.length > 0 && (
+                                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                                    {firstOccurrence.types.map((type) => (
+                                      <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
+                                        {type}
+                                      </Badge>
+                                    ))}
+                                    <Badge variant="outline" className="flex items-center gap-1">
+                                      <Repeat className="h-3 w-3" />
+                                      {group.recurrenceDescription}
+                                    </Badge>
+                                  </div>
+                                )}
+                                <h4 className="text-xl font-semibold text-foreground">
+                                  {firstOccurrence.title}
+                                </h4>
+                                <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{firstOccurrence.description}</p>
+                              </div>
+
+                              <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
+                                <div className="flex items-center gap-2 text-sm text-foreground lg:justify-end">
+                                  <Calendar className="h-4 w-4 text-primary flex-shrink-0" aria-hidden="true" />
+                                  <span className="font-medium">Next: {formatDateRange(firstOccurrence.date, firstOccurrence.endDate)}</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                  <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                  <span>{firstOccurrence.timeTBD ? "Time TBD" : formatTimeRange(firstOccurrence.startTime, firstOccurrence.endTime, userTimezone)}</span>
+                                </div>
+                                {firstOccurrence.address ? (
+                                  <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
+                                    <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                                    <a
+                                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(firstOccurrence.address)}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="lg:text-right text-primary hover:underline"
+                                    >
+                                      {firstOccurrence.address}
+                                    </a>
+                                  </div>
+                                ) : (firstOccurrence.locationType === "in-person" || firstOccurrence.locationType === "hybrid") && (
+                                  <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                    <MapPin className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                    <span>Location TBD</span>
+                                  </div>
+                                )}
+                                {(firstOccurrence.locationType === "online" || firstOccurrence.locationType === "hybrid") && (
+                                  <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                    <Globe className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                    {firstOccurrence.meetingLink ? (
+                                      <a
+                                        href={firstOccurrence.meetingLink}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-primary hover:underline"
+                                      >
+                                        {firstOccurrence.locationType === "hybrid" ? "Join Online (Hybrid)" : "Join Online"}
+                                      </a>
+                                    ) : (
+                                      <span>Meeting Link TBD</span>
+                                    )}
+                                  </div>
+                                )}
+                                {/* Show flyers */}
+                                {firstOccurrence.flyers.length > 0 && (
+                                  <div className="flex flex-wrap items-center gap-2 text-sm lg:justify-end">
+                                    {firstOccurrence.flyers.map((flyer, index) => (
+                                      <a
+                                        key={flyer.id}
+                                        href={`/api/flyers/${flyer.fileKey}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                                      >
+                                        <ExternalLink className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                        {firstOccurrence.flyers.length > 1 ? `Flyer ${index + 1}` : "View Flyer"}
+                                      </a>
+                                    ))}
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-2 text-sm lg:justify-end pt-2">
+                                  <Button variant="outline" size="sm" asChild>
+                                    <a
+                                      href={generateGoogleCalendarUrl(firstOccurrence)}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      <CalendarPlus className="h-4 w-4 mr-2" aria-hidden="true" />
+                                      Add to Calendar
+                                    </a>
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Expandable section for additional occurrences */}
+                          {remainingOccurrences.length > 0 && (
+                            <>
+                              <button
+                                onClick={() => toggleGroupExpansion(group.parentEventId!)}
+                                className="w-full px-6 py-3 flex items-center justify-between bg-muted/30 hover:bg-muted/50 transition-colors border-t border-border"
+                              >
+                                <span className="text-sm font-medium text-muted-foreground">
+                                  {remainingOccurrences.length} more occurrence{remainingOccurrences.length > 1 ? "s" : ""} in this series
+                                </span>
+                                <ChevronDown 
+                                  className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`} 
+                                />
+                              </button>
+                              
+                              {isExpanded && (
+                                <div className="border-t border-border divide-y divide-border">
+                                  {remainingOccurrences.map((occurrence) => (
+                                    <div key={occurrence.id} className="p-4 bg-muted/10 hover:bg-muted/20 transition-colors">
+                                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                        <div className="flex items-center gap-3">
+                                          <Calendar className="h-4 w-4 text-primary flex-shrink-0" aria-hidden="true" />
+                                          <span className="font-medium text-sm">{formatDateRange(occurrence.date, occurrence.endDate)}</span>
+                                          <span className="text-sm text-muted-foreground">
+                                            {occurrence.timeTBD ? "Time TBD" : formatTimeRange(occurrence.startTime, occurrence.endTime, userTimezone)}
+                                          </span>
+                                          {occurrence.isModified && (
+                                            <Badge variant="outline" className="text-xs">Modified</Badge>
+                                          )}
+                                        </div>
+                                        <Button variant="ghost" size="sm" asChild>
+                                          <a
+                                            href={generateGoogleCalendarUrl(occurrence)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                          >
+                                            <CalendarPlus className="h-4 w-4 mr-1" aria-hidden="true" />
+                                            Add
+                                          </a>
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </article>
+                      )
+                    }
+
+                    return null
+                  })}
                 </div>
               )}
             </div>

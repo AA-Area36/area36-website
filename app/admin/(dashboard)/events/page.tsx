@@ -1,17 +1,18 @@
 import { getDb } from "@/lib/db"
-import { events, eventToTypes, eventFlyers, type EventStatus, type EventType, type EventFlyer } from "@/lib/db/schema"
-import { desc } from "drizzle-orm"
+import { events, eventToTypes, eventFlyers, eventExceptions, type EventStatus, type EventType, type EventFlyer, type EventException } from "@/lib/db/schema"
+import { desc, eq } from "drizzle-orm"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Calendar, Clock, MapPin, Mail, ExternalLink, Check, Trash2, Video, Globe } from "lucide-react"
+import { Calendar, Clock, MapPin, Mail, ExternalLink, Check, Trash2, Video, Globe, Repeat } from "lucide-react"
 import type { Event, LocationType } from "@/lib/db/schema"
 
-// Event with types array and flyers (from junction tables)
+// Event with types array, flyers, and exceptions (from junction/related tables)
 interface EventWithTypes extends Event {
   types: EventType[]
   flyers: EventFlyer[]
+  exceptions: EventException[]
 }
 
 const locationTypeLabels: Record<LocationType, string> = {
@@ -38,7 +39,9 @@ function formatEventLocation(event: Event) {
 import { approveEvent, deleteEvent } from "./actions"
 import { DenyEventDialog } from "./deny-event-dialog"
 import { EditEventDialog } from "./edit-event-dialog"
+import { ManageOccurrencesDialog } from "./manage-occurrences-dialog"
 import { formatTimeRange } from "@/lib/timezone"
+import { getRecurrenceDescription } from "@/lib/utils/recurrence"
 
 export const dynamic = "force-dynamic"
 
@@ -94,11 +97,23 @@ export default async function AdminEventsPage() {
     flyersMap.set(row.eventId, existing)
   }
 
-  // Merge types and flyers into events
+  // Get all event exceptions for recurring events
+  const exceptionsData = await db.select().from(eventExceptions)
+  
+  // Create a map of eventId -> exceptions array
+  const exceptionsMap = new Map<string, EventException[]>()
+  for (const row of exceptionsData) {
+    const existing = exceptionsMap.get(row.eventId) || []
+    existing.push(row)
+    exceptionsMap.set(row.eventId, existing)
+  }
+
+  // Merge types, flyers, and exceptions into events
   const allEvents: EventWithTypes[] = eventsData.map((event) => ({
     ...event,
     types: typesMap.get(event.id) || (event.type ? [event.type] : []),
     flyers: flyersMap.get(event.id) || [],
+    exceptions: exceptionsMap.get(event.id) || [],
   }))
 
   const pendingEvents = allEvents.filter((e) => e.status === "pending")
@@ -227,6 +242,12 @@ function EventCard({
               <Badge variant="secondary" className={statusColors[event.status]}>
                 {event.status.charAt(0).toUpperCase() + event.status.slice(1)}
               </Badge>
+              {event.isRecurring && (
+                <Badge variant="outline" className="flex items-center gap-1">
+                  <Repeat className="h-3 w-3" />
+                  {getRecurrenceDescription(event)}
+                </Badge>
+              )}
             </div>
 
             <h3 className="text-lg font-semibold">{event.title}</h3>
@@ -238,6 +259,9 @@ function EventCard({
                 <span>
                   {formatDate(event.date)}
                   {event.endDate && ` - ${formatDate(event.endDate)}`}
+                  {event.isRecurring && event.recurUntil && (
+                    <span className="text-muted-foreground/70"> (until {formatDate(event.recurUntil)})</span>
+                  )}
                 </span>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
@@ -308,6 +332,9 @@ function EventCard({
               </>
             )}
             <EditEventDialog event={event} />
+            {event.isRecurring && (
+              <ManageOccurrencesDialog event={event} exceptions={event.exceptions} />
+            )}
             <form action={deleteEvent.bind(null, event.id)}>
               <Button type="submit" variant="ghost" size="sm" className="w-full text-destructive hover:text-destructive">
                 <Trash2 className="h-4 w-4 mr-2" />

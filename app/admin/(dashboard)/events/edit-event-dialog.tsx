@@ -23,11 +23,14 @@ import {
 } from "@/components/ui/select"
 import { MultiSelect } from "@/components/multi-select"
 import { FlyerUpload, type FlyerFile } from "@/components/flyer-upload"
+import { RecurrenceOptions } from "@/components/recurrence-options"
 import { Pencil, Loader2 } from "lucide-react"
-import { updateEvent, type UpdateEventData } from "./actions"
+import { updateEvent, updateRecurringEvent, type UpdateEventData } from "./actions"
 import { uploadEventFlyer, deleteEventFlyer } from "@/app/events/flyer-actions"
-import { eventTypes, locationTypes, type Event, type LocationType, type EventType, type EventFlyer } from "@/lib/db/schema"
+import { eventTypes, locationTypes, type Event, type LocationType, type EventType, type EventFlyer, type EventException } from "@/lib/db/schema"
 import { TIMEZONES } from "@/lib/timezone"
+import type { RecurrenceConfig } from "@/lib/types/recurrence"
+import { parseWeeklyPattern, parseMonthlyPattern } from "@/lib/utils/recurrence"
 
 const locationTypeLabels: Record<LocationType, string> = {
   "in-person": "In Person",
@@ -50,10 +53,11 @@ const eventTypeOptions = eventTypes.map((type) => ({
   color: eventTypeColors[type],
 }))
 
-// Event with types array and flyers (from junction tables)
+// Event with types array, flyers, and exceptions (from junction/related tables)
 interface EventWithTypes extends Event {
   types: EventType[]
   flyers: EventFlyer[]
+  exceptions: EventException[]
 }
 
 interface EditEventDialogProps {
@@ -91,6 +95,25 @@ export function EditEventDialog({ event }: EditEventDialogProps) {
   const [timeTBD, setTimeTBD] = React.useState(event.timeTBD || false)
   const [addressTBD, setAddressTBD] = React.useState(event.addressTBD || false)
   const [meetingLinkTBD, setMeetingLinkTBD] = React.useState(event.meetingLinkTBD || false)
+  // Recurrence config
+  const [recurrenceConfig, setRecurrenceConfig] = React.useState<RecurrenceConfig>(() => {
+    if (!event.isRecurring) {
+      return { isRecurring: false, recurrenceType: "none" }
+    }
+    const weeklyPattern = event.recurrenceType === "weekly" 
+      ? parseWeeklyPattern(event.recurrencePattern) 
+      : undefined
+    const monthlyPattern = event.recurrenceType === "monthly"
+      ? parseMonthlyPattern(event.monthlyPatternType, event.monthlyPatternValue)
+      : undefined
+    return {
+      isRecurring: true,
+      recurrenceType: event.recurrenceType || "none",
+      weeklyPattern: weeklyPattern || undefined,
+      monthlyPattern: monthlyPattern || undefined,
+      recurUntil: event.recurUntil || undefined,
+    }
+  })
 
   // Reset form when dialog opens
   React.useEffect(() => {
@@ -118,6 +141,24 @@ export function EditEventDialog({ event }: EditEventDialogProps) {
       setTimeTBD(event.timeTBD || false)
       setAddressTBD(event.addressTBD || false)
       setMeetingLinkTBD(event.meetingLinkTBD || false)
+      // Reset recurrence config
+      if (!event.isRecurring) {
+        setRecurrenceConfig({ isRecurring: false, recurrenceType: "none" })
+      } else {
+        const weeklyPattern = event.recurrenceType === "weekly" 
+          ? parseWeeklyPattern(event.recurrencePattern) 
+          : undefined
+        const monthlyPattern = event.recurrenceType === "monthly"
+          ? parseMonthlyPattern(event.monthlyPatternType, event.monthlyPatternValue)
+          : undefined
+        setRecurrenceConfig({
+          isRecurring: true,
+          recurrenceType: event.recurrenceType || "none",
+          weeklyPattern: weeklyPattern || undefined,
+          monthlyPattern: monthlyPattern || undefined,
+          recurUntil: event.recurUntil || undefined,
+        })
+      }
       setError(null)
     }
   }, [open, event])
@@ -143,9 +184,18 @@ export function EditEventDialog({ event }: EditEventDialogProps) {
       timeTBD,
       addressTBD,
       meetingLinkTBD,
+      // Recurrence fields
+      isRecurring: recurrenceConfig.isRecurring,
+      recurrenceType: recurrenceConfig.recurrenceType,
+      weeklyPattern: recurrenceConfig.weeklyPattern,
+      monthlyPattern: recurrenceConfig.monthlyPattern,
+      recurUntil: recurrenceConfig.recurUntil || null,
     }
 
-    const result = await updateEvent(event.id, data)
+    // Use updateRecurringEvent for recurring events, otherwise use updateEvent
+    const result = event.isRecurring || recurrenceConfig.isRecurring
+      ? await updateRecurringEvent(event.id, { ...data, scope: "series" })
+      : await updateEvent(event.id, data)
 
     setIsSubmitting(false)
 
@@ -378,6 +428,16 @@ export function EditEventDialog({ event }: EditEventDialogProps) {
                 return result
               }}
               maxFiles={5}
+              disabled={isSubmitting}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Recurrence</Label>
+            <RecurrenceOptions
+              value={recurrenceConfig}
+              onChange={setRecurrenceConfig}
+              startDate={date}
               disabled={isSubmitting}
             />
           </div>

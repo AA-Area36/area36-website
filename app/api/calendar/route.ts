@@ -1,6 +1,7 @@
 import { getDb } from "@/lib/db"
-import { events } from "@/lib/db/schema"
+import { events, eventExceptions, type Event, type EventException } from "@/lib/db/schema"
 import { eq, asc, gte, and, or, isNull } from "drizzle-orm"
+import { parseWeeklyPattern, parseMonthlyPattern } from "@/lib/utils/recurrence"
 
 export const dynamic = "force-dynamic"
 
@@ -44,6 +45,83 @@ function generateUID(eventId: string, domain: string): string {
 }
 
 /**
+ * Generate a unique identifier for an occurrence of a recurring event
+ */
+function generateOccurrenceUID(eventId: string, occurrenceDate: string, domain: string): string {
+  return `${eventId}_${occurrenceDate}@${domain}`
+}
+
+/**
+ * Generate iCal RRULE for recurring events
+ */
+function generateRRule(event: Event): string | null {
+  if (!event.isRecurring || event.recurrenceType === "none") {
+    return null
+  }
+
+  const dayNames = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"]
+
+  if (event.recurrenceType === "weekly") {
+    const pattern = parseWeeklyPattern(event.recurrencePattern)
+    if (!pattern || pattern.daysOfWeek.length === 0) return null
+
+    const byDay = pattern.daysOfWeek.map((d) => dayNames[d]).join(",")
+    let rrule = `RRULE:FREQ=WEEKLY;BYDAY=${byDay}`
+
+    if (event.recurUntil) {
+      // UNTIL must be in UTC format: YYYYMMDDTHHMMSSZ
+      const untilDate = formatICalDate(event.recurUntil)
+      rrule += `;UNTIL=${untilDate}T235959Z`
+    }
+
+    return rrule
+  }
+
+  if (event.recurrenceType === "monthly") {
+    const pattern = parseMonthlyPattern(event.monthlyPatternType, event.monthlyPatternValue)
+    if (!pattern) return null
+
+    let rrule = "RRULE:FREQ=MONTHLY"
+
+    if (pattern.type === "dayOfMonth") {
+      rrule += `;BYMONTHDAY=${pattern.dayOfMonth}`
+    } else {
+      // dayOfWeek pattern: Nth weekday of month
+      const weekNum = pattern.weekOfMonth === 5 ? -1 : pattern.weekOfMonth
+      rrule += `;BYDAY=${weekNum}${dayNames[pattern.dayOfWeek]}`
+    }
+
+    if (event.recurUntil) {
+      const untilDate = formatICalDate(event.recurUntil)
+      rrule += `;UNTIL=${untilDate}T235959Z`
+    }
+
+    return rrule
+  }
+
+  return null
+}
+
+/**
+ * Generate EXDATE entries for cancelled occurrences
+ */
+function generateExDates(
+  event: Event,
+  exceptions: EventException[]
+): string[] {
+  const cancelledExceptions = exceptions.filter(
+    (e) => e.exceptionType === "cancelled"
+  )
+
+  if (cancelledExceptions.length === 0) return []
+
+  return cancelledExceptions.map((exception) => {
+    const dateTime = formatICalDateTime(exception.occurrenceDate, event.startTime)
+    return `EXDATE;TZID=${event.timezone}:${dateTime}`
+  })
+}
+
+/**
  * Fold long lines according to iCal spec (max 75 octets per line)
  */
 function foldLine(line: string): string {
@@ -77,6 +155,9 @@ export async function GET(request: Request) {
     const todayStr = today.toLocaleDateString("en-CA", { timeZone: "America/Chicago" })
 
     // Fetch approved events from today onwards
+    // For recurring events, we need events where either:
+    // - The recurUntil date is >= today (recurring series still active)
+    // - Or it's not recurring and the date/endDate is >= today
     const approvedEvents = await db
       .select()
       .from(events)
@@ -84,12 +165,50 @@ export async function GET(request: Request) {
         and(
           eq(events.status, "approved"),
           or(
-            gte(events.endDate, todayStr),
-            and(isNull(events.endDate), gte(events.date, todayStr))
+            // Non-recurring events: standard date check
+            and(
+              or(eq(events.isRecurring, false), isNull(events.isRecurring)),
+              or(
+                gte(events.endDate, todayStr),
+                and(isNull(events.endDate), gte(events.date, todayStr))
+              )
+            ),
+            // Recurring events: check recurUntil or startDate
+            and(
+              eq(events.isRecurring, true),
+              or(
+                gte(events.recurUntil, todayStr),
+                and(isNull(events.recurUntil), gte(events.date, todayStr))
+              )
+            )
           )
         )
       )
       .orderBy(asc(events.date))
+
+    // Get all exceptions for recurring events
+    const recurringEventIds = approvedEvents
+      .filter((e) => e.isRecurring)
+      .map((e) => e.id)
+
+    const allExceptions: EventException[] = []
+    if (recurringEventIds.length > 0) {
+      for (const eventId of recurringEventIds) {
+        const exceptions = await db
+          .select()
+          .from(eventExceptions)
+          .where(eq(eventExceptions.eventId, eventId))
+        allExceptions.push(...exceptions)
+      }
+    }
+
+    // Build exception map by event ID
+    const exceptionsByEvent = new Map<string, EventException[]>()
+    for (const exception of allExceptions) {
+      const existing = exceptionsByEvent.get(exception.eventId) || []
+      existing.push(exception)
+      exceptionsByEvent.set(exception.eventId, existing)
+    }
 
     // Get domain from request for UID generation
     const url = new URL(request.url)
@@ -131,6 +250,7 @@ export async function GET(request: Request) {
     for (const event of approvedEvents) {
       const uid = generateUID(event.id, domain)
       const dtstamp = new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z"
+      const eventExceptionsList = exceptionsByEvent.get(event.id) || []
 
       lines.push("BEGIN:VEVENT")
       lines.push(`UID:${uid}`)
@@ -149,6 +269,18 @@ export async function GET(request: Request) {
         // Multi-day event without specific end time - use end of day
         const endDateTime = formatICalDateTime(event.endDate, "23:59")
         lines.push(`DTEND;TZID=${event.timezone}:${endDateTime}`)
+      }
+
+      // Add RRULE for recurring events
+      const rrule = generateRRule(event)
+      if (rrule) {
+        lines.push(rrule)
+      }
+
+      // Add EXDATE for cancelled occurrences of recurring events
+      const exdates = generateExDates(event, eventExceptionsList)
+      for (const exdate of exdates) {
+        lines.push(exdate)
       }
 
       // Summary (title)
@@ -174,12 +306,77 @@ export async function GET(request: Request) {
       }
 
       // Categories based on event type
-      lines.push(`CATEGORIES:${event.type}`)
+      if (event.type) {
+        lines.push(`CATEGORIES:${event.type}`)
+      }
 
       // Status
       lines.push("STATUS:CONFIRMED")
 
       lines.push("END:VEVENT")
+
+      // Add separate VEVENT entries for modified occurrences (with RECURRENCE-ID)
+      const modifiedExceptions = eventExceptionsList.filter(
+        (e) => e.exceptionType === "modified"
+      )
+      for (const exception of modifiedExceptions) {
+        const occurrenceUid = generateOccurrenceUID(event.id, exception.occurrenceDate, domain)
+        const recurrenceId = formatICalDateTime(exception.occurrenceDate, event.startTime)
+
+        lines.push("BEGIN:VEVENT")
+        lines.push(`UID:${uid}`) // Same UID as parent event
+        lines.push(`DTSTAMP:${dtstamp}`)
+        lines.push(`RECURRENCE-ID;TZID=${event.timezone}:${recurrenceId}`)
+
+        // Use exception values if provided, otherwise fall back to parent event
+        const modTitle = exception.title || event.title
+        const modStartTime = exception.startTime ?? event.startTime
+        const modEndTime = exception.endTime ?? event.endTime
+        const modEndDate = exception.endDate || event.endDate
+        const modAddress = exception.address ?? event.address
+        const modMeetingLink = exception.meetingLink ?? event.meetingLink
+        const modDescription = exception.description || event.description
+        const modLocationType = exception.locationType || event.locationType
+
+        // Start date/time (occurrence date with potentially modified time)
+        const modStartDateTime = formatICalDateTime(exception.occurrenceDate, modStartTime)
+        lines.push(`DTSTART;TZID=${event.timezone}:${modStartDateTime}`)
+
+        // End date/time
+        if (modEndTime) {
+          const endDate = modEndDate || exception.occurrenceDate
+          const modEndDateTime = formatICalDateTime(endDate, modEndTime)
+          lines.push(`DTEND;TZID=${event.timezone}:${modEndDateTime}`)
+        } else if (modEndDate) {
+          const modEndDateTime = formatICalDateTime(modEndDate, "23:59")
+          lines.push(`DTEND;TZID=${event.timezone}:${modEndDateTime}`)
+        }
+
+        // Summary
+        lines.push(foldLine(`SUMMARY:${escapeICalText(modTitle)}`))
+
+        // Description
+        let modDescriptionFull = modDescription
+        if (modMeetingLink) {
+          modDescriptionFull += `\\n\\nOnline Meeting Link: ${modMeetingLink}`
+        }
+        lines.push(foldLine(`DESCRIPTION:${escapeICalText(modDescriptionFull)}`))
+
+        // Location
+        if (modAddress) {
+          lines.push(foldLine(`LOCATION:${escapeICalText(modAddress)}`))
+        } else if (modLocationType === "online" && modMeetingLink) {
+          lines.push(foldLine(`LOCATION:${escapeICalText(modMeetingLink)}`))
+        }
+
+        // Categories
+        if (event.type) {
+          lines.push(`CATEGORIES:${event.type}`)
+        }
+
+        lines.push("STATUS:CONFIRMED")
+        lines.push("END:VEVENT")
+      }
     }
 
     lines.push("END:VCALENDAR")
