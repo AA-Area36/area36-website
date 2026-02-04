@@ -1,10 +1,12 @@
 // Shared utilities for validating access to recordings
+// Uses dynamic imports to avoid bundling GDrive modules at build time
 
-import { getFileMetadata, getGDriveCredentials } from "@/lib/gdrive/client"
 import { isFolderUnlocked } from "@/lib/recordings/session"
 import { getDb } from "@/lib/db"
 import { recordingFolders } from "@/lib/db/schema"
-import type { GDriveCredentials } from "@/lib/gdrive/types"
+
+// Re-export types only (these don't add to bundle size)
+export type { GDriveCredentials } from "@/lib/gdrive/types"
 
 export interface FileAccessResult {
   valid: boolean
@@ -14,12 +16,16 @@ export interface FileAccessResult {
 
 /**
  * Validate that a file belongs to an unlocked recording folder
+ * Uses dynamic imports to avoid bundling GDrive modules
  */
 export async function validateRecordingAccess(
   fileId: string,
-  credentials: GDriveCredentials
+  credentials: Awaited<ReturnType<typeof getGDriveCredentials>>
 ): Promise<FileAccessResult> {
   try {
+    // Dynamic import to avoid bundling at build time
+    const { getFileMetadata } = await import("@/lib/gdrive/client")
+    
     // Get file metadata to check parent folder
     const file = await getFileMetadata(credentials, fileId)
 
@@ -87,4 +93,14 @@ export async function getGDriveEnv(): Promise<{
   }
 }
 
-export { getGDriveCredentials }
+/**
+ * Get GDrive credentials - uses dynamic import
+ */
+export async function getGDriveCredentials(env: {
+  GDRIVE_SERVICE_ACCOUNT_EMAIL: string
+  GDRIVE_PRIVATE_KEY: string
+  GDRIVE_PRIVATE_KEY_ID: string
+}) {
+  const { getGDriveCredentials: getCredentials } = await import("@/lib/gdrive/client")
+  return getCredentials(env)
+}

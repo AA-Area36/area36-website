@@ -1,11 +1,13 @@
 // Shared utilities for validating access to protected files
+// Uses dynamic imports to avoid bundling GDrive modules at build time
 
-import { getFileMetadata as getDriveFileMetadata, getGDriveCredentials } from "@/lib/gdrive/client"
 import { isFileUnlocked } from "@/lib/files/session"
 import { getDb } from "@/lib/db"
 import { fileMetadata } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
-import type { GDriveCredentials } from "@/lib/gdrive/types"
+
+// Re-export types only (these don't add to bundle size)
+export type { GDriveCredentials } from "@/lib/gdrive/types"
 
 export interface FileAccessResult {
   valid: boolean
@@ -41,12 +43,16 @@ export async function getFileMetadataByDriveIds(driveIds: string[]) {
 /**
  * Validate access to a file
  * Returns whether the file can be accessed and whether it requires a password
+ * Uses dynamic imports to avoid bundling GDrive modules
  */
 export async function validateFileAccess(
   fileId: string,
-  credentials: GDriveCredentials
+  credentials: Awaited<ReturnType<typeof getGDriveCredentials>>
 ): Promise<FileAccessResult> {
   try {
+    // Dynamic import to avoid bundling at build time
+    const { getFileMetadata: getDriveFileMetadata } = await import("@/lib/gdrive/client")
+    
     // Get file metadata from Google Drive
     const file = await getDriveFileMetadata(credentials, fileId)
     if (!file) {
@@ -123,4 +129,14 @@ export async function getGDriveEnv(): Promise<{
   }
 }
 
-export { getGDriveCredentials }
+/**
+ * Get GDrive credentials - uses dynamic import
+ */
+export async function getGDriveCredentials(env: {
+  GDRIVE_SERVICE_ACCOUNT_EMAIL: string
+  GDRIVE_PRIVATE_KEY: string
+  GDRIVE_PRIVATE_KEY_ID: string
+}) {
+  const { getGDriveCredentials: getCredentials } = await import("@/lib/gdrive/client")
+  return getCredentials(env)
+}

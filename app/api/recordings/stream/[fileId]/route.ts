@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getAccessToken } from "@/lib/gdrive/auth"
 import {
   validateRecordingAccess,
   getGDriveEnv,
@@ -37,7 +36,7 @@ export async function GET(
       )
     }
 
-    const credentials = getGDriveCredentials(env)
+    const credentials = await getGDriveCredentials(env)
 
     // Validate user has access to this file's folder
     const { valid } = await log.tracker.time(
@@ -51,7 +50,8 @@ export async function GET(
       return NextResponse.json({ error: "Access denied" }, { status: 403 })
     }
 
-    // Get access token for Google Drive API
+    // Get access token for Google Drive API - dynamic import to reduce bundle size
+    const { getAccessToken } = await import("@/lib/gdrive/auth")
     const accessToken = await log.tracker.time("getAccessToken", () => getAccessToken(credentials))
     log.tracker.trackSubrequest()
 

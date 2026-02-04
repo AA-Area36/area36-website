@@ -1,11 +1,48 @@
-import Link from "next/link"
-import { FileText, Download, ArrowRight, FolderOpen } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { fetchRecentDocuments } from "./documents-section-actions"
-import type { Resource } from "@/lib/gdrive/types"
+"use client"
 
-export async function DocumentsSection() {
-  const documents = await fetchRecentDocuments()
+import { useState, useEffect } from "react"
+import Link from "next/link"
+import { FileText, Download, ArrowRight, FolderOpen, Loader2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+
+interface Resource {
+  id: string
+  title: string
+  downloadUrl: string
+  size?: string
+}
+
+interface ResourcesData {
+  areaDocuments: Resource[]
+  forms: Resource[]
+}
+
+export function DocumentsSection() {
+  const [documents, setDocuments] = useState<Resource[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchDocuments() {
+      try {
+        const response = await fetch("/api/gdrive/resources")
+        if (!response.ok) {
+          throw new Error("Failed to fetch")
+        }
+        const data = await response.json() as ResourcesData
+        
+        // Combine area documents and forms, take first 4
+        const combined = [...(data.areaDocuments || []), ...(data.forms || [])]
+        setDocuments(combined.slice(0, 4))
+      } catch (error) {
+        console.error("Error fetching recent documents:", error)
+        setDocuments([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchDocuments()
+  }, [])
 
   return (
     <section className="py-16 sm:py-24 bg-muted/30" aria-labelledby="documents-heading">
@@ -25,7 +62,11 @@ export async function DocumentsSection() {
           </Button>
         </div>
 
-        {documents.length === 0 ? (
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12 rounded-lg border border-border bg-card">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : documents.length === 0 ? (
           <div className="text-center py-12 rounded-lg border border-border bg-card">
             <FolderOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground">No documents available at this time.</p>

@@ -46,6 +46,12 @@ const navigation = [
 export function Header() {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false)
+  const [mounted, setMounted] = React.useState(false)
+
+  // Prevent hydration mismatch with Radix UI auto-generated IDs
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -67,30 +73,46 @@ export function Header() {
         <div className="hidden lg:flex lg:items-center lg:gap-1">
           {navigation.map((item) =>
             item.children ? (
-              <DropdownMenu key={item.name}>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    className={cn(
-                      "flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md transition-colors",
-                      pathname.startsWith(item.href) || item.children.some((c) => pathname === c.href)
-                        ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted",
-                    )}
-                  >
-                    {item.name}
-                    <ChevronDown className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  {item.children.map((child) => (
-                    <DropdownMenuItem key={child.name} asChild>
-                      <Link href={child.href} className={cn(pathname === child.href && "bg-primary/10 text-primary")}>
-                        {child.name}
-                      </Link>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              mounted ? (
+                <DropdownMenu key={item.name}>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className={cn(
+                        "flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                        pathname.startsWith(item.href) || item.children.some((c) => pathname === c.href)
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted",
+                      )}
+                    >
+                      {item.name}
+                      <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    {item.children.map((child) => (
+                      <DropdownMenuItem key={child.name} asChild>
+                        <Link href={child.href} className={cn(pathname === child.href && "bg-primary/10 text-primary")}>
+                          {child.name}
+                        </Link>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                // Render a placeholder during SSR to prevent hydration mismatch
+                <button
+                  key={item.name}
+                  className={cn(
+                    "flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                    pathname.startsWith(item.href) || item.children.some((c) => pathname === c.href)
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted",
+                  )}
+                >
+                  {item.name}
+                  <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                </button>
+              )
             ) : (
               <Link
                 key={item.name}
@@ -108,8 +130,15 @@ export function Header() {
             ),
           )}
           <div className="ml-4 flex items-center gap-1 border-l border-border pl-4">
-            <LanguageSelector />
-            <AccessibilityMenu />
+            {mounted ? (
+              <>
+                <LanguageSelector />
+                <AccessibilityMenu />
+              </>
+            ) : (
+              // Placeholder for accessibility/language selectors during SSR
+              <div className="w-20" />
+            )}
             <ThemeToggle />
           </div>
         </div>

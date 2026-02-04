@@ -15,6 +15,7 @@ import {
   Mic,
   Lock,
   Download,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -42,6 +43,7 @@ interface RecordingsClientProps {
 interface AudioPlayerState {
   recording: Recording | null
   isPlaying: boolean
+  isLoading: boolean
   currentTime: number
   duration: number
   volume: number
@@ -84,6 +86,7 @@ export function RecordingsClient({ categories, recordings, years, unlockedFolder
   const [playerState, setPlayerState] = React.useState<AudioPlayerState>({
     recording: null,
     isPlaying: false,
+    isLoading: false,
     currentTime: 0,
     duration: 0,
     volume: 0.8,
@@ -163,14 +166,16 @@ export function RecordingsClient({ categories, recordings, years, unlockedFolder
       if (playerState.isPlaying) {
         audioRef.current?.pause()
       } else {
+        setPlayerState((prev) => ({ ...prev, isLoading: true }))
         audioRef.current?.play()
       }
     } else {
-      // Play new recording
+      // Play new recording - show loading state immediately
       setPlayerState((prev) => ({
         ...prev,
         recording,
-        isPlaying: true,
+        isPlaying: false,
+        isLoading: true,
         currentTime: 0,
         duration: 0,
       }))
@@ -182,16 +187,6 @@ export function RecordingsClient({ categories, recordings, years, unlockedFolder
       audioRef.current?.pause()
     } else {
       audioRef.current?.play()
-    }
-  }
-
-  const handleTimeUpdate = () => {
-    if (audioRef.current) {
-      setPlayerState((prev) => ({
-        ...prev,
-        currentTime: audioRef.current!.currentTime,
-        duration: audioRef.current!.duration || 0,
-      }))
     }
   }
 
@@ -231,25 +226,42 @@ export function RecordingsClient({ categories, recordings, years, unlockedFolder
     const audio = audioRef.current
     if (!audio) return
 
-    const handlePlay = () => setPlayerState((prev) => ({ ...prev, isPlaying: true }))
-    const handlePause = () => setPlayerState((prev) => ({ ...prev, isPlaying: false }))
-    const handleEnded = () => setPlayerState((prev) => ({ ...prev, isPlaying: false }))
+    // Note: We don't use the 'play' event to set isPlaying because it fires immediately
+    // when play() is called, before buffering completes. Instead, we use 'playing' event
+    // which fires when playback actually starts.
+    const handlePause = () => setPlayerState((prev) => ({ ...prev, isPlaying: false, isLoading: false }))
+    const handleEnded = () => setPlayerState((prev) => ({ ...prev, isPlaying: false, isLoading: false }))
     const handleLoadedMetadata = () => {
       setPlayerState((prev) => ({ ...prev, duration: audio.duration }))
     }
+    // Loading state handlers - only clear loading when actual playback starts (playing event)
+    // or when timeupdate fires (meaning audio is actually progressing)
+    const handleWaiting = () => setPlayerState((prev) => ({ ...prev, isLoading: true }))
+    const handlePlaying = () => setPlayerState((prev) => ({ ...prev, isLoading: false, isPlaying: true }))
+    const handleTimeUpdateWithLoading = () => {
+      setPlayerState((prev) => ({
+        ...prev,
+        currentTime: audio.currentTime,
+        duration: audio.duration || prev.duration,
+        // If time is updating, we're definitely not loading
+        isLoading: false,
+      }))
+    }
 
-    audio.addEventListener("play", handlePlay)
     audio.addEventListener("pause", handlePause)
     audio.addEventListener("ended", handleEnded)
     audio.addEventListener("loadedmetadata", handleLoadedMetadata)
-    audio.addEventListener("timeupdate", handleTimeUpdate)
+    audio.addEventListener("timeupdate", handleTimeUpdateWithLoading)
+    audio.addEventListener("waiting", handleWaiting)
+    audio.addEventListener("playing", handlePlaying)
 
     return () => {
-      audio.removeEventListener("play", handlePlay)
       audio.removeEventListener("pause", handlePause)
       audio.removeEventListener("ended", handleEnded)
       audio.removeEventListener("loadedmetadata", handleLoadedMetadata)
-      audio.removeEventListener("timeupdate", handleTimeUpdate)
+      audio.removeEventListener("timeupdate", handleTimeUpdateWithLoading)
+      audio.removeEventListener("waiting", handleWaiting)
+      audio.removeEventListener("playing", handlePlaying)
     }
   }, [])
 
@@ -425,13 +437,15 @@ export function RecordingsClient({ categories, recordings, years, unlockedFolder
                           const isCurrentlyPlaying =
                             playerState.recording?.id === recording.id && playerState.isPlaying
 
+                          const isCurrentRecording = playerState.recording?.id === recording.id
+                          const isCurrentlyLoading = isCurrentRecording && playerState.isLoading
+
                           return (
                             <div
                               key={recording.id}
                               className={cn(
                                 "w-full rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md",
-                                playerState.recording?.id === recording.id &&
-                                  "border-primary bg-primary/5"
+                                isCurrentRecording && "border-primary bg-primary/5"
                               )}
                             >
                               <div className="flex items-center gap-4">
@@ -448,6 +462,8 @@ export function RecordingsClient({ categories, recordings, years, unlockedFolder
                                 >
                                   {isCurrentlyPlaying ? (
                                     <Pause className="h-5 w-5" aria-hidden="true" />
+                                  ) : isCurrentlyLoading ? (
+                                    <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
                                   ) : (
                                     <Play className="h-5 w-5 ml-0.5" aria-hidden="true" />
                                   )}
@@ -530,6 +546,8 @@ export function RecordingsClient({ categories, recordings, years, unlockedFolder
               >
                 {playerState.isPlaying ? (
                   <Pause className="h-5 w-5" />
+                ) : playerState.isLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
                   <Play className="h-5 w-5 ml-0.5" />
                 )}

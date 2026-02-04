@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { FolderExplorer } from "./folder-explorer"
-import { Loader2, AlertCircle, RefreshCw } from "lucide-react"
+import { Loader2, AlertCircle, RefreshCw, CheckCircle2, FolderOpen } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { FolderNode } from "./actions"
 
@@ -18,23 +18,36 @@ interface FileMetadata {
   updatedAt: string
 }
 
-interface AdminFilesData {
-  folders: FolderNode[]
+interface AvailableFolder {
+  type: string
+  name: string
+}
+
+interface InitialData {
+  availableFolders: AvailableFolder[]
   metadata: FileMetadata[]
+}
+
+interface FolderLoadState {
+  loading: boolean
+  error: string | null
+  data: FolderNode | null
 }
 
 /**
  * Client-side loader for admin files page
- * Fetches data from API to avoid loading GDrive modules at build time
+ * Fetches folders individually to spread CPU usage across requests
  */
 export function AdminFilesLoader() {
-  const [data, setData] = useState<AdminFilesData | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [initialData, setInitialData] = useState<InitialData | null>(null)
+  const [folderStates, setFolderStates] = useState<Record<string, FolderLoadState>>({})
+  const [isInitialLoading, setIsInitialLoading] = useState(true)
+  const [initialError, setInitialError] = useState<string | null>(null)
 
-  const fetchData = useCallback(async () => {
-    setIsLoading(true)
-    setError(null)
+  // Fetch initial data (available folders + metadata)
+  const fetchInitialData = useCallback(async () => {
+    setIsInitialLoading(true)
+    setInitialError(null)
 
     try {
       const response = await fetch("/api/admin/files")
@@ -44,25 +57,96 @@ export function AdminFilesLoader() {
           throw new Error("Unauthorized - please log in")
         }
         const errorData = await response.json().catch(() => ({})) as { error?: string }
-        throw new Error(errorData.error || `Failed to fetch files: ${response.status}`)
+        throw new Error(errorData.error || `Failed to fetch: ${response.status}`)
       }
 
-      const result = await response.json() as AdminFilesData
-      setData(result)
+      const result = await response.json() as InitialData
+      setInitialData(result)
+
+      // Initialize folder states
+      const states: Record<string, FolderLoadState> = {}
+      for (const folder of result.availableFolders) {
+        states[folder.type] = { loading: false, error: null, data: null }
+      }
+      setFolderStates(states)
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to fetch files"
-      setError(message)
-      console.error("Admin files fetch error:", err)
+      const message = err instanceof Error ? err.message : "Failed to fetch"
+      setInitialError(message)
+      console.error("Admin files initial fetch error:", err)
     } finally {
-      setIsLoading(false)
+      setIsInitialLoading(false)
     }
   }, [])
 
-  useEffect(() => {
-    fetchData()
-  }, [fetchData])
+  // Fetch a single folder
+  const fetchFolder = useCallback(async (folderType: string) => {
+    setFolderStates(prev => ({
+      ...prev,
+      [folderType]: { ...prev[folderType], loading: true, error: null }
+    }))
 
-  if (isLoading) {
+    try {
+      const response = await fetch(`/api/admin/files?folder=${folderType}`)
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({})) as { error?: string }
+        throw new Error(errorData.error || `Failed to fetch ${folderType}`)
+      }
+
+      const result = await response.json() as { folder: FolderNode | null }
+      
+      setFolderStates(prev => ({
+        ...prev,
+        [folderType]: { loading: false, error: null, data: result.folder }
+      }))
+    } catch (err) {
+      const message = err instanceof Error ? err.message : `Failed to fetch ${folderType}`
+      setFolderStates(prev => ({
+        ...prev,
+        [folderType]: { loading: false, error: message, data: null }
+      }))
+      console.error(`Admin files folder fetch error (${folderType}):`, err)
+    }
+  }, [])
+
+  // Fetch all folders (one at a time to spread CPU usage)
+  const fetchAllFolders = useCallback(async () => {
+    if (!initialData) return
+
+    // Fetch folders sequentially to avoid CPU spikes
+    for (const folder of initialData.availableFolders) {
+      await fetchFolder(folder.type)
+    }
+  }, [initialData, fetchFolder])
+
+  // Initial load
+  useEffect(() => {
+    fetchInitialData()
+  }, [fetchInitialData])
+
+  // Fetch folders after initial data is loaded
+  useEffect(() => {
+    if (initialData && Object.keys(folderStates).length > 0) {
+      fetchAllFolders()
+    }
+  }, [initialData]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Calculate stats
+  const folders = Object.values(folderStates)
+    .map(s => s.data)
+    .filter((f): f is FolderNode => f !== null)
+  
+  const metadata = initialData?.metadata || []
+  const protectedCount = metadata.filter((m) => m.password).length
+  const customNameCount = metadata.length
+
+  // Calculate loading progress
+  const totalFolders = initialData?.availableFolders.length || 0
+  const loadedFolders = Object.values(folderStates).filter(s => s.data !== null).length
+  const loadingFolders = Object.values(folderStates).filter(s => s.loading).length
+  const errorFolders = Object.values(folderStates).filter(s => s.error !== null).length
+
+  if (isInitialLoading) {
     return (
       <div className="space-y-6">
         <div>
@@ -74,13 +158,13 @@ export function AdminFilesLoader() {
 
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
           <Loader2 className="h-8 w-8 animate-spin mb-4" />
-          <p className="text-sm">Loading files from Google Drive...</p>
+          <p className="text-sm">Loading configuration...</p>
         </div>
       </div>
     )
   }
 
-  if (error) {
+  if (initialError) {
     return (
       <div className="space-y-6">
         <div>
@@ -93,9 +177,9 @@ export function AdminFilesLoader() {
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <AlertCircle className="h-8 w-8 text-destructive mb-4" />
           <p className="text-sm text-muted-foreground mb-4">
-            Failed to load files: {error}
+            Failed to load: {initialError}
           </p>
-          <Button variant="outline" size="sm" onClick={fetchData}>
+          <Button variant="outline" size="sm" onClick={fetchInitialData}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Try Again
           </Button>
@@ -103,11 +187,6 @@ export function AdminFilesLoader() {
       </div>
     )
   }
-
-  const folders = data?.folders || []
-  const metadata = data?.metadata || []
-  const protectedCount = metadata.filter((m) => m.password).length
-  const customNameCount = metadata.length
 
   return (
     <div className="space-y-6">
@@ -135,10 +214,88 @@ export function AdminFilesLoader() {
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Root Folders</CardDescription>
-            <CardTitle className="text-3xl">{folders.length}</CardTitle>
+            <CardTitle className="text-3xl">
+              {loadingFolders > 0 ? (
+                <span className="flex items-center gap-2">
+                  {loadedFolders}/{totalFolders}
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                </span>
+              ) : (
+                folders.length
+              )}
+            </CardTitle>
           </CardHeader>
         </Card>
       </div>
+
+      {/* Folder Loading Progress */}
+      {loadingFolders > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading Folders...
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {initialData?.availableFolders.map(folder => {
+                const state = folderStates[folder.type]
+                return (
+                  <div key={folder.type} className="flex items-center gap-2 text-sm">
+                    {state?.loading ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    ) : state?.data ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    ) : state?.error ? (
+                      <AlertCircle className="h-4 w-4 text-destructive" />
+                    ) : (
+                      <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                    )}
+                    <span className={state?.error ? "text-destructive" : ""}>
+                      {folder.name}
+                      {state?.error && ` - ${state.error}`}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Error Summary */}
+      {errorFolders > 0 && loadingFolders === 0 && (
+        <Card className="border-destructive">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2 text-destructive">
+              <AlertCircle className="h-4 w-4" />
+              Some folders failed to load
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {initialData?.availableFolders.map(folder => {
+                const state = folderStates[folder.type]
+                if (!state?.error) return null
+                return (
+                  <div key={folder.type} className="flex items-center justify-between text-sm">
+                    <span>{folder.name}: {state.error}</span>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => fetchFolder(folder.type)}
+                    >
+                      <RefreshCw className="h-3 w-3 mr-1" />
+                      Retry
+                    </Button>
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Folder Explorer */}
       <Card>
@@ -149,7 +306,19 @@ export function AdminFilesLoader() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <FolderExplorer folders={folders} />
+          {folders.length > 0 ? (
+            <FolderExplorer folders={folders} />
+          ) : loadingFolders > 0 ? (
+            <div className="flex items-center justify-center py-8 text-muted-foreground">
+              <Loader2 className="h-6 w-6 animate-spin mr-2" />
+              <span>Loading folder contents...</span>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <FolderOpen className="h-8 w-8 mx-auto mb-2" />
+              <p>No folders available</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

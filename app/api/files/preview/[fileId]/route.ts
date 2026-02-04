@@ -4,7 +4,6 @@ import {
   getGDriveEnv,
   getGDriveCredentials,
 } from "@/lib/files/access"
-import { getPreviewUrl } from "@/lib/gdrive/client"
 
 // Use nodejs runtime for compatibility with Cloudflare Workers via OpenNext
 export const runtime = "nodejs"
@@ -29,7 +28,7 @@ export async function GET(
       )
     }
 
-    const credentials = getGDriveCredentials(env)
+    const credentials = await getGDriveCredentials(env)
 
     // Validate access
     const { valid, requiresPassword } = await validateFileAccess(
@@ -47,8 +46,9 @@ export async function GET(
       return NextResponse.json({ error: "Access denied" }, { status: 403 })
     }
 
-    // Return the Google Drive preview URL for embedding
+    // Return the Google Drive preview URL for embedding - dynamic import to reduce bundle size
     // The client will use this URL in an iframe
+    const { getPreviewUrl } = await import("@/lib/gdrive/client")
     const previewUrl = getPreviewUrl(fileId)
 
     return NextResponse.json({ previewUrl })

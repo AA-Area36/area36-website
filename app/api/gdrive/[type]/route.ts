@@ -12,6 +12,16 @@ type GDriveType =
   | "service-resources" 
   | "conference-materials"
 
+// Cache TTLs in seconds
+const CACHE_TTL = {
+  recordings: 60 * 30, // 30 minutes - recordings change rarely
+  newsletters: 60 * 60, // 1 hour - newsletters change rarely
+  resources: 60 * 15, // 15 minutes - resources may update more often
+  committees: 60 * 30, // 30 minutes
+  "service-resources": 60 * 30, // 30 minutes
+  "conference-materials": 60 * 60, // 1 hour
+} as const
+
 // Generate a short request ID for tracing
 function generateRequestId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
@@ -67,264 +77,289 @@ function timer() {
   }
 }
 
-// Fetch recordings with detailed logging - uses dynamic imports
+// Fetch recordings with caching
 async function fetchRecordingsData(requestId: string) {
-  const env = await getEnv()
+  const { withCache } = await import("@/lib/gdrive/cache")
   
-  if (!env.GDRIVE_SERVICE_ACCOUNT_EMAIL || !env.GDRIVE_RECORDINGS_FOLDER_ID) {
-    log("warn", "GDrive not configured for recordings", { requestId })
-    return { categories: [], recordings: {}, years: [], registeredFolders: [] }
-  }
+  return withCache(
+    "api:recordings",
+    async () => {
+      const env = await getEnv()
+      
+      if (!env.GDRIVE_SERVICE_ACCOUNT_EMAIL || !env.GDRIVE_RECORDINGS_FOLDER_ID) {
+        log("warn", "GDrive not configured for recordings", { requestId })
+        return { categories: [], recordings: {}, years: [], registeredFolders: [] }
+      }
 
-  // Dynamic imports to reduce initial bundle size
-  const { getGDriveCredentials } = await import("@/lib/gdrive/client")
-  const { getRecordings, getRecordingYears } = await import("@/lib/gdrive/recordings")
+      const { getGDriveCredentials } = await import("@/lib/gdrive/client")
+      const { getRecordings, getRecordingYears } = await import("@/lib/gdrive/recordings")
 
-  const credentials = getGDriveCredentials(env)
-  const folderId = env.GDRIVE_RECORDINGS_FOLDER_ID
+      const credentials = getGDriveCredentials(env)
+      const folderId = env.GDRIVE_RECORDINGS_FOLDER_ID
 
-  log("info", "Fetching recordings from GDrive", { requestId, folderId })
+      log("info", "Fetching recordings from GDrive (cache miss)", { requestId, folderId })
 
-  // Fetch recordings data
-  const recordingsTimer = timer()
-  const [data, years] = await Promise.all([
-    getRecordings(credentials, folderId),
-    getRecordingYears(credentials, folderId),
-  ])
-  log("info", "GDrive recordings fetched", { 
-    requestId, 
-    durationMs: recordingsTimer.elapsed(),
-    categoryCount: data.categories.length,
-    yearCount: years.length,
-  })
+      const recordingsTimer = timer()
+      const [data, years] = await Promise.all([
+        getRecordings(credentials, folderId),
+        getRecordingYears(credentials, folderId),
+      ])
+      
+      // Fetch registered folders from DB (not cached - DB is fast)
+      const db = await getDb()
+      const folders = await db.select({ 
+        driveId: recordingFolders.driveId, 
+        folderName: recordingFolders.folderName 
+      }).from(recordingFolders)
+      
+      log("info", "GDrive recordings fetched", { 
+        requestId, 
+        durationMs: recordingsTimer.elapsed(),
+        categoryCount: data.categories.length,
+        yearCount: years.length,
+      })
 
-  // Fetch registered folders from DB
-  const dbTimer = timer()
-  const db = await getDb()
-  const folders = await db.select({ 
-    driveId: recordingFolders.driveId, 
-    folderName: recordingFolders.folderName 
-  }).from(recordingFolders)
-  log("info", "DB registered folders fetched", { 
-    requestId, 
-    durationMs: dbTimer.elapsed(),
-    folderCount: folders.length,
-  })
-
-  return {
-    categories: data.categories,
-    recordings: data.recordings,
-    years,
-    registeredFolders: folders,
-  }
+      return {
+        categories: data.categories,
+        recordings: data.recordings,
+        years,
+        registeredFolders: folders,
+      }
+    },
+    { ttl: CACHE_TTL.recordings }
+  )
 }
 
-// Fetch newsletters with detailed logging - uses dynamic imports
+// Fetch newsletters with caching
 async function fetchNewslettersData(requestId: string) {
-  const env = await getEnv()
+  const { withCache } = await import("@/lib/gdrive/cache")
   
-  if (!env.GDRIVE_SERVICE_ACCOUNT_EMAIL || !env.GDRIVE_NEWSLETTERS_FOLDER_ID) {
-    log("warn", "GDrive not configured for newsletters", { requestId })
-    return { newsletters: [], years: [] }
-  }
+  return withCache(
+    "api:newsletters",
+    async () => {
+      const env = await getEnv()
+      
+      if (!env.GDRIVE_SERVICE_ACCOUNT_EMAIL || !env.GDRIVE_NEWSLETTERS_FOLDER_ID) {
+        log("warn", "GDrive not configured for newsletters", { requestId })
+        return { newsletters: [], years: [] }
+      }
 
-  // Dynamic imports to reduce initial bundle size
-  const { getGDriveCredentials } = await import("@/lib/gdrive/client")
-  const { getNewsletters, getNewsletterYears } = await import("@/lib/gdrive/newsletters")
+      const { getGDriveCredentials } = await import("@/lib/gdrive/client")
+      const { getNewsletters, getNewsletterYears } = await import("@/lib/gdrive/newsletters")
 
-  const credentials = getGDriveCredentials(env)
-  const folderId = env.GDRIVE_NEWSLETTERS_FOLDER_ID
+      const credentials = getGDriveCredentials(env)
+      const folderId = env.GDRIVE_NEWSLETTERS_FOLDER_ID
 
-  log("info", "Fetching newsletters from GDrive", { requestId, folderId })
+      log("info", "Fetching newsletters from GDrive (cache miss)", { requestId, folderId })
 
-  const t = timer()
-  const [newsletters, years] = await Promise.all([
-    getNewsletters(credentials, folderId),
-    getNewsletterYears(credentials, folderId),
-  ])
-  
-  log("info", "GDrive newsletters fetched", { 
-    requestId, 
-    durationMs: t.elapsed(),
-    newsletterCount: newsletters.length,
-    yearCount: years.length,
-  })
+      const t = timer()
+      const [newsletters, years] = await Promise.all([
+        getNewsletters(credentials, folderId),
+        getNewsletterYears(credentials, folderId),
+      ])
+      
+      log("info", "GDrive newsletters fetched", { 
+        requestId, 
+        durationMs: t.elapsed(),
+        newsletterCount: newsletters.length,
+        yearCount: years.length,
+      })
 
-  return { newsletters, years }
+      return { newsletters, years }
+    },
+    { ttl: CACHE_TTL.newsletters }
+  )
 }
 
-// Fetch resources with detailed logging - uses dynamic imports
+// Fetch resources with caching
 async function fetchResourcesData(requestId: string) {
-  const env = await getEnv()
+  const { withCache } = await import("@/lib/gdrive/cache")
   
-  if (!env.GDRIVE_SERVICE_ACCOUNT_EMAIL || !env.GDRIVE_RESOURCES_FOLDER_ID) {
-    log("warn", "GDrive not configured for resources", { requestId })
-    return { delegateReports: [], areaDocuments: [], forms: [], conferenceMaterials: [] }
-  }
+  return withCache(
+    "api:resources",
+    async () => {
+      const env = await getEnv()
+      
+      if (!env.GDRIVE_SERVICE_ACCOUNT_EMAIL || !env.GDRIVE_RESOURCES_FOLDER_ID) {
+        log("warn", "GDrive not configured for resources", { requestId })
+        return { delegateReports: [], areaDocuments: [], forms: [], conferenceMaterials: [] }
+      }
 
-  // Dynamic imports to reduce initial bundle size
-  const { getGDriveCredentials } = await import("@/lib/gdrive/client")
-  const { getResources } = await import("@/lib/gdrive/resources")
+      const { getGDriveCredentials } = await import("@/lib/gdrive/client")
+      const { getResources } = await import("@/lib/gdrive/resources")
 
-  const credentials = getGDriveCredentials(env)
-  const folderId = env.GDRIVE_RESOURCES_FOLDER_ID
+      const credentials = getGDriveCredentials(env)
+      const folderId = env.GDRIVE_RESOURCES_FOLDER_ID
 
-  log("info", "Fetching resources from GDrive", { requestId, folderId })
+      log("info", "Fetching resources from GDrive (cache miss)", { requestId, folderId })
 
-  const driveTimer = timer()
-  const resources = await getResources(credentials, folderId)
-  log("info", "GDrive resources fetched", { 
-    requestId, 
-    durationMs: driveTimer.elapsed(),
-    delegateReports: resources.delegateReports.length,
-    areaDocuments: resources.areaDocuments.length,
-    forms: resources.forms.length,
-    conferenceMaterials: resources.conferenceMaterials.length,
-  })
+      const driveTimer = timer()
+      const resources = await getResources(credentials, folderId)
+      
+      // Enrich with metadata from DB
+      const [delegateReports, areaDocuments, forms, conferenceMaterials] = await Promise.all([
+        enrichResourcesWithMetadata(resources.delegateReports),
+        enrichResourcesWithMetadata(resources.areaDocuments),
+        enrichResourcesWithMetadata(resources.forms),
+        enrichResourcesWithMetadata(resources.conferenceMaterials),
+      ])
+      
+      log("info", "GDrive resources fetched and enriched", { 
+        requestId, 
+        durationMs: driveTimer.elapsed(),
+        delegateReports: delegateReports.length,
+        areaDocuments: areaDocuments.length,
+        forms: forms.length,
+        conferenceMaterials: conferenceMaterials.length,
+      })
 
-  // Enrich with metadata from DB
-  const enrichTimer = timer()
-  const [delegateReports, areaDocuments, forms, conferenceMaterials] = await Promise.all([
-    enrichResourcesWithMetadata(resources.delegateReports),
-    enrichResourcesWithMetadata(resources.areaDocuments),
-    enrichResourcesWithMetadata(resources.forms),
-    enrichResourcesWithMetadata(resources.conferenceMaterials),
-  ])
-  log("info", "Resources enriched with metadata", { 
-    requestId, 
-    durationMs: enrichTimer.elapsed(),
-  })
-
-  return { delegateReports, areaDocuments, forms, conferenceMaterials }
+      return { delegateReports, areaDocuments, forms, conferenceMaterials }
+    },
+    { ttl: CACHE_TTL.resources }
+  )
 }
 
-// Fetch committee files with detailed logging - uses dynamic imports
+// Fetch committee files with caching
 async function fetchCommitteesData(requestId: string) {
-  const env = await getEnv()
+  const { withCache } = await import("@/lib/gdrive/cache")
   
-  if (!env.GDRIVE_SERVICE_ACCOUNT_EMAIL || !env.GDRIVE_COMMITTEES_FOLDER_ID) {
-    log("warn", "GDrive not configured for committees", { requestId })
-    return {}
-  }
+  return withCache(
+    "api:committees",
+    async () => {
+      const env = await getEnv()
+      
+      if (!env.GDRIVE_SERVICE_ACCOUNT_EMAIL || !env.GDRIVE_COMMITTEES_FOLDER_ID) {
+        log("warn", "GDrive not configured for committees", { requestId })
+        return {}
+      }
 
-  // Dynamic imports to reduce initial bundle size
-  const { getGDriveCredentials } = await import("@/lib/gdrive/client")
-  const { getCommitteeFiles } = await import("@/lib/gdrive/committees")
-  type CommitteeFiles = Awaited<ReturnType<typeof getCommitteeFiles>>
+      const { getGDriveCredentials } = await import("@/lib/gdrive/client")
+      const { getCommitteeFiles } = await import("@/lib/gdrive/committees")
+      type CommitteeFiles = Awaited<ReturnType<typeof getCommitteeFiles>>
 
-  const credentials = getGDriveCredentials(env)
-  const folderId = env.GDRIVE_COMMITTEES_FOLDER_ID
+      const credentials = getGDriveCredentials(env)
+      const folderId = env.GDRIVE_COMMITTEES_FOLDER_ID
 
-  log("info", "Fetching committee files from GDrive", { requestId, folderId })
+      log("info", "Fetching committee files from GDrive (cache miss)", { requestId, folderId })
 
-  const driveTimer = timer()
-  const files = await getCommitteeFiles(credentials, folderId)
-  const committeeCount = Object.keys(files).length
-  const totalFiles = Object.values(files).reduce((sum, arr) => sum + arr.length, 0)
-  log("info", "GDrive committee files fetched", { 
-    requestId, 
-    durationMs: driveTimer.elapsed(),
-    committeeCount,
-    totalFiles,
-  })
+      const driveTimer = timer()
+      const files = await getCommitteeFiles(credentials, folderId)
+      
+      // Enrich with metadata
+      const enrichedFiles: CommitteeFiles = {}
+      for (const [slug, committeeFiles] of Object.entries(files)) {
+        enrichedFiles[slug] = await enrichCommitteeFilesWithMetadata(committeeFiles)
+      }
+      
+      const committeeCount = Object.keys(enrichedFiles).length
+      const totalFiles = Object.values(enrichedFiles).reduce((sum, arr) => sum + arr.length, 0)
+      log("info", "GDrive committee files fetched and enriched", { 
+        requestId, 
+        durationMs: driveTimer.elapsed(),
+        committeeCount,
+        totalFiles,
+      })
 
-  // Enrich with metadata
-  const enrichTimer = timer()
-  const enrichedFiles: CommitteeFiles = {}
-  for (const [slug, committeeFiles] of Object.entries(files)) {
-    enrichedFiles[slug] = await enrichCommitteeFilesWithMetadata(committeeFiles)
-  }
-  log("info", "Committee files enriched with metadata", { 
-    requestId, 
-    durationMs: enrichTimer.elapsed(),
-  })
-
-  return enrichedFiles
+      return enrichedFiles
+    },
+    { ttl: CACHE_TTL.committees }
+  )
 }
 
-// Fetch service resources with detailed logging - uses dynamic imports
+// Fetch service resources with caching
 async function fetchServiceResourcesData(requestId: string) {
-  const env = await getEnv()
+  const { withCache } = await import("@/lib/gdrive/cache")
   
-  if (!env.GDRIVE_SERVICE_ACCOUNT_EMAIL || !env.GDRIVE_SERVICE_RESOURCES_FOLDER_ID) {
-    log("warn", "GDrive not configured for service resources", { requestId })
-    return []
-  }
+  return withCache(
+    "api:service-resources",
+    async () => {
+      const env = await getEnv()
+      
+      if (!env.GDRIVE_SERVICE_ACCOUNT_EMAIL || !env.GDRIVE_SERVICE_RESOURCES_FOLDER_ID) {
+        log("warn", "GDrive not configured for service resources", { requestId })
+        return []
+      }
 
-  // Dynamic imports to reduce initial bundle size
-  const { getGDriveCredentials } = await import("@/lib/gdrive/client")
-  const { getServiceResources } = await import("@/lib/gdrive/service-resources")
-  type ServiceResource = Awaited<ReturnType<typeof getServiceResources>>[number]
+      const { getGDriveCredentials } = await import("@/lib/gdrive/client")
+      const { getServiceResources } = await import("@/lib/gdrive/service-resources")
+      type ServiceResource = Awaited<ReturnType<typeof getServiceResources>>[number]
 
-  const credentials = getGDriveCredentials(env)
-  const folderId = env.GDRIVE_SERVICE_RESOURCES_FOLDER_ID
+      const credentials = getGDriveCredentials(env)
+      const folderId = env.GDRIVE_SERVICE_RESOURCES_FOLDER_ID
 
-  log("info", "Fetching service resources from GDrive", { requestId, folderId })
+      log("info", "Fetching service resources from GDrive (cache miss)", { requestId, folderId })
 
-  const driveTimer = timer()
-  const resources = await getServiceResources(credentials, folderId)
-  log("info", "GDrive service resources fetched", { 
-    requestId, 
-    durationMs: driveTimer.elapsed(),
-    resourceCount: resources.length,
-  })
+      const driveTimer = timer()
+      const resources = await getServiceResources(credentials, folderId)
+      
+      if (resources.length === 0) return resources
 
-  // Enrich with metadata
-  if (resources.length === 0) return resources
+      // Enrich with metadata
+      const driveIds = resources.map((r) => r.id)
+      const metadataMap = await getFileMetadataByDriveIds(driveIds)
+      
+      const enrichedResources: ServiceResource[] = resources.map((resource) => {
+        const meta = metadataMap.get(resource.id)
+        if (!meta) return resource
+        return {
+          ...resource,
+          name: meta.displayName,
+          isProtected: !!meta.password,
+          category: meta.category,
+        }
+      })
+      
+      log("info", "GDrive service resources fetched and enriched", { 
+        requestId, 
+        durationMs: driveTimer.elapsed(),
+        resourceCount: enrichedResources.length,
+      })
 
-  const enrichTimer = timer()
-  const driveIds = resources.map((r) => r.id)
-  const metadataMap = await getFileMetadataByDriveIds(driveIds)
-  
-  const enrichedResources: ServiceResource[] = resources.map((resource) => {
-    const meta = metadataMap.get(resource.id)
-    if (!meta) return resource
-    return {
-      ...resource,
-      name: meta.displayName,
-      isProtected: !!meta.password,
-      category: meta.category,
-    }
-  })
-  log("info", "Service resources enriched with metadata", { 
-    requestId, 
-    durationMs: enrichTimer.elapsed(),
-  })
-
-  return enrichedResources
+      return enrichedResources
+    },
+    { ttl: CACHE_TTL["service-resources"] }
+  )
 }
 
-// Fetch conference materials with detailed logging - uses dynamic imports
+// Fetch conference materials with caching
 async function fetchConferenceMaterialsData(requestId: string) {
-  const env = await getEnv()
+  const { withCache } = await import("@/lib/gdrive/cache")
   
-  if (!env.GDRIVE_SERVICE_ACCOUNT_EMAIL || !env.GDRIVE_RESOURCES_FOLDER_ID) {
-    log("warn", "GDrive not configured for conference materials", { requestId })
-    return { materials: [], oldReports: [] }
-  }
+  return withCache(
+    "api:conference-materials",
+    async () => {
+      const env = await getEnv()
+      
+      if (!env.GDRIVE_SERVICE_ACCOUNT_EMAIL || !env.GDRIVE_RESOURCES_FOLDER_ID) {
+        log("warn", "GDrive not configured for conference materials", { requestId })
+        return { materials: [], oldReports: [] }
+      }
 
-  // Dynamic imports to reduce initial bundle size
-  const { getGDriveCredentials } = await import("@/lib/gdrive/client")
-  const { getResourcesByCategory, getOldConferenceReports } = await import("@/lib/gdrive/resources")
+      const { getGDriveCredentials } = await import("@/lib/gdrive/client")
+      const { getResourcesByCategory, getOldConferenceReports } = await import("@/lib/gdrive/resources")
 
-  const credentials = getGDriveCredentials(env)
-  const folderId = env.GDRIVE_RESOURCES_FOLDER_ID
+      const credentials = getGDriveCredentials(env)
+      const folderId = env.GDRIVE_RESOURCES_FOLDER_ID
 
-  log("info", "Fetching conference materials from GDrive", { requestId, folderId })
+      log("info", "Fetching conference materials from GDrive (cache miss)", { requestId, folderId })
 
-  const driveTimer = timer()
-  const [materials, oldReports] = await Promise.all([
-    getResourcesByCategory(credentials, folderId, "conference-materials"),
-    getOldConferenceReports(credentials, folderId),
-  ])
-  log("info", "GDrive conference materials fetched", { 
-    requestId, 
-    durationMs: driveTimer.elapsed(),
-    materialsCount: materials.length,
-    oldReportsCount: oldReports.length,
-  })
+      const driveTimer = timer()
+      const [materials, oldReports] = await Promise.all([
+        getResourcesByCategory(credentials, folderId, "conference-materials"),
+        getOldConferenceReports(credentials, folderId),
+      ])
+      
+      log("info", "GDrive conference materials fetched", { 
+        requestId, 
+        durationMs: driveTimer.elapsed(),
+        materialsCount: materials.length,
+        oldReportsCount: oldReports.length,
+      })
 
-  return { materials, oldReports }
+      return { materials, oldReports }
+    },
+    { ttl: CACHE_TTL["conference-materials"] }
+  )
 }
 
 export async function GET(
@@ -392,7 +427,7 @@ export async function GET(
     return NextResponse.json(data, {
       headers: {
         "X-Request-Id": requestId,
-        // Cache for 5 minutes on client, allow stale for 1 hour while revalidating
+        // Browser cache for 5 minutes, allow stale for 1 hour while revalidating
         "Cache-Control": "public, max-age=300, stale-while-revalidate=3600",
       },
     })

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { getDb } from "@/lib/db"
 import { fileMetadata } from "@/lib/db/schema"
@@ -24,6 +24,20 @@ interface FileNode {
   category?: string | null
 }
 
+// Folder type enum for per-folder requests
+type FolderType = "resources" | "committees" | "newsletters" | "recordings" | "service-resources"
+
+const FOLDER_CONFIG: Record<FolderType, { envKey: string; name: string }> = {
+  resources: { envKey: "GDRIVE_RESOURCES_FOLDER_ID", name: "Resources" },
+  committees: { envKey: "GDRIVE_COMMITTEES_FOLDER_ID", name: "Committees" },
+  newsletters: { envKey: "GDRIVE_NEWSLETTERS_FOLDER_ID", name: "Newsletters" },
+  recordings: { envKey: "GDRIVE_RECORDINGS_FOLDER_ID", name: "Recordings" },
+  "service-resources": { envKey: "GDRIVE_SERVICE_RESOURCES_FOLDER_ID", name: "Service Resources" },
+}
+
+// Cache TTL for admin files (shorter since admins need fresh data)
+const CACHE_TTL = 60 * 5 // 5 minutes
+
 // Get environment variables from Cloudflare context
 async function getEnv() {
   try {
@@ -48,7 +62,83 @@ async function getEnv() {
   }
 }
 
-export async function GET() {
+/**
+ * Build folder tree for a single root folder
+ * Uses caching to reduce CPU usage
+ */
+async function buildSingleFolderTree(
+  folderType: FolderType,
+  metadataMap: Map<string, { displayName: string; password: string | null; category: string | null }>
+): Promise<FolderNode | null> {
+  const { withCache } = await import("@/lib/gdrive/cache")
+  const config = FOLDER_CONFIG[folderType]
+  
+  return withCache(
+    `admin:folder:${folderType}`,
+    async () => {
+      const env = await getEnv()
+      const folderId = (env as Record<string, string>)[config.envKey]
+      
+      if (!env.GDRIVE_SERVICE_ACCOUNT_EMAIL || !folderId) {
+        return null
+      }
+
+      const { getGDriveCredentials, listFolders, listAllFiles } = await import("@/lib/gdrive/client")
+      const credentials = getGDriveCredentials(env)
+
+      async function buildTree(
+        currentFolderId: string,
+        folderName: string
+      ): Promise<FolderNode> {
+        // Get subfolders and files in parallel
+        const [subfolders, files] = await Promise.all([
+          listFolders(credentials, currentFolderId),
+          listAllFiles(credentials, currentFolderId, { orderBy: "name" }),
+        ])
+
+        const children: (FolderNode | FileNode)[] = []
+
+        // Add subfolders recursively
+        for (const subfolder of subfolders) {
+          const childFolder = await buildTree(subfolder.id, subfolder.name)
+          children.push(childFolder)
+        }
+
+        // Add files (excluding folders)
+        const fileItems = files.filter(
+          (f) => f.mimeType !== "application/vnd.google-apps.folder"
+        )
+        for (const file of fileItems) {
+          const meta = metadataMap.get(file.id)
+          children.push({
+            id: file.id,
+            name: file.name,
+            type: "file",
+            mimeType: file.mimeType,
+            size: file.size,
+            parentId: currentFolderId,
+            hasMetadata: !!meta,
+            isProtected: !!meta?.password,
+            displayName: meta?.displayName,
+            category: meta?.category,
+          })
+        }
+
+        return {
+          id: currentFolderId,
+          name: folderName,
+          type: "folder",
+          children,
+        }
+      }
+
+      return buildTree(folderId, config.name)
+    },
+    { ttl: CACHE_TTL }
+  )
+}
+
+export async function GET(request: NextRequest) {
   // Check authentication
   const session = await auth()
   if (!session?.user?.email) {
@@ -56,94 +146,48 @@ export async function GET() {
   }
 
   try {
-    const env = await getEnv()
-    if (!env.GDRIVE_SERVICE_ACCOUNT_EMAIL) {
-      return NextResponse.json({ folders: [], metadata: [] })
-    }
+    const { searchParams } = new URL(request.url)
+    const folderType = searchParams.get("folder") as FolderType | null
 
-    // Dynamic import of GDrive client to avoid loading at build time
-    const { getGDriveCredentials, listFolders, listAllFiles } = await import("@/lib/gdrive/client")
-    const credentials = getGDriveCredentials(env)
-
-    // Get all file metadata to mark files with custom settings
+    // Get all file metadata (needed for both modes)
     const db = await getDb()
     const allMetadata = await db.select().from(fileMetadata)
     const metadataMap = new Map(
       allMetadata.map((m) => [m.driveId, { displayName: m.displayName, password: m.password, category: m.category }])
     )
 
-    /**
-     * Recursively build folder tree from Google Drive
-     */
-    async function buildFolderTree(
-      folderId: string,
-      folderName: string
-    ): Promise<FolderNode> {
-      // Get subfolders and files in parallel
-      const [subfolders, files] = await Promise.all([
-        listFolders(credentials, folderId),
-        listAllFiles(credentials, folderId, { orderBy: "name" }),
-      ])
-
-      // Build children
-      const children: (FolderNode | FileNode)[] = []
-
-      // Add subfolders recursively
-      for (const subfolder of subfolders) {
-        const childFolder = await buildFolderTree(subfolder.id, subfolder.name)
-        children.push(childFolder)
+    // If a specific folder is requested, fetch only that one
+    if (folderType) {
+      if (!FOLDER_CONFIG[folderType]) {
+        return NextResponse.json(
+          { error: `Invalid folder type. Valid types: ${Object.keys(FOLDER_CONFIG).join(", ")}` },
+          { status: 400 }
+        )
       }
 
-      // Add files (excluding folders)
-      const fileItems = files.filter(
-        (f) => f.mimeType !== "application/vnd.google-apps.folder"
-      )
-      for (const file of fileItems) {
-        const meta = metadataMap.get(file.id)
-        children.push({
-          id: file.id,
-          name: file.name,
-          type: "file",
-          mimeType: file.mimeType,
-          size: file.size,
-          parentId: folderId,
-          hasMetadata: !!meta,
-          isProtected: !!meta?.password,
-          displayName: meta?.displayName,
-          category: meta?.category,
-        })
-      }
-
-      return {
-        id: folderId,
-        name: folderName,
-        type: "folder",
-        children,
-      }
+      const folder = await buildSingleFolderTree(folderType, metadataMap)
+      
+      return NextResponse.json({
+        folder,
+        metadata: allMetadata,
+      })
     }
 
-    const folders: FolderNode[] = []
-
-    // Build tree for each configured folder
-    const folderConfigs = [
-      { id: env.GDRIVE_RESOURCES_FOLDER_ID, name: "Resources" },
-      { id: env.GDRIVE_COMMITTEES_FOLDER_ID, name: "Committees" },
-      { id: env.GDRIVE_NEWSLETTERS_FOLDER_ID, name: "Newsletters" },
-      { id: env.GDRIVE_RECORDINGS_FOLDER_ID, name: "Recordings" },
-      { id: env.GDRIVE_SERVICE_RESOURCES_FOLDER_ID, name: "Service Resources" },
-    ].filter((f) => f.id)
-
-    for (const config of folderConfigs) {
-      try {
-        const tree = await buildFolderTree(config.id, config.name)
-        folders.push(tree)
-      } catch (error) {
-        console.error(`Error building tree for ${config.name}:`, error)
-      }
-    }
+    // Otherwise, return just metadata and folder config (for initial load)
+    // Client will fetch individual folders separately
+    const env = await getEnv()
+    const availableFolders = Object.entries(FOLDER_CONFIG)
+      .filter(([, config]) => {
+        const folderId = (env as Record<string, string>)[config.envKey]
+        return env.GDRIVE_SERVICE_ACCOUNT_EMAIL && folderId
+      })
+      .map(([type, config]) => ({
+        type,
+        name: config.name,
+      }))
 
     return NextResponse.json({
-      folders,
+      availableFolders,
       metadata: allMetadata,
     })
   } catch (error) {
