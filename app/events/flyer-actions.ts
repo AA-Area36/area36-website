@@ -1,10 +1,12 @@
 "use server"
 
 import { getDb } from "@/lib/db"
-import { eventFlyers } from "@/lib/db/schema"
+import { eventFlyers, events } from "@/lib/db/schema"
 import { uploadFlyer, deleteFlyer } from "@/lib/r2"
 import { eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
+import { auth } from "@/lib/auth"
+import { verifyEventUploadToken } from "@/lib/security/upload-token"
 
 export interface UploadFlyerResponse {
   success: true
@@ -30,10 +32,29 @@ export async function uploadEventFlyer(
   eventId: string,
   formData: FormData
 ): Promise<UploadFlyerResponse | UploadFlyerErrorResponse> {
+  const session = await auth()
+  const isAdmin = !!session?.user?.email
+
   const file = formData.get("file") as File | null
 
   if (!file) {
     return { success: false, error: "No file provided" }
+  }
+
+  const db = await getDb()
+  const [event] = await db.select().from(events).where(eq(events.id, eventId)).limit(1)
+  if (!event) {
+    return { success: false, error: "Event not found" }
+  }
+
+  if (!isAdmin) {
+    const uploadToken = formData.get("uploadToken") as string | null
+    if (!uploadToken || !(await verifyEventUploadToken(uploadToken, eventId))) {
+      return { success: false, error: "Upload not authorized" }
+    }
+    if (event.status !== "pending") {
+      return { success: false, error: "Uploads are only allowed for pending events" }
+    }
   }
 
   // Upload to R2
@@ -44,7 +65,6 @@ export async function uploadEventFlyer(
   }
 
   // Get the current max order for this event's flyers
-  const db = await getDb()
   const existingFlyers = await db
     .select()
     .from(eventFlyers)

@@ -1,4 +1,5 @@
 import { cookies } from "next/headers"
+import { signUnlockCookie, verifyUnlockCookie } from "@/lib/security/unlock-cookie"
 
 const UNLOCKED_FILES_COOKIE = "unlocked-files"
 
@@ -11,7 +12,8 @@ export async function getUnlockedFiles(): Promise<string[]> {
   if (!cookie?.value) return []
 
   try {
-    return JSON.parse(cookie.value) as string[]
+    const verified = await verifyUnlockCookie(cookie.value)
+    return verified?.ids ?? []
   } catch {
     return []
   }
@@ -28,7 +30,13 @@ export async function setUnlockedFile(fileId: string): Promise<void> {
     existing.push(fileId)
   }
 
-  cookieStore.set(UNLOCKED_FILES_COOKIE, JSON.stringify(existing), {
+  const signedValue = await signUnlockCookie(existing)
+  if (!signedValue) {
+    console.error("UNLOCK_COOKIE_SECRET is not configured; cannot set unlock cookie")
+    return
+  }
+
+  cookieStore.set(UNLOCKED_FILES_COOKIE, signedValue, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

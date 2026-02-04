@@ -6,6 +6,7 @@ import { fileMetadata } from "@/lib/db/schema"
 import { eq, sql } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { nanoid } from "nanoid"
+import { hashPassword } from "@/lib/security/passwords"
 
 // Types for folder structure (used by client components)
 export interface FolderNode {
@@ -79,7 +80,8 @@ export async function upsertFileMetadata(data: {
   const db = await getDb()
 
   // Convert empty strings to null for optional fields
-  const password = data.password?.trim() || null
+  const passwordValue = data.password?.trim() || null
+  const password = passwordValue ? await hashPassword(passwordValue) : null
   const category = data.category?.trim() || null
 
   // Check if metadata already exists

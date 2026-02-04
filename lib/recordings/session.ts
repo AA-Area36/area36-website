@@ -1,4 +1,5 @@
 import { cookies } from "next/headers"
+import { signUnlockCookie, verifyUnlockCookie } from "@/lib/security/unlock-cookie"
 
 const UNLOCKED_FOLDERS_COOKIE = "unlocked-recording-folders"
 
@@ -8,7 +9,8 @@ export async function getUnlockedFolders(): Promise<string[]> {
   if (!cookie?.value) return []
   
   try {
-    return JSON.parse(cookie.value) as string[]
+    const verified = await verifyUnlockCookie(cookie.value)
+    return verified?.ids ?? []
   } catch {
     return []
   }
@@ -22,7 +24,13 @@ export async function setUnlockedFolder(folderId: string): Promise<void> {
     existing.push(folderId)
   }
   
-  cookieStore.set(UNLOCKED_FOLDERS_COOKIE, JSON.stringify(existing), {
+  const signedValue = await signUnlockCookie(existing)
+  if (!signedValue) {
+    console.error("UNLOCK_COOKIE_SECRET is not configured; cannot set unlock cookie")
+    return
+  }
+
+  cookieStore.set(UNLOCKED_FOLDERS_COOKIE, signedValue, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

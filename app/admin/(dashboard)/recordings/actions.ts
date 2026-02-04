@@ -6,6 +6,7 @@ import { recordingFolders } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { createRequestLogger } from "@/lib/logger"
+import { hashPassword } from "@/lib/security/passwords"
 
 export async function getRecordingFolders() {
   const log = createRequestLogger("/admin/recordings", "ACTION")
@@ -39,12 +40,13 @@ export async function addRecordingFolder(data: {
 
   try {
     const db = await log.tracker.time("db.connect", () => getDb())
+    const hashedPassword = await hashPassword(data.password)
     await log.tracker.time("db.insert", () =>
       db.insert(recordingFolders).values({
       id: crypto.randomUUID(),
       driveId: data.driveId,
       folderName: data.folderName,
-      password: data.password,
+      password: hashedPassword,
     })
     )
 
@@ -74,11 +76,12 @@ export async function updateRecordingFolder(
 
   try {
     const db = await log.tracker.time("db.connect", () => getDb())
+    const updatePassword = data.password ? await hashPassword(data.password) : undefined
     await log.tracker.time("db.update", () =>
       db.update(recordingFolders)
         .set({
           ...(data.folderName && { folderName: data.folderName }),
-          ...(data.password && { password: data.password }),
+          ...(data.password && { password: updatePassword }),
           updatedAt: new Date().toISOString(),
         })
         .where(eq(recordingFolders.id, id))

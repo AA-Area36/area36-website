@@ -6,6 +6,7 @@ import {
   correctionsContactFormSchema,
   type CorrectionsContactFormData,
 } from "@/lib/schemas/corrections-tcp"
+import { checkRateLimit, getClientIp } from "@/lib/security/rate-limit"
 
 interface ReCaptchaResponse {
   success: boolean
@@ -79,6 +80,15 @@ export async function submitCorrectionsContactForm(data: CorrectionsContactFormD
 
   if (!result.success) {
     return { success: false, error: result.error.errors[0]?.message ?? "Invalid form data" }
+  }
+
+  const ip = await getClientIp()
+  const rateLimit = checkRateLimit(`corrections:${ip}`, {
+    limit: 5,
+    windowMs: 10 * 60 * 1000,
+  })
+  if (!rateLimit.ok) {
+    return { success: false, error: "Too many submissions. Please try again later." }
   }
 
   const recaptchaResult = await verifyRecaptcha(result.data.recaptchaToken)

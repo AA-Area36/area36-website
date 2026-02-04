@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getFlyer } from "@/lib/r2"
+import { sanitizeFilenameForHeader } from "@/lib/security/filename"
 
 // Public route - no authentication required since event flyers are publicly displayed
 export async function GET(
@@ -35,7 +36,8 @@ export async function GET(
   if (contentType === "application/pdf") {
     // Get original filename from custom metadata if available
     const originalName = flyer.customMetadata?.originalName || "flyer.pdf"
-    headers.set("Content-Disposition", `inline; filename="${originalName}"`)
+    const safeName = sanitizeFilenameForHeader(originalName, "flyer.pdf")
+    headers.set("Content-Disposition", `inline; filename="${safeName}"`)
   }
 
   return new NextResponse(flyer.body, {

@@ -5,6 +5,7 @@ import { subscriptionDrives, driveSubmissions, type SubscriptionDrive, type Driv
 import { uploadImage } from "@/lib/r2"
 import { eq, and, desc } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
+import { checkRateLimit, getClientIp } from "@/lib/security/rate-limit"
 
 interface ReCaptchaResponse {
   success: boolean
@@ -125,6 +126,18 @@ export async function submitDriveConfirmation(formData: FormData) {
     return {
       success: false,
       error: "Please upload a confirmation image.",
+    }
+  }
+
+  const ip = await getClientIp()
+  const rateLimit = checkRateLimit(`grapevine:${ip}`, {
+    limit: 5,
+    windowMs: 10 * 60 * 1000,
+  })
+  if (!rateLimit.ok) {
+    return {
+      success: false,
+      error: "Too many submissions. Please try again later.",
     }
   }
 

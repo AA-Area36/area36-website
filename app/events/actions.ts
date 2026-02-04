@@ -4,6 +4,8 @@ import { eventSubmissionWithRecurrenceSchema, type EventSubmissionWithRecurrence
 import { getDb } from "@/lib/db"
 import { events, eventToTypes, type MonthlyPatternType, type RecurrenceType } from "@/lib/db/schema"
 import { serializeWeeklyPattern, serializeMonthlyPatternValue } from "@/lib/utils/recurrence"
+import { createEventUploadToken } from "@/lib/security/upload-token"
+import { checkRateLimit, getClientIp } from "@/lib/security/rate-limit"
 
 interface ReCaptchaResponse {
   success: boolean
@@ -52,6 +54,18 @@ export async function submitEvent(data: EventSubmissionWithRecurrenceData) {
       success: false,
       error: "Please fix the errors below",
       fieldErrors,
+    }
+  }
+
+  const ip = await getClientIp()
+  const rateLimit = checkRateLimit(`event:${ip}`, {
+    limit: 3,
+    windowMs: 10 * 60 * 1000,
+  })
+  if (!rateLimit.ok) {
+    return {
+      success: false,
+      error: "Too many submissions. Please try again later.",
     }
   }
 
@@ -178,9 +192,12 @@ export async function submitEvent(data: EventSubmissionWithRecurrenceData) {
       )
     }
 
+    const uploadToken = await createEventUploadToken(eventId)
+
     return {
       success: true,
       eventId,
+      uploadToken: uploadToken ?? undefined,
       message: "Your event has been submitted and is pending review. You will be notified once it is approved.",
     }
   } catch (error) {

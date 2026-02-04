@@ -501,6 +501,9 @@ export function EventsClient({ events }: EventsClientProps) {
             if (flyer.file) {
               const flyerFormData = new FormData()
               flyerFormData.append("file", flyer.file)
+              if (result.uploadToken) {
+                flyerFormData.append("uploadToken", result.uploadToken)
+              }
               await uploadEventFlyer(result.eventId, flyerFormData)
             }
           }

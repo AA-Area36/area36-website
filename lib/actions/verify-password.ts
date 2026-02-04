@@ -5,6 +5,7 @@ import { recordingFolders, fileMetadata } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { setUnlockedFolder } from "@/lib/recordings/session"
 import { setUnlockedFile } from "@/lib/files/session"
+import { verifyPassword } from "@/lib/security/passwords"
 
 /**
  * Verify password for a recording folder and unlock it
@@ -25,7 +26,8 @@ export async function verifyFolderPassword(
       return { success: false, error: "Folder not found" }
     }
 
-    if (folder.password !== password) {
+    const valid = await verifyPassword(password, folder.password)
+    if (!valid) {
       return { success: false, error: "Incorrect password" }
     }
 
@@ -58,7 +60,8 @@ export async function verifyFilePassword(
       return { success: false, error: "File not found" }
     }
 
-    if (meta.password !== password) {
+    const valid = await verifyPassword(password, meta.password)
+    if (!valid) {
       return { success: false, error: "Incorrect password" }
     }
 

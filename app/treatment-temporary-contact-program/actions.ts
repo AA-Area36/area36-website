@@ -8,6 +8,7 @@ import {
   type NewcomerFormData,
   type VolunteerFormData,
 } from "@/lib/schemas/treatment-tcp"
+import { checkRateLimit, getClientIp } from "@/lib/security/rate-limit"
 
 interface ReCaptchaResponse {
   success: boolean
@@ -83,6 +84,15 @@ export async function submitNewcomerForm(data: NewcomerFormData) {
     return { success: false, error: result.error.errors[0]?.message ?? "Invalid form data" }
   }
 
+  const ip = await getClientIp()
+  const rateLimit = checkRateLimit(`treatment:newcomer:${ip}`, {
+    limit: 5,
+    windowMs: 10 * 60 * 1000,
+  })
+  if (!rateLimit.ok) {
+    return { success: false, error: "Too many submissions. Please try again later." }
+  }
+
   const recaptchaResult = await verifyRecaptcha(result.data.recaptchaToken)
   if (!recaptchaResult.success) {
     return { success: false, error: recaptchaResult.error }
@@ -140,6 +150,15 @@ export async function submitVolunteerForm(data: VolunteerFormData) {
 
   if (!result.success) {
     return { success: false, error: result.error.errors[0]?.message ?? "Invalid form data" }
+  }
+
+  const ip = await getClientIp()
+  const rateLimit = checkRateLimit(`treatment:volunteer:${ip}`, {
+    limit: 5,
+    windowMs: 10 * 60 * 1000,
+  })
+  if (!rateLimit.ok) {
+    return { success: false, error: "Too many submissions. Please try again later." }
   }
 
   const recaptchaResult = await verifyRecaptcha(result.data.recaptchaToken)

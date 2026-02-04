@@ -2,6 +2,7 @@
 
 import { contactFormSchema, type ContactFormData } from "@/lib/schemas/contact"
 import { sendContactEmail } from "@/lib/email"
+import { checkRateLimit, getClientIp } from "@/lib/security/rate-limit"
 
 interface ReCaptchaResponse {
   success: boolean
@@ -41,6 +42,18 @@ export async function submitContactForm(data: ContactFormData) {
     return {
       success: false,
       error: result.error.errors[0]?.message ?? "Invalid form data",
+    }
+  }
+
+  const ip = await getClientIp()
+  const rateLimit = checkRateLimit(`contact:${ip}`, {
+    limit: 5,
+    windowMs: 10 * 60 * 1000,
+  })
+  if (!rateLimit.ok) {
+    return {
+      success: false,
+      error: "Too many submissions. Please try again later.",
     }
   }
 
