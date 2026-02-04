@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { PDFViewer } from "@/components/pdf-viewer"
 import { FilePasswordDialog } from "@/components/file-password-dialog"
 import type { CommitteeFile } from "@/lib/gdrive/committees"
-import { verifyFilePassword } from "@/app/admin/(dashboard)/files/actions"
+import { verifyFilePassword } from "@/lib/actions/verify-password"
 
 interface CommitteeFilesSectionProps {
   title: string

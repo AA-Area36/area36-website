@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { PDFViewer } from "@/components/pdf-viewer"
 import { FilePasswordDialog } from "@/components/file-password-dialog"
-import { verifyFilePassword } from "@/app/admin/(dashboard)/files/actions"
+import { verifyFilePassword } from "@/lib/actions/verify-password"
 import type { Resource } from "@/lib/gdrive/types"
 
 interface ResourceViewerProps {

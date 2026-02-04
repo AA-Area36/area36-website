@@ -5,7 +5,7 @@ import { FileText, Download, Eye, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PDFViewer } from "@/components/pdf-viewer"
 import { FilePasswordDialog } from "@/components/file-password-dialog"
-import { verifyFilePassword } from "@/app/admin/(dashboard)/files/actions"
+import { verifyFilePassword } from "@/lib/actions/verify-password"
 import type { ServiceResource } from "@/lib/gdrive/service-resources"
 
 interface ServiceResourcesProps {

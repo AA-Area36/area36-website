@@ -1,15 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getGDriveCredentials } from "@/lib/gdrive/client"
-import { getRecordings, getRecordingYears } from "@/lib/gdrive/recordings"
-import { getNewsletters, getNewsletterYears } from "@/lib/gdrive/newsletters"
-import { getResources, getResourcesByCategory, getOldConferenceReports } from "@/lib/gdrive/resources"
-import { getCommitteeFiles } from "@/lib/gdrive/committees"
-import { getServiceResources } from "@/lib/gdrive/service-resources"
 import { enrichResourcesWithMetadata, enrichCommitteeFilesWithMetadata, getFileMetadataByDriveIds } from "@/lib/files/metadata"
 import { getDb } from "@/lib/db"
 import { recordingFolders } from "@/lib/db/schema"
-import type { ServiceResource } from "@/lib/gdrive/service-resources"
-import type { CommitteeFiles } from "@/lib/gdrive/committees"
 
 // Valid types for the API
 type GDriveType = 
@@ -75,7 +67,7 @@ function timer() {
   }
 }
 
-// Fetch recordings with detailed logging
+// Fetch recordings with detailed logging - uses dynamic imports
 async function fetchRecordingsData(requestId: string) {
   const env = await getEnv()
   
@@ -83,6 +75,10 @@ async function fetchRecordingsData(requestId: string) {
     log("warn", "GDrive not configured for recordings", { requestId })
     return { categories: [], recordings: {}, years: [], registeredFolders: [] }
   }
+
+  // Dynamic imports to reduce initial bundle size
+  const { getGDriveCredentials } = await import("@/lib/gdrive/client")
+  const { getRecordings, getRecordingYears } = await import("@/lib/gdrive/recordings")
 
   const credentials = getGDriveCredentials(env)
   const folderId = env.GDRIVE_RECORDINGS_FOLDER_ID
@@ -123,7 +119,7 @@ async function fetchRecordingsData(requestId: string) {
   }
 }
 
-// Fetch newsletters with detailed logging
+// Fetch newsletters with detailed logging - uses dynamic imports
 async function fetchNewslettersData(requestId: string) {
   const env = await getEnv()
   
@@ -131,6 +127,10 @@ async function fetchNewslettersData(requestId: string) {
     log("warn", "GDrive not configured for newsletters", { requestId })
     return { newsletters: [], years: [] }
   }
+
+  // Dynamic imports to reduce initial bundle size
+  const { getGDriveCredentials } = await import("@/lib/gdrive/client")
+  const { getNewsletters, getNewsletterYears } = await import("@/lib/gdrive/newsletters")
 
   const credentials = getGDriveCredentials(env)
   const folderId = env.GDRIVE_NEWSLETTERS_FOLDER_ID
@@ -153,7 +153,7 @@ async function fetchNewslettersData(requestId: string) {
   return { newsletters, years }
 }
 
-// Fetch resources with detailed logging
+// Fetch resources with detailed logging - uses dynamic imports
 async function fetchResourcesData(requestId: string) {
   const env = await getEnv()
   
@@ -161,6 +161,10 @@ async function fetchResourcesData(requestId: string) {
     log("warn", "GDrive not configured for resources", { requestId })
     return { delegateReports: [], areaDocuments: [], forms: [], conferenceMaterials: [] }
   }
+
+  // Dynamic imports to reduce initial bundle size
+  const { getGDriveCredentials } = await import("@/lib/gdrive/client")
+  const { getResources } = await import("@/lib/gdrive/resources")
 
   const credentials = getGDriveCredentials(env)
   const folderId = env.GDRIVE_RESOURCES_FOLDER_ID
@@ -194,7 +198,7 @@ async function fetchResourcesData(requestId: string) {
   return { delegateReports, areaDocuments, forms, conferenceMaterials }
 }
 
-// Fetch committee files with detailed logging
+// Fetch committee files with detailed logging - uses dynamic imports
 async function fetchCommitteesData(requestId: string) {
   const env = await getEnv()
   
@@ -202,6 +206,11 @@ async function fetchCommitteesData(requestId: string) {
     log("warn", "GDrive not configured for committees", { requestId })
     return {}
   }
+
+  // Dynamic imports to reduce initial bundle size
+  const { getGDriveCredentials } = await import("@/lib/gdrive/client")
+  const { getCommitteeFiles } = await import("@/lib/gdrive/committees")
+  type CommitteeFiles = Awaited<ReturnType<typeof getCommitteeFiles>>
 
   const credentials = getGDriveCredentials(env)
   const folderId = env.GDRIVE_COMMITTEES_FOLDER_ID
@@ -233,7 +242,7 @@ async function fetchCommitteesData(requestId: string) {
   return enrichedFiles
 }
 
-// Fetch service resources with detailed logging
+// Fetch service resources with detailed logging - uses dynamic imports
 async function fetchServiceResourcesData(requestId: string) {
   const env = await getEnv()
   
@@ -241,6 +250,11 @@ async function fetchServiceResourcesData(requestId: string) {
     log("warn", "GDrive not configured for service resources", { requestId })
     return []
   }
+
+  // Dynamic imports to reduce initial bundle size
+  const { getGDriveCredentials } = await import("@/lib/gdrive/client")
+  const { getServiceResources } = await import("@/lib/gdrive/service-resources")
+  type ServiceResource = Awaited<ReturnType<typeof getServiceResources>>[number]
 
   const credentials = getGDriveCredentials(env)
   const folderId = env.GDRIVE_SERVICE_RESOURCES_FOLDER_ID
@@ -280,7 +294,7 @@ async function fetchServiceResourcesData(requestId: string) {
   return enrichedResources
 }
 
-// Fetch conference materials with detailed logging
+// Fetch conference materials with detailed logging - uses dynamic imports
 async function fetchConferenceMaterialsData(requestId: string) {
   const env = await getEnv()
   
@@ -288,6 +302,10 @@ async function fetchConferenceMaterialsData(requestId: string) {
     log("warn", "GDrive not configured for conference materials", { requestId })
     return { materials: [], oldReports: [] }
   }
+
+  // Dynamic imports to reduce initial bundle size
+  const { getGDriveCredentials } = await import("@/lib/gdrive/client")
+  const { getResourcesByCategory, getOldConferenceReports } = await import("@/lib/gdrive/resources")
 
   const credentials = getGDriveCredentials(env)
   const folderId = env.GDRIVE_RESOURCES_FOLDER_ID

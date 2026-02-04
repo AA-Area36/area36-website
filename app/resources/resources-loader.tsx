@@ -1,22 +1,27 @@
 "use client"
 
 import { useResources } from "@/lib/hooks/use-gdrive-files"
-import { GdriveLoader, GdriveError } from "@/components/gdrive-loader"
+import { GdriveLoader } from "@/components/gdrive-loader"
 import { ResourcesContent } from "./resources-content"
 import { FolderOpen } from "lucide-react"
 
 /**
  * Lazy loads resources from the API and renders the ResourcesContent
+ * 
+ * GRACEFUL DEGRADATION: If files fail to load, shows empty state message
+ * instead of error. This ensures the page remains usable even if GDrive
+ * is unavailable.
  */
 export function ResourcesLoader() {
-  const { data, isLoading, error, refetch } = useResources()
+  const { data, isLoading, error } = useResources()
 
   if (isLoading) {
     return <GdriveLoader message="Loading resources..." />
   }
 
+  // Graceful degradation: log error but show empty state
   if (error) {
-    return <GdriveError error={error} onRetry={refetch} />
+    console.error("Failed to load resources:", error)
   }
 
   if (!data) {
