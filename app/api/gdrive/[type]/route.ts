@@ -92,7 +92,7 @@ async function fetchRecordingsData(requestId: string) {
       }
 
       const { getGDriveCredentials } = await import("@/lib/gdrive/client")
-      const { getRecordings, getRecordingYears } = await import("@/lib/gdrive/recordings")
+      const { getRecordings } = await import("@/lib/gdrive/recordings")
 
       const credentials = getGDriveCredentials(env)
       const folderId = env.GDRIVE_RECORDINGS_FOLDER_ID
@@ -100,10 +100,9 @@ async function fetchRecordingsData(requestId: string) {
       log("info", "Fetching recordings from GDrive (cache miss)", { requestId, folderId })
 
       const recordingsTimer = timer()
-      const [data, years] = await Promise.all([
-        getRecordings(credentials, folderId),
-        getRecordingYears(credentials, folderId),
-      ])
+      const data = await getRecordings(credentials, folderId)
+      const years = [...new Set(Object.values(data.recordings).flat().map((r) => r.year))]
+        .sort((a, b) => b - a)
       
       // Fetch registered folders from DB (not cached - DB is fast)
       const db = await getDb()

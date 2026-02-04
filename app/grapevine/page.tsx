@@ -8,9 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 // import { SubscriptionDriveSection } from "./subscription-drive-section"
 // import { ReCaptchaProvider } from "@/components/recaptcha-provider"
 
-export const dynamic = "force-dynamic"
-
-export default async function GrapevinePage() {
+export default function GrapevinePage() {
   // const activeDrive = await getActiveDrive()
   // const leaderboard = activeDrive ? await getDriveLeaderboard(activeDrive.id) : []
   return (

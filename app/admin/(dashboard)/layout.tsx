@@ -3,18 +3,23 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { CalendarDays, LogOut, Shield, TrendingUp, Mic, Files } from "lucide-react"
+import { createRequestLogger } from "@/lib/logger"
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const session = await auth()
+  const log = createRequestLogger("/admin", "GET")
+  const session = await log.tracker.time("auth", () => auth())
 
   // If not authenticated, redirect to login
   if (!session?.user) {
+    log.warn("Admin access denied")
+    log.tracker.finish(302)
     redirect("/admin/login")
   }
+  log.tracker.finish(200)
 
   return (
     <div className="min-h-screen bg-background">

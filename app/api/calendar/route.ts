@@ -1,9 +1,13 @@
 import { getDb } from "@/lib/db"
 import { events, eventExceptions, type Event, type EventException } from "@/lib/db/schema"
-import { eq, asc, gte, and, or, isNull } from "drizzle-orm"
+import { eq, asc, gte, and, or, isNull, inArray } from "drizzle-orm"
 import { parseWeeklyPattern, parseMonthlyPattern } from "@/lib/utils/recurrence"
+import { withEdgeCache } from "@/lib/cache/edge-cache"
+import { createRequestLogger } from "@/lib/logger"
 
 export const dynamic = "force-dynamic"
+const CACHE_KEY = "calendar:ical"
+const CACHE_TTL = 60 * 10 // 10 minutes
 
 /**
  * Escape special characters for iCal text fields
@@ -146,19 +150,22 @@ function foldLine(line: string): string {
   return lines.join("\r\n")
 }
 
-export async function GET(request: Request) {
-  try {
-    const db = await getDb()
+async function buildCalendar(
+  log: ReturnType<typeof createRequestLogger>,
+  requestUrl: string
+): Promise<string> {
+  const db = await log.tracker.time("db.connect", () => getDb())
 
-    // Get today's date in Central time (Area 36 is in Minnesota)
-    const today = new Date()
-    const todayStr = today.toLocaleDateString("en-CA", { timeZone: "America/Chicago" })
+  // Get today's date in Central time (Area 36 is in Minnesota)
+  const today = new Date()
+  const todayStr = today.toLocaleDateString("en-CA", { timeZone: "America/Chicago" })
 
-    // Fetch approved events from today onwards
-    // For recurring events, we need events where either:
-    // - The recurUntil date is >= today (recurring series still active)
-    // - Or it's not recurring and the date/endDate is >= today
-    const approvedEvents = await db
+  // Fetch approved events from today onwards
+  // For recurring events, we need events where either:
+  // - The recurUntil date is >= today (recurring series still active)
+  // - Or it's not recurring and the date/endDate is >= today
+  const approvedEvents = await log.tracker.time("db.events", () =>
+    db
       .select()
       .from(events)
       .where(
@@ -185,214 +192,240 @@ export async function GET(request: Request) {
         )
       )
       .orderBy(asc(events.date))
+  )
 
-    // Get all exceptions for recurring events
-    const recurringEventIds = approvedEvents
-      .filter((e) => e.isRecurring)
-      .map((e) => e.id)
+  // Get all exceptions for recurring events
+  const recurringEventIds = approvedEvents
+    .filter((e) => e.isRecurring)
+    .map((e) => e.id)
 
-    const allExceptions: EventException[] = []
-    if (recurringEventIds.length > 0) {
-      for (const eventId of recurringEventIds) {
-        const exceptions = await db
+  const allExceptions: EventException[] = recurringEventIds.length > 0
+    ? await log.tracker.time("db.exceptions", () =>
+        db
           .select()
           .from(eventExceptions)
-          .where(eq(eventExceptions.eventId, eventId))
-        allExceptions.push(...exceptions)
-      }
+          .where(inArray(eventExceptions.eventId, recurringEventIds))
+      )
+    : []
+
+  // Build exception map by event ID
+  const exceptionsByEvent = new Map<string, EventException[]>()
+  for (const exception of allExceptions) {
+    const existing = exceptionsByEvent.get(exception.eventId) || []
+    existing.push(exception)
+    exceptionsByEvent.set(exception.eventId, existing)
+  }
+
+  // Get domain from request for UID generation
+  const url = new URL(requestUrl)
+  const domain = url.hostname || "area36.org"
+
+  // Build iCal content
+  const lines: string[] = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Area 36 Southern Minnesota A.A.//Events Calendar//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    "X-WR-CALNAME:Area 36 A.A. Events",
+    "X-WR-TIMEZONE:America/Chicago",
+  ]
+
+  // Add VTIMEZONE for America/Chicago
+  lines.push(
+    "BEGIN:VTIMEZONE",
+    "TZID:America/Chicago",
+    "BEGIN:DAYLIGHT",
+    "TZOFFSETFROM:-0600",
+    "TZOFFSETTO:-0500",
+    "TZNAME:CDT",
+    "DTSTART:19700308T020000",
+    "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU",
+    "END:DAYLIGHT",
+    "BEGIN:STANDARD",
+    "TZOFFSETFROM:-0500",
+    "TZOFFSETTO:-0600",
+    "TZNAME:CST",
+    "DTSTART:19701101T020000",
+    "RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU",
+    "END:STANDARD",
+    "END:VTIMEZONE"
+  )
+
+  // Add each event as a VEVENT
+  for (const event of approvedEvents) {
+    const uid = generateUID(event.id, domain)
+    const dtstamp = new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z"
+    const eventExceptionsList = exceptionsByEvent.get(event.id) || []
+
+    lines.push("BEGIN:VEVENT")
+    lines.push(`UID:${uid}`)
+    lines.push(`DTSTAMP:${dtstamp}`)
+
+    // Handle start date/time
+    const startDateTime = formatICalDateTime(event.date, event.startTime)
+    lines.push(`DTSTART;TZID=${event.timezone}:${startDateTime}`)
+
+    // Handle end date/time
+    if (event.endTime) {
+      const endDate = event.endDate || event.date
+      const endDateTime = formatICalDateTime(endDate, event.endTime)
+      lines.push(`DTEND;TZID=${event.timezone}:${endDateTime}`)
+    } else if (event.endDate) {
+      // Multi-day event without specific end time - use end of day
+      const endDateTime = formatICalDateTime(event.endDate, "23:59")
+      lines.push(`DTEND;TZID=${event.timezone}:${endDateTime}`)
     }
 
-    // Build exception map by event ID
-    const exceptionsByEvent = new Map<string, EventException[]>()
-    for (const exception of allExceptions) {
-      const existing = exceptionsByEvent.get(exception.eventId) || []
-      existing.push(exception)
-      exceptionsByEvent.set(exception.eventId, existing)
+    // Add RRULE for recurring events
+    const rrule = generateRRule(event)
+    if (rrule) {
+      lines.push(rrule)
     }
 
-    // Get domain from request for UID generation
-    const url = new URL(request.url)
-    const domain = url.hostname || "area36.org"
+    // Add EXDATE for cancelled occurrences of recurring events
+    const exdates = generateExDates(event, eventExceptionsList)
+    for (const exdate of exdates) {
+      lines.push(exdate)
+    }
 
-    // Build iCal content
-    const lines: string[] = [
-      "BEGIN:VCALENDAR",
-      "VERSION:2.0",
-      "PRODID:-//Area 36 Southern Minnesota A.A.//Events Calendar//EN",
-      "CALSCALE:GREGORIAN",
-      "METHOD:PUBLISH",
-      "X-WR-CALNAME:Area 36 A.A. Events",
-      "X-WR-TIMEZONE:America/Chicago",
-    ]
+    // Summary (title)
+    lines.push(foldLine(`SUMMARY:${escapeICalText(event.title)}`))
 
-    // Add VTIMEZONE for America/Chicago
-    lines.push(
-      "BEGIN:VTIMEZONE",
-      "TZID:America/Chicago",
-      "BEGIN:DAYLIGHT",
-      "TZOFFSETFROM:-0600",
-      "TZOFFSETTO:-0500",
-      "TZNAME:CDT",
-      "DTSTART:19700308T020000",
-      "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU",
-      "END:DAYLIGHT",
-      "BEGIN:STANDARD",
-      "TZOFFSETFROM:-0500",
-      "TZOFFSETTO:-0600",
-      "TZNAME:CST",
-      "DTSTART:19701101T020000",
-      "RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU",
-      "END:STANDARD",
-      "END:VTIMEZONE"
+    // Description
+    let description = event.description
+    if (event.meetingLink) {
+      description += `\\n\\nOnline Meeting Link: ${event.meetingLink}`
+    }
+    lines.push(foldLine(`DESCRIPTION:${escapeICalText(description)}`))
+
+    // Location
+    if (event.address) {
+      lines.push(foldLine(`LOCATION:${escapeICalText(event.address)}`))
+    } else if (event.locationType === "online" && event.meetingLink) {
+      lines.push(foldLine(`LOCATION:${escapeICalText(event.meetingLink)}`))
+    }
+
+    // URL for the event (flyer if available)
+    if (event.flyerUrl) {
+      lines.push(`URL:${event.flyerUrl}`)
+    }
+
+    // Categories based on event type
+    if (event.type) {
+      lines.push(`CATEGORIES:${event.type}`)
+    }
+
+    // Status
+    lines.push("STATUS:CONFIRMED")
+
+    lines.push("END:VEVENT")
+
+    // Add separate VEVENT entries for modified occurrences (with RECURRENCE-ID)
+    const modifiedExceptions = eventExceptionsList.filter(
+      (e) => e.exceptionType === "modified"
     )
-
-    // Add each event as a VEVENT
-    for (const event of approvedEvents) {
-      const uid = generateUID(event.id, domain)
-      const dtstamp = new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z"
-      const eventExceptionsList = exceptionsByEvent.get(event.id) || []
+    for (const exception of modifiedExceptions) {
+      const occurrenceUid = generateOccurrenceUID(event.id, exception.occurrenceDate, domain)
+      const recurrenceId = formatICalDateTime(exception.occurrenceDate, event.startTime)
 
       lines.push("BEGIN:VEVENT")
-      lines.push(`UID:${uid}`)
+      lines.push(`UID:${uid}`) // Same UID as parent event
       lines.push(`DTSTAMP:${dtstamp}`)
+      lines.push(`RECURRENCE-ID;TZID=${event.timezone}:${recurrenceId}`)
 
-      // Handle start date/time
-      const startDateTime = formatICalDateTime(event.date, event.startTime)
-      lines.push(`DTSTART;TZID=${event.timezone}:${startDateTime}`)
+      // Use exception values if provided, otherwise fall back to parent event
+      const modTitle = exception.title || event.title
+      const modStartTime = exception.startTime ?? event.startTime
+      const modEndTime = exception.endTime ?? event.endTime
+      const modEndDate = exception.endDate || event.endDate
+      const modAddress = exception.address ?? event.address
+      const modMeetingLink = exception.meetingLink ?? event.meetingLink
+      const modDescription = exception.description || event.description
+      const modLocationType = exception.locationType || event.locationType
 
-      // Handle end date/time
-      if (event.endTime) {
-        const endDate = event.endDate || event.date
-        const endDateTime = formatICalDateTime(endDate, event.endTime)
-        lines.push(`DTEND;TZID=${event.timezone}:${endDateTime}`)
-      } else if (event.endDate) {
-        // Multi-day event without specific end time - use end of day
-        const endDateTime = formatICalDateTime(event.endDate, "23:59")
-        lines.push(`DTEND;TZID=${event.timezone}:${endDateTime}`)
+      // Start date/time (occurrence date with potentially modified time)
+      const modStartDateTime = formatICalDateTime(exception.occurrenceDate, modStartTime)
+      lines.push(`DTSTART;TZID=${event.timezone}:${modStartDateTime}`)
+
+      // End date/time
+      if (modEndTime) {
+        const endDate = modEndDate || exception.occurrenceDate
+        const modEndDateTime = formatICalDateTime(endDate, modEndTime)
+        lines.push(`DTEND;TZID=${event.timezone}:${modEndDateTime}`)
+      } else if (modEndDate) {
+        const modEndDateTime = formatICalDateTime(modEndDate, "23:59")
+        lines.push(`DTEND;TZID=${event.timezone}:${modEndDateTime}`)
       }
 
-      // Add RRULE for recurring events
-      const rrule = generateRRule(event)
-      if (rrule) {
-        lines.push(rrule)
-      }
-
-      // Add EXDATE for cancelled occurrences of recurring events
-      const exdates = generateExDates(event, eventExceptionsList)
-      for (const exdate of exdates) {
-        lines.push(exdate)
-      }
-
-      // Summary (title)
-      lines.push(foldLine(`SUMMARY:${escapeICalText(event.title)}`))
+      // Summary
+      lines.push(foldLine(`SUMMARY:${escapeICalText(modTitle)}`))
 
       // Description
-      let description = event.description
-      if (event.meetingLink) {
-        description += `\\n\\nOnline Meeting Link: ${event.meetingLink}`
+      let modDescriptionFull = modDescription
+      if (modMeetingLink) {
+        modDescriptionFull += `\\n\\nOnline Meeting Link: ${modMeetingLink}`
       }
-      lines.push(foldLine(`DESCRIPTION:${escapeICalText(description)}`))
+      lines.push(foldLine(`DESCRIPTION:${escapeICalText(modDescriptionFull)}`))
 
       // Location
-      if (event.address) {
-        lines.push(foldLine(`LOCATION:${escapeICalText(event.address)}`))
-      } else if (event.locationType === "online" && event.meetingLink) {
-        lines.push(foldLine(`LOCATION:${escapeICalText(event.meetingLink)}`))
+      if (modAddress) {
+        lines.push(foldLine(`LOCATION:${escapeICalText(modAddress)}`))
+      } else if (modLocationType === "online" && modMeetingLink) {
+        lines.push(foldLine(`LOCATION:${escapeICalText(modMeetingLink)}`))
       }
 
-      // URL for the event (flyer if available)
-      if (event.flyerUrl) {
-        lines.push(`URL:${event.flyerUrl}`)
-      }
-
-      // Categories based on event type
+      // Categories
       if (event.type) {
         lines.push(`CATEGORIES:${event.type}`)
       }
 
-      // Status
       lines.push("STATUS:CONFIRMED")
-
       lines.push("END:VEVENT")
-
-      // Add separate VEVENT entries for modified occurrences (with RECURRENCE-ID)
-      const modifiedExceptions = eventExceptionsList.filter(
-        (e) => e.exceptionType === "modified"
-      )
-      for (const exception of modifiedExceptions) {
-        const occurrenceUid = generateOccurrenceUID(event.id, exception.occurrenceDate, domain)
-        const recurrenceId = formatICalDateTime(exception.occurrenceDate, event.startTime)
-
-        lines.push("BEGIN:VEVENT")
-        lines.push(`UID:${uid}`) // Same UID as parent event
-        lines.push(`DTSTAMP:${dtstamp}`)
-        lines.push(`RECURRENCE-ID;TZID=${event.timezone}:${recurrenceId}`)
-
-        // Use exception values if provided, otherwise fall back to parent event
-        const modTitle = exception.title || event.title
-        const modStartTime = exception.startTime ?? event.startTime
-        const modEndTime = exception.endTime ?? event.endTime
-        const modEndDate = exception.endDate || event.endDate
-        const modAddress = exception.address ?? event.address
-        const modMeetingLink = exception.meetingLink ?? event.meetingLink
-        const modDescription = exception.description || event.description
-        const modLocationType = exception.locationType || event.locationType
-
-        // Start date/time (occurrence date with potentially modified time)
-        const modStartDateTime = formatICalDateTime(exception.occurrenceDate, modStartTime)
-        lines.push(`DTSTART;TZID=${event.timezone}:${modStartDateTime}`)
-
-        // End date/time
-        if (modEndTime) {
-          const endDate = modEndDate || exception.occurrenceDate
-          const modEndDateTime = formatICalDateTime(endDate, modEndTime)
-          lines.push(`DTEND;TZID=${event.timezone}:${modEndDateTime}`)
-        } else if (modEndDate) {
-          const modEndDateTime = formatICalDateTime(modEndDate, "23:59")
-          lines.push(`DTEND;TZID=${event.timezone}:${modEndDateTime}`)
-        }
-
-        // Summary
-        lines.push(foldLine(`SUMMARY:${escapeICalText(modTitle)}`))
-
-        // Description
-        let modDescriptionFull = modDescription
-        if (modMeetingLink) {
-          modDescriptionFull += `\\n\\nOnline Meeting Link: ${modMeetingLink}`
-        }
-        lines.push(foldLine(`DESCRIPTION:${escapeICalText(modDescriptionFull)}`))
-
-        // Location
-        if (modAddress) {
-          lines.push(foldLine(`LOCATION:${escapeICalText(modAddress)}`))
-        } else if (modLocationType === "online" && modMeetingLink) {
-          lines.push(foldLine(`LOCATION:${escapeICalText(modMeetingLink)}`))
-        }
-
-        // Categories
-        if (event.type) {
-          lines.push(`CATEGORIES:${event.type}`)
-        }
-
-        lines.push("STATUS:CONFIRMED")
-        lines.push("END:VEVENT")
-      }
     }
+  }
 
-    lines.push("END:VCALENDAR")
+  lines.push("END:VCALENDAR")
 
-    // Join with CRLF as per iCal spec
-    const icalContent = lines.join("\r\n")
+  // Join with CRLF as per iCal spec
+  const icalContent = lines.join("\r\n")
 
-    return new Response(icalContent, {
+  log.info("Calendar built", {
+    eventCount: approvedEvents.length,
+    exceptionCount: allExceptions.length,
+    recurringEvents: recurringEventIds.length,
+  })
+
+  return icalContent
+}
+
+export async function GET(request: Request) {
+  const log = createRequestLogger("/api/calendar", "GET")
+
+  try {
+    const { data, status } = await withEdgeCache(
+      CACHE_KEY,
+      () => buildCalendar(log, request.url),
+      { ttl: CACHE_TTL }
+    )
+
+    log.info("Calendar cache response", { cacheStatus: status })
+    log.tracker.finish(200)
+
+    return new Response(data, {
       headers: {
         "Content-Type": "text/calendar; charset=utf-8",
         "Content-Disposition": 'attachment; filename="area36-events.ics"',
-        "Cache-Control": "public, max-age=3600", // Cache for 1 hour
+        "Cache-Control": "public, max-age=300, stale-while-revalidate=3600",
+        "X-Request-Id": log.requestId,
       },
     })
   } catch (error) {
-    console.error("Calendar feed error:", error)
-    return new Response("Error generating calendar feed", { status: 500 })
+    log.error("Calendar feed error", error)
+    log.tracker.finish(500)
+    return new Response("Error generating calendar feed", {
+      status: 500,
+      headers: { "X-Request-Id": log.requestId },
+    })
   }
 }

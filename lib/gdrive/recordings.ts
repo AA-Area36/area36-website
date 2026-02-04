@@ -222,12 +222,12 @@ export async function getRecordings(
             listAllFiles(credentials, folder.id, { orderBy: "name desc" }),
           ])
 
-          const hasYearSubfolders = subfolders.some((sf) => /^20\d{2}$/.test(sf.name))
+          const yearSubfolders = subfolders.filter((sf) => /^20\d{2}$/.test(sf.name))
 
-          if (hasYearSubfolders) {
+          if (yearSubfolders.length > 0) {
             // Process all year subfolders in parallel
             const yearResults = await Promise.all(
-              subfolders.map(async (yearFolder) => {
+              yearSubfolders.map(async (yearFolder) => {
                 const files = await listAllFiles(credentials, yearFolder.id, {
                   orderBy: "name desc",
                 })
