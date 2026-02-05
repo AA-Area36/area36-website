@@ -255,3 +255,50 @@ export const fileMetadata = sqliteTable("file_metadata", {
 
 export type FileMetadata = typeof fileMetadata.$inferSelect
 export type NewFileMetadata = typeof fileMetadata.$inferInsert
+
+// Monitoring tables
+export const uptimeDaily = sqliteTable(
+  "uptime_daily",
+  {
+    day: text("day").notNull(),
+    endpoint: text("endpoint").notNull(),
+    checksTotal: integer("checks_total").notNull().default(0),
+    checksOk: integer("checks_ok").notNull().default(0),
+    latencyMsSum: integer("latency_ms_sum").notNull().default(0),
+    latencyMsMax: integer("latency_ms_max").notNull().default(0),
+    lastStatus: integer("last_status"),
+    lastCheckedAt: text("last_checked_at"),
+  },
+  (table) => [primaryKey({ columns: [table.day, table.endpoint] })]
+)
+
+export type UptimeDaily = typeof uptimeDaily.$inferSelect
+export type NewUptimeDaily = typeof uptimeDaily.$inferInsert
+
+export const errorsDaily = sqliteTable(
+  "errors_daily",
+  {
+    day: text("day").notNull(),
+    errorKind: text("error_kind").notNull(),
+    fingerprint: text("fingerprint").notNull(),
+    count: integer("count").notNull().default(0),
+    sampleMessage: text("sample_message"),
+    sampleRoute: text("sample_route"),
+    lastSeenAt: text("last_seen_at"),
+  },
+  (table) => [primaryKey({ columns: [table.day, table.errorKind, table.fingerprint] })]
+)
+
+export type ErrorsDaily = typeof errorsDaily.$inferSelect
+export type NewErrorsDaily = typeof errorsDaily.$inferInsert
+
+export const reportsMonthly = sqliteTable("reports_monthly", {
+  month: text("month").primaryKey(),
+  generatedAt: text("generated_at").notNull(),
+  subject: text("subject").notNull(),
+  r2KeyHtml: text("r2_key_html"),
+  r2KeyJson: text("r2_key_json"),
+})
+
+export type ReportsMonthly = typeof reportsMonthly.$inferSelect
+export type NewReportsMonthly = typeof reportsMonthly.$inferInsert

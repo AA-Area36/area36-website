@@ -5,6 +5,7 @@ import {
   getGDriveCredentials,
 } from "@/lib/recordings/access"
 import { createRequestLogger } from "@/lib/logger"
+import { recordError } from "@/lib/monitoring/errors"
 
 // Use nodejs runtime for better compatibility with Cloudflare Workers via OpenNext
 // Edge runtime causes token caching issues and CPU limit problems
@@ -77,6 +78,11 @@ export async function GET(
     if (!driveResponse.ok) {
       const errorText = await driveResponse.text()
       log.error("Drive API error", new Error(`${driveResponse.status}: ${errorText}`))
+      void recordError({
+        kind: "FETCH_FAILED",
+        route: "/api/recordings/stream",
+        error: new Error(`${driveResponse.status}: ${errorText}`),
+      })
       log.tracker.finish(driveResponse.status)
       return NextResponse.json(
         { error: "Failed to fetch audio" },
@@ -129,6 +135,7 @@ export async function GET(
     })
   } catch (error) {
     log.error("Error streaming audio", error)
+    void recordError({ kind: "FETCH_FAILED", route: "/api/recordings/stream", error })
     log.tracker.finish(500)
     return NextResponse.json({ error: "Stream failed" }, { status: 500 })
   }

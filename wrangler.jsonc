@@ -40,6 +40,10 @@
     {
       "binding": "DRIVE_IMAGES",
       "bucket_name": "area36-drive-confirmations"
+    },
+    {
+      "binding": "REPORTS_BUCKET",
+      "bucket_name": "area36-reports"
     }
   ]
 }

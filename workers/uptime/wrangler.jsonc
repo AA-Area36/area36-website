@@ -1,0 +1,20 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "area36-uptime",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-15",
+  "triggers": {
+    "crons": ["0 * * * *"]
+  },
+  "vars": {
+    "SITE_BASE_URL": "https://area36.org",
+    "UPTIME_ENDPOINTS": "[\"/\",\"/api/healthz\",\"/api/gdrive/newsletters\"]"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "area36-website",
+      "database_id": "646074b4-8660-4ab4-98aa-54511636bc0e"
+    }
+  ]
+}

@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint .",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare build && wrangler deploy"
+    "deploy": "opennextjs-cloudflare build && wrangler deploy",
+    "deploy:uptime": "wrangler deploy -c workers/uptime/wrangler.jsonc",
+    "deploy:monthly-report": "wrangler deploy -c workers/monthly-report/wrangler.jsonc"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

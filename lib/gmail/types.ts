@@ -12,6 +12,10 @@ export interface EmailParams {
   to: string
   subject: string
   body: string
+  /** Optional plain text body when sending multipart content */
+  textBody?: string
+  /** Optional HTML body (will be sent as multipart/alternative) */
+  htmlBody?: string
   /** Optional reply-to address (e.g., the contact form submitter's email) */
   replyTo?: string
 }

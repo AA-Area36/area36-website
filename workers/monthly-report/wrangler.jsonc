@@ -1,0 +1,31 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "area36-monthly-report",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-15",
+  "triggers": {
+    "crons": ["0 14 1 * *"]
+  },
+  "vars": {
+    "SITE_BASE_URL": "https://area36.org",
+    "GMAIL_SENDER_EMAIL": "webmaster@area36.org",
+    "GDRIVE_NEWSLETTERS_FOLDER_ID": "1ux5PcUF8KkROir3GrL_4F6POPz81_rQN",
+    "GDRIVE_RESOURCES_FOLDER_ID": "1SxpurNxZUh5tObUo2JxqMSHYMjDqdoyb",
+    "GDRIVE_RECORDINGS_FOLDER_ID": "1Br1EC8YmVz5yX4UsmTkTlKXUSKCufakD",
+    "GDRIVE_COMMITTEES_FOLDER_ID": "1gtwNjoFO3phENdJ-aCXq0ps7sTDDen0U",
+    "GDRIVE_SERVICE_RESOURCES_FOLDER_ID": "1O9ec6xM1Z_XXlU3C53-eX6XBDKWA82Nx"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "area36-website",
+      "database_id": "646074b4-8660-4ab4-98aa-54511636bc0e"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "REPORTS_BUCKET",
+      "bucket_name": "area36-reports"
+    }
+  ]
+}

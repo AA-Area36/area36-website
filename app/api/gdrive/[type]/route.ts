@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { enrichResourcesWithMetadata, enrichCommitteeFilesWithMetadata, getFileMetadataByDriveIds } from "@/lib/files/metadata"
 import { getDb } from "@/lib/db"
 import { recordingFolders } from "@/lib/db/schema"
+import { recordError } from "@/lib/monitoring/errors"
 
 // Valid types for the API
 type GDriveType = 
@@ -441,6 +442,7 @@ export async function GET(
       error: errorMessage,
       stack: errorStack,
     })
+    void recordError({ kind: "FETCH_FAILED", route: `/api/gdrive/${type}`, error })
 
     return NextResponse.json(
       { error: errorMessage },

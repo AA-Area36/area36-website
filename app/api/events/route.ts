@@ -14,6 +14,7 @@ import { getEventsForDateRange } from "@/lib/utils/event-queries"
 import type { EventWithRelations, DisplayEvent } from "@/lib/types/recurrence"
 import { withEdgeCache } from "@/lib/cache/edge-cache"
 import { createRequestLogger } from "@/lib/logger"
+import { recordError } from "@/lib/monitoring/errors"
 
 const CACHE_KEY = "events:approved"
 const CACHE_TTL = 60 * 5 // 5 minutes
@@ -141,6 +142,7 @@ export async function GET() {
     })
   } catch (error) {
     log.error("Events API failed", error)
+    void recordError({ kind: "D1_QUERY_FAILED", route: "/api/events", error })
     log.tracker.finish(500)
 
     const message = error instanceof Error ? error.message : "Unknown error"

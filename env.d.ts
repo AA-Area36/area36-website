@@ -20,10 +20,11 @@ declare global {
 }
 
 // Cloudflare environment bindings
-interface CloudflareEnv {
+  interface CloudflareEnv {
   DB: D1Database
   ASSETS: Fetcher
   DRIVE_IMAGES: R2Bucket
+  REPORTS_BUCKET: R2Bucket
   AUTH_SECRET: string
   AUTH_GOOGLE_ID: string
   AUTH_GOOGLE_SECRET: string

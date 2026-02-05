@@ -56,23 +56,44 @@ function createEmailMessage(
   from: string,
   to: string,
   subject: string,
-  body: string,
-  replyTo?: string
+  params: EmailParams
 ): string {
   const headers = [
     `From: ${from}`,
     `To: ${to}`,
     `Subject: ${subject}`,
     "MIME-Version: 1.0",
-    "Content-Type: text/plain; charset=UTF-8",
   ]
 
-  if (replyTo) {
-    headers.push(`Reply-To: ${replyTo}`)
+  if (params.replyTo) {
+    headers.push(`Reply-To: ${params.replyTo}`)
   }
 
-  // RFC 2822 format: headers, blank line, body
-  return headers.join("\r\n") + "\r\n\r\n" + body
+  if (params.htmlBody) {
+    const boundary = `boundary_${Math.random().toString(36).slice(2)}`
+    headers.push(`Content-Type: multipart/alternative; boundary=\"${boundary}\"`)
+
+    const textBody = params.textBody ?? params.body ?? ""
+    const htmlBody = params.htmlBody
+
+    const parts = [
+      `--${boundary}`,
+      "Content-Type: text/plain; charset=UTF-8",
+      "",
+      textBody,
+      `--${boundary}`,
+      "Content-Type: text/html; charset=UTF-8",
+      "",
+      htmlBody,
+      `--${boundary}--`,
+      "",
+    ]
+
+    return headers.join("\r\n") + "\r\n\r\n" + parts.join("\r\n")
+  }
+
+  headers.push("Content-Type: text/plain; charset=UTF-8")
+  return headers.join("\r\n") + "\r\n\r\n" + params.body
 }
 
 /**
@@ -91,8 +112,7 @@ export async function sendEmail(
       credentials.senderEmail,
       params.to,
       params.subject,
-      params.body,
-      params.replyTo
+      params
     )
 
     // Encode as base64url

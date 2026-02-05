@@ -4,6 +4,7 @@ import { eq, asc, gte, and, or, isNull, inArray } from "drizzle-orm"
 import { parseWeeklyPattern, parseMonthlyPattern } from "@/lib/utils/recurrence"
 import { withEdgeCache } from "@/lib/cache/edge-cache"
 import { createRequestLogger } from "@/lib/logger"
+import { recordError } from "@/lib/monitoring/errors"
 
 export const dynamic = "force-dynamic"
 const CACHE_KEY = "calendar:ical"
@@ -422,6 +423,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     log.error("Calendar feed error", error)
+    void recordError({ kind: "D1_QUERY_FAILED", route: "/api/calendar", error })
     log.tracker.finish(500)
     return new Response("Error generating calendar feed", {
       status: 500,
