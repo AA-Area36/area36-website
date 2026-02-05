@@ -1,6 +1,6 @@
 type HashParams = {
   iterations: number
-  salt: Uint8Array
+  salt: ArrayBuffer
 }
 
 const textEncoder = new TextEncoder()
@@ -56,10 +56,14 @@ async function deriveKey(plain: string, params: HashParams): Promise<Uint8Array>
   return new Uint8Array(bits)
 }
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+}
+
 export async function hashPassword(plain: string): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH_BYTES))
   const iterations = DEFAULT_ITERATIONS
-  const hash = await deriveKey(plain, { iterations, salt })
+  const hash = await deriveKey(plain, { iterations, salt: toArrayBuffer(salt) })
 
   const saltB64 = base64UrlEncode(salt)
   const hashB64 = base64UrlEncode(hash)
@@ -80,7 +84,7 @@ export async function verifyPassword(plain: string, stored: string): Promise<boo
   const salt = base64UrlDecode(parts[2])
   const expected = parts[3]
 
-  const derived = await deriveKey(plain, { iterations, salt })
+  const derived = await deriveKey(plain, { iterations, salt: toArrayBuffer(salt) })
   const derivedB64 = base64UrlEncode(derived)
   return timingSafeEqual(derivedB64, expected)
 }
