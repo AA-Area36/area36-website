@@ -10,6 +10,7 @@ declare global {
       NEXT_PUBLIC_RECAPTCHA_SITE_KEY: string
       NEXTAUTH_SECRET?: string
       UNLOCK_COOKIE_SECRET?: string
+      UPLOAD_TOKEN_SECRET?: string
     }
   }
 
@@ -30,6 +31,7 @@ declare global {
   AUTH_SECRET: string
   NEXTAUTH_SECRET?: string
   UNLOCK_COOKIE_SECRET?: string
+  UPLOAD_TOKEN_SECRET?: string
   AUTH_GOOGLE_ID: string
   AUTH_GOOGLE_SECRET: string
   RECAPTCHA_SECRET_KEY: string
