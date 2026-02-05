@@ -57,7 +57,9 @@ async function deriveKey(plain: string, params: HashParams): Promise<Uint8Array>
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+  const copy = new Uint8Array(bytes.byteLength)
+  copy.set(bytes)
+  return copy.buffer
 }
 
 export async function hashPassword(plain: string): Promise<string> {

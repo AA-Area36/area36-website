@@ -8,6 +8,8 @@ declare global {
       AUTH_GOOGLE_SECRET: string
       RECAPTCHA_SECRET_KEY: string
       NEXT_PUBLIC_RECAPTCHA_SITE_KEY: string
+      NEXTAUTH_SECRET?: string
+      UNLOCK_COOKIE_SECRET?: string
     }
   }
 
@@ -26,6 +28,8 @@ declare global {
   DRIVE_IMAGES: R2Bucket
   REPORTS_BUCKET: R2Bucket
   AUTH_SECRET: string
+  NEXTAUTH_SECRET?: string
+  UNLOCK_COOKIE_SECRET?: string
   AUTH_GOOGLE_ID: string
   AUTH_GOOGLE_SECRET: string
   RECAPTCHA_SECRET_KEY: string
