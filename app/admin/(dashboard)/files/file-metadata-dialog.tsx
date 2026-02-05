@@ -32,6 +32,7 @@ export function FileMetadataDialog({
   const [displayName, setDisplayName] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [hasPassword, setHasPassword] = React.useState(false)
+  const [hasExistingPassword, setHasExistingPassword] = React.useState(false)
   const [category, setCategory] = React.useState("")
   const [isPending, startTransition] = useTransition()
   const [isDeleting, startDeleteTransition] = useTransition()
@@ -42,6 +43,7 @@ export function FileMetadataDialog({
     if (file && open) {
       setDisplayName(file.displayName || file.name.replace(/\.[^.]+$/, ""))
       setHasPassword(file.isProtected || false)
+      setHasExistingPassword(!!file.isProtected)
       setPassword("")
       setCategory(file.category || "")
       setError(null)
@@ -52,9 +54,7 @@ export function FileMetadataDialog({
           if (meta) {
             setDisplayName(meta.displayName)
             setHasPassword(!!meta.password)
-            if (meta.password) {
-              setPassword(meta.password)
-            }
+            setHasExistingPassword(!!meta.password)
             setCategory(meta.category || "")
           }
         })
@@ -72,7 +72,7 @@ export function FileMetadataDialog({
       return
     }
 
-    if (hasPassword && !password.trim()) {
+    if (hasPassword && !password.trim() && !hasExistingPassword) {
       setError("Password is required when protection is enabled")
       return
     }
@@ -83,7 +83,7 @@ export function FileMetadataDialog({
           driveId: file.id,
           parentFolderId: file.parentId,
           displayName: displayName.trim(),
-          password: hasPassword ? password.trim() : null,
+          password: hasPassword ? (password.trim() ? password.trim() : undefined) : null,
           category: category.trim() || null,
         })
         onOpenChange(false)
@@ -177,7 +177,7 @@ export function FileMetadataDialog({
                   type="text"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter password"
+                  placeholder={hasExistingPassword ? "Leave blank to keep existing password" : "Enter password"}
                 />
               </div>
             )}

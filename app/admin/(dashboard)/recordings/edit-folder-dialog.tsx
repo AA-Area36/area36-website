@@ -19,7 +19,7 @@ export function EditFolderDialog({ folder }: EditFolderDialogProps) {
   const [error, setError] = useState<string | null>(null)
   
   const [folderName, setFolderName] = useState(folder.folderName)
-  const [password, setPassword] = useState(folder.password)
+  const [password, setPassword] = useState("")
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -75,13 +75,13 @@ export function EditFolderDialog({ folder }: EditFolderDialogProps) {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="edit-password">Password *</Label>
+            <Label htmlFor="edit-password">New Password</Label>
             <Input
               id="edit-password"
               type="text"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              required
+              placeholder="Leave blank to keep existing password"
             />
           </div>
           <div className="flex justify-end gap-3 pt-4">

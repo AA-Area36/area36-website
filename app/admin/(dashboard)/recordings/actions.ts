@@ -76,12 +76,13 @@ export async function updateRecordingFolder(
 
   try {
     const db = await log.tracker.time("db.connect", () => getDb())
-    const updatePassword = data.password ? await hashPassword(data.password) : undefined
+    const trimmedPassword = data.password?.trim() || ""
+    const updatePassword = trimmedPassword ? await hashPassword(trimmedPassword) : undefined
     await log.tracker.time("db.update", () =>
       db.update(recordingFolders)
         .set({
           ...(data.folderName && { folderName: data.folderName }),
-          ...(data.password && { password: updatePassword }),
+          ...(updatePassword && { password: updatePassword }),
           updatedAt: new Date().toISOString(),
         })
         .where(eq(recordingFolders.id, id))
