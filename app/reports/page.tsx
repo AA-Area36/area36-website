@@ -55,18 +55,17 @@ export default async function ReportsPage() {
                       </div>
                       <div className="flex flex-wrap gap-3 text-sm">
                         <Link
-                          className="text-primary hover:underline"
-                          href={`/api/reports/${report.month}?format=html`}
-                          target="_blank"
+                          className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-primary-foreground hover:bg-primary/90 transition-colors"
+                          href={`/reports/${report.month}`}
                         >
-                          View HTML
+                          View Report
                         </Link>
                         <Link
                           className="text-primary hover:underline"
                           href={`/api/reports/${report.month}?format=json`}
                           target="_blank"
                         >
-                          View JSON
+                          Download JSON
                         </Link>
                       </div>
                     </CardContent>

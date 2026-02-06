@@ -53,14 +53,19 @@ export default async function AdminReportsPage() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
+                    <Button asChild size="sm">
+                      <Link href={`/admin/reports/${report.month}`}>
+                        View Report
+                      </Link>
+                    </Button>
                     <Button asChild variant="outline" size="sm">
                       <Link href={`/api/reports/${report.month}?format=html`} target="_blank">
-                        View HTML
+                        Raw HTML
                       </Link>
                     </Button>
                     <Button asChild variant="outline" size="sm">
                       <Link href={`/api/reports/${report.month}?format=json`} target="_blank">
-                        View JSON
+                        Raw JSON
                       </Link>
                     </Button>
                   </div>

@@ -25,7 +25,8 @@
   "r2_buckets": [
     {
       "binding": "REPORTS_BUCKET",
-      "bucket_name": "area36-reports"
+      "bucket_name": "area36-reports",
+      "preview_bucket_name": "area36-reports-preview"
     }
   ]
 }

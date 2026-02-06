@@ -50,5 +50,8 @@ next-env.d.ts
 *.swp
 *.swo
 
+# AI assistants
+.opencode/
+
 # OS
 Thumbs.db
