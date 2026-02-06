@@ -18,7 +18,7 @@ export default async function LoginPage({
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Admin Sign In</CardTitle>
           <CardDescription>
-            Sign in with your @area36.org Google account to access the admin panel.
+            Sign in with your approved Area 36 Google account to access the admin panel.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -27,7 +27,7 @@ export default async function LoginPage({
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span>
                 {error === "AccessDenied"
-                  ? "Access denied. Only @area36.org emails are allowed."
+                  ? "Access denied. Only approved Area 36 admin accounts are allowed."
                   : "An error occurred during sign in. Please try again."}
               </span>
             </div>
@@ -61,7 +61,7 @@ export default async function LoginPage({
             </Button>
           </form>
           <p className="text-xs text-center text-muted-foreground">
-            Only Area 36 administrators with @area36.org email addresses can access this panel.
+            Approved accounts: members of area36-internal@area36.org, webmaster@area36.org, alttechnology@area36.org.
           </p>
         </CardContent>
       </Card>

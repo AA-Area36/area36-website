@@ -51,6 +51,13 @@ export interface GitHubCommit {
   }
 }
 
+export interface WorkerErrorBreakdown {
+  scriptThrewException: number
+  exceededResources: number
+  internalError: number
+  clientDisconnected: number
+}
+
 export interface CloudflareMetrics {
   workers: {
     requests: number | null
@@ -60,6 +67,7 @@ export interface CloudflareMetrics {
     cpuTimeP99: number | null
     durationP50: number | null
     durationP99: number | null
+    errorBreakdown?: WorkerErrorBreakdown
     error?: string
   }
   d1: {
@@ -102,7 +110,11 @@ export interface ReportData {
   drive: DriveDelta[]
   cloudflare: CloudflareMetrics
   github: {
-    commits: { totalCount: number; sample: GitHubCommit[] }
+    commits: { 
+      totalCount: number
+      sample: GitHubCommit[]  // For email (5 commits)
+      all?: GitHubCommit[]    // For web (all commits)
+    }
     error?: string
   }
   uptime: UptimeRow[]

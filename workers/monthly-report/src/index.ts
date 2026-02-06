@@ -76,6 +76,13 @@ interface EventDetails {
   }
 }
 
+interface WorkerErrorBreakdown {
+  scriptThrewException: number
+  exceededResources: number
+  internalError: number
+  clientDisconnected: number
+}
+
 interface FlattenedCloudflare {
   workers: {
     requests: number | null
@@ -85,6 +92,7 @@ interface FlattenedCloudflare {
     cpuTimeP99: number | null
     durationP50: number | null
     durationP99: number | null
+    errorBreakdown?: WorkerErrorBreakdown
     error?: string
   }
   d1: {
@@ -114,6 +122,18 @@ function getPreviousMonthRange(now = new Date()) {
   return {
     start: firstOfPrevMonth,
     end: firstOfThisMonth,
+    monthKey,
+  }
+}
+
+// For testing: get current month range (month-to-date)
+function getCurrentMonthRange(now = new Date()) {
+  const firstOfThisMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+  const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1))
+  const monthKey = firstOfThisMonth.toISOString().slice(0, 7)
+  return {
+    start: firstOfThisMonth,
+    end: tomorrow,
     monthKey,
   }
 }
@@ -183,43 +203,36 @@ async function fetchGitHubCommits(token: string | undefined, start: Date, end: D
     per_page: "100",
   })
 
-  const firstUrl = `${baseUrl}?${params.toString()}`
-  const firstResponse = await fetch(firstUrl, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      "User-Agent": "area36-monthly-report",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  })
+  const allCommits: GitHubCommit[] = []
+  let url: string | null = `${baseUrl}?${params.toString()}`
 
-  if (!firstResponse.ok) {
-    const text = await firstResponse.text()
-    throw new Error(`GitHub API error ${firstResponse.status}: ${text}`)
-  }
-
-  const firstPage = (await firstResponse.json()) as GitHubCommit[]
-  const links = parseLinkHeader(firstResponse.headers.get("Link"))
-
-  let totalCount = firstPage.length
-  if (links.last) {
-    const lastUrl = links.last
-    const lastResponse = await fetch(lastUrl, {
+  // Paginate through all commits
+  while (url) {
+    const response = await fetch(url, {
       headers: {
         Accept: "application/vnd.github+json",
         "User-Agent": "area36-monthly-report",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     })
-    if (lastResponse.ok) {
-      const lastPage = (await lastResponse.json()) as GitHubCommit[]
-      const lastPageNum = Number(new URL(lastUrl).searchParams.get("page") || "1")
-      totalCount = (lastPageNum - 1) * 100 + lastPage.length
+
+    if (!response.ok) {
+      const text = await response.text()
+      throw new Error(`GitHub API error ${response.status}: ${text}`)
     }
+
+    const pageCommits = (await response.json()) as GitHubCommit[]
+    allCommits.push(...pageCommits)
+
+    // Check for next page
+    const links = parseLinkHeader(response.headers.get("Link"))
+    url = links.next || null
   }
 
   return {
-    totalCount,
-    sample: firstPage.slice(0, 5),
+    totalCount: allCommits.length,
+    sample: allCommits.slice(0, 5),  // For email (truncated)
+    all: allCommits,  // For web (all commits)
   }
 }
 
@@ -318,16 +331,33 @@ async function fetchCloudflareMetrics(token: string | undefined, accountId: stri
     }
   }`
 
+  // Worker error breakdown by status - groups by invocation outcome
+  const errorBreakdownQuery = `query($accountTag: String!, $since: DateTime!, $until: DateTime!) {
+    viewer {
+      accounts(filter: { accountTag: $accountTag }) {
+        workersInvocationsAdaptive(limit: 10000, filter: { datetime_geq: $since, datetime_leq: $until }) {
+          sum {
+            requests
+          }
+          dimensions {
+            status
+          }
+        }
+      }
+    }
+  }`
+
   // Note: Pages Functions use the same Workers runtime and are tracked with workersInvocationsAdaptive
   // There is no separate pagesFunctionsInvocationsAdaptive node
 
-  const [workers, d1, r2] = await Promise.all([
+  const [workers, d1, r2, errorBreakdown] = await Promise.all([
     fetchCloudflareQuery(token, accountId, workersQuery, variables),
     fetchCloudflareQuery(token, accountId, d1Query, variables),
     fetchCloudflareQuery(token, accountId, r2Query, variables),
+    fetchCloudflareQuery(token, accountId, errorBreakdownQuery, variables),
   ])
 
-  return { workers, d1, r2 }
+  return { workers, d1, r2, errorBreakdown }
 }
 
 const GOOGLE_DRIVE_FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
@@ -597,6 +627,17 @@ function flattenCloudflareMetrics(cloudflare: CloudflareMetrics): FlattenedCloud
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const getDataArray = (data: any, path: string[]) => {
+    try {
+      let val = data
+      for (const key of path) val = val?.[key]
+      return val ?? []
+    } catch {
+      return []
+    }
+  }
+
   const workersData = getData(cloudflare.workers.data, ["viewer", "accounts", "0", "workersInvocationsAdaptive"])
   const workersSum = workersData.sum ?? {}
   const workersQuantiles = workersData.quantiles ?? {}
@@ -607,6 +648,44 @@ function flattenCloudflareMetrics(cloudflare: CloudflareMetrics): FlattenedCloud
   const r2Data = getData(cloudflare.r2.data, ["viewer", "accounts", "0", "r2OperationsAdaptiveGroups"])
   const r2Sum = r2Data.sum ?? {}
 
+  // Parse error breakdown from status dimensions
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const errorBreakdownData = getDataArray(cloudflare.errorBreakdown?.data, ["viewer", "accounts", "0", "workersInvocationsAdaptive"]) as any[]
+  let errorBreakdown: WorkerErrorBreakdown | undefined
+  
+  if (errorBreakdownData.length > 0) {
+    errorBreakdown = {
+      scriptThrewException: 0,
+      exceededResources: 0,
+      internalError: 0,
+      clientDisconnected: 0,
+    }
+    
+    for (const item of errorBreakdownData) {
+      const status = item.dimensions?.status
+      const count = item.sum?.requests ?? 0
+      
+      if (status === "scriptThrewException") {
+        errorBreakdown.scriptThrewException = count
+      } else if (status === "exceededResources") {
+        errorBreakdown.exceededResources = count
+      } else if (status === "internalError") {
+        errorBreakdown.internalError = count
+      } else if (status === "clientDisconnected") {
+        errorBreakdown.clientDisconnected = count
+      }
+    }
+    
+    // Only include if there are actual errors
+    const totalErrors = errorBreakdown.scriptThrewException + 
+      errorBreakdown.exceededResources + 
+      errorBreakdown.internalError + 
+      errorBreakdown.clientDisconnected
+    if (totalErrors === 0) {
+      errorBreakdown = undefined
+    }
+  }
+
   return {
     workers: {
       requests: workersSum.requests ?? null,
@@ -616,6 +695,7 @@ function flattenCloudflareMetrics(cloudflare: CloudflareMetrics): FlattenedCloud
       cpuTimeP99: workersQuantiles.cpuTimeP99 ?? null,
       durationP50: workersQuantiles.durationP50 ?? null,
       durationP99: workersQuantiles.durationP99 ?? null,
+      errorBreakdown,
       error: cloudflare.workers.error,
     },
     d1: {
@@ -713,7 +793,11 @@ interface ReportData {
   drive: DriveDelta[]
   cloudflare: FlattenedCloudflare
   github: {
-    commits: { totalCount: number; sample: GitHubCommit[] }
+    commits: { 
+      totalCount: number
+      sample: GitHubCommit[]  // For email (5 commits)
+      all?: GitHubCommit[]    // For web (all commits)
+    }
     error?: string
   }
   uptime: Awaited<ReturnType<typeof fetchUptimeSummary>>
@@ -844,37 +928,73 @@ function renderHtmlReport(data: ReportData) {
     `
   }
 
-  // Cloudflare section - Workers includes Pages Functions
-  const cloudflareRows = [
-    {
-      label: "Workers",
-      value: cloudflare.workers.error
-        ? cloudflare.workers.error
-        : `${formatNumber(cloudflare.workers.requests)} requests, ${formatNumber(cloudflare.workers.subrequests)} subrequests, ${formatNumber(cloudflare.workers.errors)} errors`,
-    },
-    {
-      label: "CPU Time",
-      value: cloudflare.workers.error
-        ? "n/a"
-        : `P50: ${formatNumber(cloudflare.workers.cpuTimeP50)}μs, P99: ${formatNumber(cloudflare.workers.cpuTimeP99)}μs`,
-    },
-    {
-      label: "Duration",
-      value: cloudflare.workers.error
-        ? "n/a"
-        : `P50: ${formatNumber(cloudflare.workers.durationP50)}ms, P99: ${formatNumber(cloudflare.workers.durationP99)}ms`,
-    },
-    {
-      label: "D1 Database",
-      value: cloudflare.d1.error
-        ? cloudflare.d1.error
-        : `${formatNumber(cloudflare.d1.readQueries)} reads, ${formatNumber(cloudflare.d1.writeQueries)} writes`,
-    },
-    {
-      label: "R2 Storage",
-      value: cloudflare.r2.error ? cloudflare.r2.error : `${formatNumber(cloudflare.r2.requests)} requests`,
-    },
-  ]
+  // Cloudflare section - Structured layout for email
+  const infrastructureContent = cloudflare.workers.error
+    ? `<p style="color: #dc2626;">Error: ${escapeHtml(cloudflare.workers.error)}</p>`
+    : `
+      <!-- Workers Summary -->
+      <div style="border: 1px solid #e5e7eb; border-radius: 4px; padding: 16px; margin-bottom: 16px;">
+        <div style="font-size: 13px; font-weight: 600; color: #6b7280; margin-bottom: 12px;">Workers</div>
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="text-align: center; padding: 8px;">
+              <div style="font-size: 24px; font-weight: bold; color: #111827;">${formatNumber(cloudflare.workers.requests)}</div>
+              <div style="font-size: 11px; color: #6b7280; text-transform: uppercase;">Requests</div>
+            </td>
+            <td style="text-align: center; padding: 8px;">
+              <div style="font-size: 24px; font-weight: bold; color: #111827;">${formatNumber(cloudflare.workers.subrequests)}</div>
+              <div style="font-size: 11px; color: #6b7280; text-transform: uppercase;">Subrequests</div>
+            </td>
+            <td style="text-align: center; padding: 8px;">
+              <div style="font-size: 24px; font-weight: bold; color: #111827;">${formatNumber(cloudflare.workers.errors)}</div>
+              <div style="font-size: 11px; color: #6b7280; text-transform: uppercase;">Errors</div>
+            </td>
+          </tr>
+        </table>
+        <div style="border-top: 1px solid #e5e7eb; margin-top: 12px; padding-top: 12px;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="padding: 4px 8px;">
+                <span style="font-size: 12px; color: #6b7280;">CPU Time:</span>
+                <span style="font-size: 13px; color: #374151; margin-left: 8px;">P50: ${formatNumber(cloudflare.workers.cpuTimeP50)}μs</span>
+                <span style="font-size: 13px; color: #374151; margin-left: 16px;">P99: ${formatNumber(cloudflare.workers.cpuTimeP99)}μs</span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 4px 8px;">
+                <span style="font-size: 12px; color: #6b7280;">Duration:</span>
+                <span style="font-size: 13px; color: #374151; margin-left: 8px;">P50: ${formatNumber(cloudflare.workers.durationP50)}ms</span>
+                <span style="font-size: 13px; color: #374151; margin-left: 16px;">P99: ${formatNumber(cloudflare.workers.durationP99)}ms</span>
+              </td>
+            </tr>
+          </table>
+        </div>
+      </div>
+      <!-- D1 & R2 -->
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td width="50%" style="padding-right: 8px; vertical-align: top;">
+            <div style="border: 1px solid #e5e7eb; border-radius: 4px; padding: 12px;">
+              <div style="font-size: 12px; color: #6b7280; margin-bottom: 8px;">D1 Database</div>
+              ${cloudflare.d1.error
+                ? `<div style="color: #dc2626;">${escapeHtml(cloudflare.d1.error)}</div>`
+                : `<div style="font-size: 18px; font-weight: bold; color: #111827;">${formatNumber(cloudflare.d1.readQueries)} <span style="font-size: 12px; font-weight: normal; color: #6b7280;">reads</span></div>
+                   <div style="font-size: 18px; font-weight: bold; color: #111827;">${formatNumber(cloudflare.d1.writeQueries)} <span style="font-size: 12px; font-weight: normal; color: #6b7280;">writes</span></div>`
+              }
+            </div>
+          </td>
+          <td width="50%" style="padding-left: 8px; vertical-align: top;">
+            <div style="border: 1px solid #e5e7eb; border-radius: 4px; padding: 12px;">
+              <div style="font-size: 12px; color: #6b7280; margin-bottom: 8px;">R2 Storage</div>
+              ${cloudflare.r2.error
+                ? `<div style="color: #dc2626;">${escapeHtml(cloudflare.r2.error)}</div>`
+                : `<div style="font-size: 18px; font-weight: bold; color: #111827;">${formatNumber(cloudflare.r2.requests)} <span style="font-size: 12px; font-weight: normal; color: #6b7280;">requests</span></div>`
+              }
+            </div>
+          </td>
+        </tr>
+      </table>
+    `
 
   // GitHub section - all commits to main are releases
   const githubContent = github.error
@@ -1032,18 +1152,7 @@ function renderHtmlReport(data: ReportData) {
           <tr>
             <td style="padding: 0 32px 32px;">
               <h2 style="margin: 0 0 16px; font-size: 18px; color: #111827; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px;">Infrastructure</h2>
-              <table width="100%" cellpadding="8" cellspacing="0" style="border: 1px solid #e5e7eb; border-radius: 4px;">
-                ${cloudflareRows
-                  .map(
-                    (row) => `
-                  <tr>
-                    <td style="font-weight: 600; color: #374151; border-bottom: 1px solid #f3f4f6; width: 120px;">${row.label}</td>
-                    <td style="color: #6b7280; border-bottom: 1px solid #f3f4f6;">${row.value}</td>
-                  </tr>
-                `
-                  )
-                  .join("")}
-              </table>
+              ${infrastructureContent}
             </td>
           </tr>
           
@@ -1223,15 +1332,22 @@ function renderTextReport(data: ReportData) {
   return lines.join("\n")
 }
 
-async function generateReport(env: Env) {
-  const { start, end, monthKey } = getPreviousMonthRange()
+async function generateReport(env: Env, options: { useCurrentMonth?: boolean; forceRegenerate?: boolean } = {}) {
+  const { start, end, monthKey } = options.useCurrentMonth 
+    ? getCurrentMonthRange() 
+    : getPreviousMonthRange()
   const generatedAt = new Date().toISOString()
 
   const existing = await env.DB.prepare("SELECT month FROM reports_monthly WHERE month = ?")
     .bind(monthKey)
     .first()
-  if (existing) {
+  if (existing && !options.forceRegenerate) {
     return { skipped: true, monthKey, reason: "Report already exists" }
+  }
+  
+  // Delete existing report if forcing regeneration
+  if (existing && options.forceRegenerate) {
+    await env.DB.prepare("DELETE FROM reports_monthly WHERE month = ?").bind(monthKey).run()
   }
 
   let githubError: string | undefined
@@ -1320,8 +1436,12 @@ export default {
         return new Response("Unauthorized", { status: 401 })
       }
       
+      // Parse options from query params
+      const useCurrentMonth = url.searchParams.get("current") === "true"
+      const forceRegenerate = url.searchParams.get("force") === "true"
+      
       try {
-        const result = await generateReport(env)
+        const result = await generateReport(env, { useCurrentMonth, forceRegenerate })
         return Response.json(result)
       } catch (error) {
         console.error("Report generation failed:", error)

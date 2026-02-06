@@ -11,6 +11,7 @@ declare global {
       NEXTAUTH_SECRET?: string
       UNLOCK_COOKIE_SECRET?: string
       UPLOAD_TOKEN_SECRET?: string
+      GOOGLE_ADMIN_IMPERSONATE_EMAIL?: string
     }
   }
 
@@ -48,6 +49,7 @@ declare global {
   GDRIVE_SERVICE_RESOURCES_FOLDER_ID: string
   // Gmail API (uses same service account as Google Drive)
   GMAIL_SENDER_EMAIL: string
+  GOOGLE_ADMIN_IMPERSONATE_EMAIL?: string
 }
 
 declare module "@opennextjs/cloudflare" {

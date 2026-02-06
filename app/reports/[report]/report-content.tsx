@@ -311,42 +311,6 @@ function DriveSection({ drive }: { drive: DriveDelta[] }) {
 }
 
 function InfrastructureSection({ cloudflare }: { cloudflare: ReportData["cloudflare"] }) {
-  const metrics = [
-    {
-      label: "Workers",
-      value: cloudflare.workers.error
-        ? cloudflare.workers.error
-        : `${formatNumber(cloudflare.workers.requests)} requests, ${formatNumber(cloudflare.workers.subrequests)} subrequests, ${formatNumber(cloudflare.workers.errors)} errors`,
-      hasError: !!cloudflare.workers.error,
-    },
-    {
-      label: "CPU Time",
-      value: cloudflare.workers.error
-        ? "n/a"
-        : `P50: ${formatNumber(cloudflare.workers.cpuTimeP50)}μs, P99: ${formatNumber(cloudflare.workers.cpuTimeP99)}μs`,
-      hasError: false,
-    },
-    {
-      label: "Duration",
-      value: cloudflare.workers.error
-        ? "n/a"
-        : `P50: ${formatNumber(cloudflare.workers.durationP50)}ms, P99: ${formatNumber(cloudflare.workers.durationP99)}ms`,
-      hasError: false,
-    },
-    {
-      label: "D1 Database",
-      value: cloudflare.d1.error
-        ? cloudflare.d1.error
-        : `${formatNumber(cloudflare.d1.readQueries)} reads, ${formatNumber(cloudflare.d1.writeQueries)} writes`,
-      hasError: !!cloudflare.d1.error,
-    },
-    {
-      label: "R2 Storage",
-      value: cloudflare.r2.error ? cloudflare.r2.error : `${formatNumber(cloudflare.r2.requests)} requests`,
-      hasError: !!cloudflare.r2.error,
-    },
-  ]
-
   return (
     <Card>
       <CardHeader>
@@ -355,14 +319,80 @@ function InfrastructureSection({ cloudflare }: { cloudflare: ReportData["cloudfl
           Cloudflare Infrastructure
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {metrics.map((metric) => (
-            <div key={metric.label} className="rounded-lg border p-4">
-              <div className="text-sm font-medium text-muted-foreground">{metric.label}</div>
-              <div className={`mt-1 ${metric.hasError ? "text-destructive" : "text-foreground"}`}>{metric.value}</div>
-            </div>
-          ))}
+      <CardContent className="space-y-6">
+        {/* Workers Section */}
+        <div className="rounded-lg border p-4">
+          <div className="text-sm font-medium text-muted-foreground mb-3">Workers</div>
+          {cloudflare.workers.error ? (
+            <div className="text-destructive">{cloudflare.workers.error}</div>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <div className="text-2xl font-bold text-foreground">{formatNumber(cloudflare.workers.requests)}</div>
+                  <div className="text-xs text-muted-foreground">Requests</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-foreground">{formatNumber(cloudflare.workers.subrequests)}</div>
+                  <div className="text-xs text-muted-foreground">Subrequests</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-foreground">{formatNumber(cloudflare.workers.errors)}</div>
+                  <div className="text-xs text-muted-foreground">Errors</div>
+                </div>
+              </div>
+              <div className="mt-4 pt-4 border-t grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">CPU Time</div>
+                  <div className="text-sm">
+                    <span className="font-medium">P50:</span> {formatNumber(cloudflare.workers.cpuTimeP50)}μs
+                    <span className="mx-2 text-muted-foreground">•</span>
+                    <span className="font-medium">P99:</span> {formatNumber(cloudflare.workers.cpuTimeP99)}μs
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Duration</div>
+                  <div className="text-sm">
+                    <span className="font-medium">P50:</span> {formatNumber(cloudflare.workers.durationP50)}ms
+                    <span className="mx-2 text-muted-foreground">•</span>
+                    <span className="font-medium">P99:</span> {formatNumber(cloudflare.workers.durationP99)}ms
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* D1 and R2 side by side */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="rounded-lg border p-4">
+            <div className="text-sm font-medium text-muted-foreground mb-2">D1 Database</div>
+            {cloudflare.d1.error ? (
+              <div className="text-destructive">{cloudflare.d1.error}</div>
+            ) : (
+              <div className="flex gap-6">
+                <div>
+                  <div className="text-xl font-bold">{formatNumber(cloudflare.d1.readQueries)}</div>
+                  <div className="text-xs text-muted-foreground">Reads</div>
+                </div>
+                <div>
+                  <div className="text-xl font-bold">{formatNumber(cloudflare.d1.writeQueries)}</div>
+                  <div className="text-xs text-muted-foreground">Writes</div>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="rounded-lg border p-4">
+            <div className="text-sm font-medium text-muted-foreground mb-2">R2 Storage</div>
+            {cloudflare.r2.error ? (
+              <div className="text-destructive">{cloudflare.r2.error}</div>
+            ) : (
+              <div>
+                <div className="text-xl font-bold">{formatNumber(cloudflare.r2.requests)}</div>
+                <div className="text-xs text-muted-foreground">Requests</div>
+              </div>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -370,6 +400,9 @@ function InfrastructureSection({ cloudflare }: { cloudflare: ReportData["cloudfl
 }
 
 function GitHubSection({ github }: { github: ReportData["github"] }) {
+  // Use all commits if available, otherwise fall back to sample
+  const commitsToShow = github.commits.all || github.commits.sample
+
   return (
     <Card>
       <CardHeader>
@@ -388,9 +421,9 @@ function GitHubSection({ github }: { github: ReportData["github"] }) {
             <p className="text-green-600 font-semibold mb-4">
               {github.commits.totalCount} commit{github.commits.totalCount > 1 ? "s" : ""} (deployments)
             </p>
-            {github.commits.sample.length > 0 && (
+            {commitsToShow.length > 0 && (
               <ul className="space-y-3">
-                {github.commits.sample.map((commit) => (
+                {commitsToShow.map((commit) => (
                   <li key={commit.sha} className="border-b pb-2 last:border-0">
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
@@ -404,11 +437,6 @@ function GitHubSection({ github }: { github: ReportData["github"] }) {
                   </li>
                 ))}
               </ul>
-            )}
-            {github.commits.totalCount > 5 && (
-              <p className="text-sm text-muted-foreground mt-4">
-                ... and {github.commits.totalCount - 5} more commits
-              </p>
             )}
           </div>
         )}
@@ -470,67 +498,122 @@ function UptimeSection({ uptime }: { uptime: ReportData["uptime"] }) {
   )
 }
 
-function ErrorsSection({ errors }: { errors: ReportData["errors"] }) {
-  const totalErrors = errors.byKind.reduce((acc, row) => acc + row.count, 0)
+function ErrorsSection({ errors, cloudflare }: { errors: ReportData["errors"]; cloudflare: ReportData["cloudflare"] }) {
+  const totalAppErrors = errors.byKind.reduce((acc, row) => acc + row.count, 0)
+  const workerErrorBreakdown = cloudflare.workers.errorBreakdown
+  const totalWorkerErrors = workerErrorBreakdown
+    ? workerErrorBreakdown.scriptThrewException +
+      workerErrorBreakdown.exceededResources +
+      workerErrorBreakdown.internalError +
+      workerErrorBreakdown.clientDisconnected
+    : 0
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <AlertTriangle className="h-5 w-5" />
-          Errors
-          {totalErrors === 0 ? (
-            <Badge variant="secondary" className="bg-green-100 text-green-800">
-              None
-            </Badge>
-          ) : (
-            <Badge variant="destructive">{totalErrors}</Badge>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {errors.byKind.length === 0 ? (
-          <p className="text-green-600 font-medium">No errors recorded this month.</p>
-        ) : (
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div>
-              <h4 className="font-medium mb-3 text-sm text-muted-foreground">By Type</h4>
-              <ul className="space-y-2">
-                {errors.byKind.map((row) => (
-                  <li key={row.errorKind} className="flex justify-between items-center">
-                    <span className="text-sm">{row.errorKind}</span>
-                    <Badge variant="outline">{row.count}</Badge>
-                  </li>
-                ))}
-              </ul>
+    <div className="space-y-6">
+      {/* Cloudflare Worker Errors - show if there are worker errors */}
+      {totalWorkerErrors > 0 && workerErrorBreakdown && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Server className="h-5 w-5" />
+              Cloudflare Worker Errors
+              <Badge variant="destructive">{totalWorkerErrors}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {workerErrorBreakdown.scriptThrewException > 0 && (
+                <div className="rounded-lg border p-4">
+                  <div className="text-xl font-bold text-destructive">{formatNumber(workerErrorBreakdown.scriptThrewException)}</div>
+                  <div className="text-xs text-muted-foreground">Script Exceptions</div>
+                  <div className="text-xs text-muted-foreground mt-1">Unhandled JS errors</div>
+                </div>
+              )}
+              {workerErrorBreakdown.exceededResources > 0 && (
+                <div className="rounded-lg border p-4">
+                  <div className="text-xl font-bold text-destructive">{formatNumber(workerErrorBreakdown.exceededResources)}</div>
+                  <div className="text-xs text-muted-foreground">Resource Exceeded</div>
+                  <div className="text-xs text-muted-foreground mt-1">CPU/memory limits</div>
+                </div>
+              )}
+              {workerErrorBreakdown.internalError > 0 && (
+                <div className="rounded-lg border p-4">
+                  <div className="text-xl font-bold text-destructive">{formatNumber(workerErrorBreakdown.internalError)}</div>
+                  <div className="text-xs text-muted-foreground">Internal Errors</div>
+                  <div className="text-xs text-muted-foreground mt-1">Runtime issues</div>
+                </div>
+              )}
+              {workerErrorBreakdown.clientDisconnected > 0 && (
+                <div className="rounded-lg border p-4">
+                  <div className="text-xl font-bold text-yellow-600">{formatNumber(workerErrorBreakdown.clientDisconnected)}</div>
+                  <div className="text-xs text-muted-foreground">Client Disconnected</div>
+                  <div className="text-xs text-muted-foreground mt-1">Early disconnection</div>
+                </div>
+              )}
             </div>
-            {errors.topErrors.length > 0 && (
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Application Errors */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5" />
+            Application Errors
+            {totalAppErrors === 0 ? (
+              <Badge variant="secondary" className="bg-green-100 text-green-800">
+                None
+              </Badge>
+            ) : (
+              <Badge variant="destructive">{totalAppErrors}</Badge>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {errors.byKind.length === 0 ? (
+            <p className="text-green-600 font-medium">No application errors recorded this month.</p>
+          ) : (
+            <div className="grid gap-6 lg:grid-cols-2">
               <div>
-                <h4 className="font-medium mb-3 text-sm text-muted-foreground">Top Errors</h4>
-                <ul className="space-y-3">
-                  {errors.topErrors.slice(0, 5).map((row, idx) => (
-                    <li key={idx} className="border-b pb-2 last:border-0">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="destructive" className="text-xs">
-                          {row.count}x
-                        </Badge>
-                        <span className="text-sm font-medium">{row.errorKind}</span>
-                      </div>
-                      {row.sampleRoute && (
-                        <div className="text-xs text-muted-foreground mt-1">Route: {row.sampleRoute}</div>
-                      )}
-                      {row.sampleMessage && (
-                        <div className="text-xs text-muted-foreground mt-1 truncate">{row.sampleMessage}</div>
-                      )}
+                <h4 className="font-medium mb-3 text-sm text-muted-foreground">By Type</h4>
+                <ul className="space-y-2">
+                  {errors.byKind.map((row) => (
+                    <li key={row.errorKind} className="flex justify-between items-center">
+                      <span className="text-sm">{row.errorKind}</span>
+                      <Badge variant="outline">{row.count}</Badge>
                     </li>
                   ))}
                 </ul>
               </div>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+              {errors.topErrors.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-3 text-sm text-muted-foreground">Top Errors</h4>
+                  <ul className="space-y-3">
+                    {errors.topErrors.slice(0, 5).map((row, idx) => (
+                      <li key={idx} className="border-b pb-2 last:border-0">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="destructive" className="text-xs">
+                            {row.count}x
+                          </Badge>
+                          <span className="text-sm font-medium">{row.errorKind}</span>
+                        </div>
+                        {row.sampleRoute && (
+                          <div className="text-xs text-muted-foreground mt-1">Route: {row.sampleRoute}</div>
+                        )}
+                        {row.sampleMessage && (
+                          <div className="text-xs text-muted-foreground mt-1 truncate">{row.sampleMessage}</div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   )
 }
 
@@ -613,7 +696,7 @@ export function ReportContent({ data, month, generatedAt, showAllStatuses = fals
             </TabsContent>
 
             <TabsContent value="errors">
-              <ErrorsSection errors={data.errors} />
+              <ErrorsSection errors={data.errors} cloudflare={data.cloudflare} />
             </TabsContent>
           </Tabs>
         </div>
