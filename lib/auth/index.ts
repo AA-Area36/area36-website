@@ -108,8 +108,12 @@ const nextAuth = NextAuth(async () => {
 
 const baseAuth = nextAuth.auth
 
-export async function auth(...args: Parameters<typeof baseAuth>) {
-  const session = await baseAuth(...args)
+type BaseAuth = typeof baseAuth
+type BaseAuthArg = Parameters<BaseAuth>[0]
+type BaseAuthResult = Awaited<ReturnType<BaseAuth>>
+
+export async function auth(request?: BaseAuthArg): Promise<BaseAuthResult> {
+  const session = await (baseAuth as (req?: BaseAuthArg) => Promise<BaseAuthResult>)(request)
   if (!session?.user?.email) {
     return null
   }
