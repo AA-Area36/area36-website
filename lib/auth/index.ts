@@ -1,4 +1,5 @@
 import NextAuth from "next-auth"
+import type { Session } from "next-auth"
 import Google from "next-auth/providers/google"
 import { getCloudflareContext } from "@opennextjs/cloudflare"
 import { D1Adapter } from "./d1-adapter"
@@ -106,14 +107,8 @@ const nextAuth = NextAuth(async () => {
   }
 })
 
-const baseAuth = nextAuth.auth
-
-type BaseAuth = typeof baseAuth
-type BaseAuthArg = Parameters<BaseAuth>[0]
-type BaseAuthResult = Awaited<ReturnType<BaseAuth>>
-
-export async function auth(request?: BaseAuthArg): Promise<BaseAuthResult> {
-  const session = await (baseAuth as (req?: BaseAuthArg) => Promise<BaseAuthResult>)(request)
+export async function auth(): Promise<Session | null> {
+  const session = await nextAuth.auth()
   if (!session?.user?.email) {
     return null
   }
