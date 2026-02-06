@@ -1050,10 +1050,10 @@ function renderHtmlReport(data: ReportData) {
     `
     : `<p style="color: #6b7280;">No uptime data recorded this month.</p>`
 
-  // Errors section
+  // Application Errors section (distinct from infrastructure errors)
   const errorsContent =
     errors.byKind.length === 0
-      ? `<p style="color: #16a34a; font-weight: 600;">No errors recorded this month.</p>`
+      ? `<p style="color: #16a34a; font-weight: 600;">No application errors recorded this month.</p>`
       : `
         <div style="margin-bottom: 16px;">
           <div style="font-size: 13px; font-weight: 600; color: #6b7280; margin-bottom: 8px;">By Type</div>
@@ -1172,10 +1172,10 @@ function renderHtmlReport(data: ReportData) {
             </td>
           </tr>
           
-          <!-- Section: Errors -->
+          <!-- Section: Application Errors -->
           <tr>
             <td style="padding: 0 32px 32px;">
-              <h2 style="margin: 0 0 16px; font-size: 18px; color: #111827; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px;">Errors</h2>
+              <h2 style="margin: 0 0 16px; font-size: 18px; color: #111827; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px;">Application Errors</h2>
               ${errorsContent}
             </td>
           </tr>

@@ -53,21 +53,12 @@ export default async function ReportsPage() {
                           Month: {report.month} • Generated: {formatDate(report.generatedAt)}
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-3 text-sm">
-                        <Link
-                          className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-primary-foreground hover:bg-primary/90 transition-colors"
-                          href={`/reports/${report.month}`}
-                        >
-                          View Report
-                        </Link>
-                        <Link
-                          className="text-primary hover:underline"
-                          href={`/api/reports/${report.month}?format=json`}
-                          target="_blank"
-                        >
-                          Download JSON
-                        </Link>
-                      </div>
+                      <Link
+                        className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90 transition-colors"
+                        href={`/reports/${report.month}`}
+                      >
+                        View Report
+                      </Link>
                     </CardContent>
                   </Card>
                 ))}

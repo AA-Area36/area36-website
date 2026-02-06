@@ -501,53 +501,64 @@ function UptimeSection({ uptime }: { uptime: ReportData["uptime"] }) {
 function ErrorsSection({ errors, cloudflare }: { errors: ReportData["errors"]; cloudflare: ReportData["cloudflare"] }) {
   const totalAppErrors = errors.byKind.reduce((acc, row) => acc + row.count, 0)
   const workerErrorBreakdown = cloudflare.workers.errorBreakdown
+  
+  // Errors: scriptThrewException, exceededResources, internalError
+  // Warnings: clientDisconnected (not counted as errors)
   const totalWorkerErrors = workerErrorBreakdown
     ? workerErrorBreakdown.scriptThrewException +
       workerErrorBreakdown.exceededResources +
-      workerErrorBreakdown.internalError +
-      workerErrorBreakdown.clientDisconnected
+      workerErrorBreakdown.internalError
     : 0
+  const totalWorkerWarnings = workerErrorBreakdown?.clientDisconnected ?? 0
+  const hasWorkerIssues = totalWorkerErrors > 0 || totalWorkerWarnings > 0
 
   return (
     <div className="space-y-6">
-      {/* Cloudflare Worker Errors - show if there are worker errors */}
-      {totalWorkerErrors > 0 && workerErrorBreakdown && (
+      {/* Cloudflare Worker Errors & Warnings */}
+      {hasWorkerIssues && workerErrorBreakdown && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Server className="h-5 w-5" />
-              Cloudflare Worker Errors
-              <Badge variant="destructive">{totalWorkerErrors}</Badge>
+              Cloudflare Worker Issues
+              {totalWorkerErrors > 0 && (
+                <Badge variant="destructive">{totalWorkerErrors} errors</Badge>
+              )}
+              {totalWorkerWarnings > 0 && (
+                <Badge variant="outline" className="border-yellow-500 text-yellow-600">
+                  {totalWorkerWarnings} warnings
+                </Badge>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {workerErrorBreakdown.scriptThrewException > 0 && (
-                <div className="rounded-lg border p-4">
+                <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4">
                   <div className="text-xl font-bold text-destructive">{formatNumber(workerErrorBreakdown.scriptThrewException)}</div>
                   <div className="text-xs text-muted-foreground">Script Exceptions</div>
                   <div className="text-xs text-muted-foreground mt-1">Unhandled JS errors</div>
                 </div>
               )}
               {workerErrorBreakdown.exceededResources > 0 && (
-                <div className="rounded-lg border p-4">
+                <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4">
                   <div className="text-xl font-bold text-destructive">{formatNumber(workerErrorBreakdown.exceededResources)}</div>
                   <div className="text-xs text-muted-foreground">Resource Exceeded</div>
                   <div className="text-xs text-muted-foreground mt-1">CPU/memory limits</div>
                 </div>
               )}
               {workerErrorBreakdown.internalError > 0 && (
-                <div className="rounded-lg border p-4">
+                <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4">
                   <div className="text-xl font-bold text-destructive">{formatNumber(workerErrorBreakdown.internalError)}</div>
                   <div className="text-xs text-muted-foreground">Internal Errors</div>
                   <div className="text-xs text-muted-foreground mt-1">Runtime issues</div>
                 </div>
               )}
               {workerErrorBreakdown.clientDisconnected > 0 && (
-                <div className="rounded-lg border p-4">
+                <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-4">
                   <div className="text-xl font-bold text-yellow-600">{formatNumber(workerErrorBreakdown.clientDisconnected)}</div>
                   <div className="text-xs text-muted-foreground">Client Disconnected</div>
-                  <div className="text-xs text-muted-foreground mt-1">Early disconnection</div>
+                  <div className="text-xs text-muted-foreground mt-1">Early disconnection (warning)</div>
                 </div>
               )}
             </div>
