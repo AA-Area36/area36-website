@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { useGoogleReCaptcha } from "react-google-recaptcha-v3"
 import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
-import { Calendar, CalendarPlus, MapPin, Clock, ExternalLink, Search, Plus, X, Globe, HelpCircle, Repeat, ChevronDown } from "lucide-react"
+import { Calendar, CalendarPlus, MapPin, Clock, ExternalLink, Search, Plus, X, Globe, HelpCircle, Repeat, ChevronDown, Check } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -32,6 +32,8 @@ import { submitEvent } from "./actions"
 import { uploadEventFlyer } from "./flyer-actions"
 import type { Event, LocationType, EventType, EventFlyer } from "@/lib/db/schema"
 import type { DisplayEvent } from "@/lib/types/recurrence"
+import { buildDistrictMonthlyMeetingOccurrences } from "@/lib/utils/district-monthly-meetings"
+import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 
 // Event with types array and flyers (from junction tables)
 export interface EventWithTypes extends Event {
@@ -57,6 +59,8 @@ const eventTypeColors: Record<string, string> = {
   Committee: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
   District: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
 }
+
+const SECTION_PAGE_SIZE = 5
 
 // Generate Google Calendar URL for individual events
 function generateGoogleCalendarUrl(event: DisplayEvent): string {
@@ -183,6 +187,46 @@ function groupEvents(events: DisplayEvent[]): EventGroup[] {
   return groups
 }
 
+function SectionPagination({
+  page,
+  totalPages,
+  onPageChange,
+  className,
+}: {
+  page: number
+  totalPages: number
+  onPageChange: (next: number) => void
+  className?: string
+}) {
+  if (totalPages <= 1) return null
+  return (
+    <div className={`flex flex-wrap items-center justify-between gap-3 pt-2 ${className ?? ""}`}>
+      <div className="text-sm text-muted-foreground">
+        Page <span className="font-medium text-foreground">{page}</span> of{" "}
+        <span className="font-medium text-foreground">{totalPages}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onPageChange(Math.max(1, page - 1))}
+          disabled={page <= 1}
+        >
+          Previous
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+          disabled={page >= totalPages}
+        >
+          Next
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 interface EventsClientProps {
   events: DisplayEvent[]
 }
@@ -197,6 +241,7 @@ export function EventsClient({ events }: EventsClientProps) {
   const initialTypes = searchParams.get("types")?.split(",").filter(Boolean) || []
   const initialDateFrom = searchParams.get("from")
   const initialDateTo = searchParams.get("to")
+  const initialShowDistrictMeetings = searchParams.get("districtMeetings") !== "0"
   const initialDateRange: DateRange | undefined = initialDateFrom
     ? { from: parseLocalDate(initialDateFrom), to: initialDateTo ? parseLocalDate(initialDateTo) : undefined }
     : undefined
@@ -204,6 +249,7 @@ export function EventsClient({ events }: EventsClientProps) {
   const [searchQuery, setSearchQuery] = React.useState(initialSearch)
   const [selectedTypes, setSelectedTypes] = React.useState<string[]>(initialTypes)
   const [dateRange, setDateRange] = React.useState<DateRange | undefined>(initialDateRange)
+  const [showDistrictMeetings, setShowDistrictMeetings] = React.useState(initialShowDistrictMeetings)
   const [currentMonth, setCurrentMonth] = React.useState(new Date())
   const [submitDialogOpen, setSubmitDialogOpen] = React.useState(false)
   const [instructionsDialogOpen, setInstructionsDialogOpen] = React.useState(false)
@@ -230,8 +276,27 @@ export function EventsClient({ events }: EventsClientProps) {
   const [formStartDate, setFormStartDate] = React.useState("")
   // Track which recurring event groups are expanded
   const [expandedGroups, setExpandedGroups] = React.useState<Set<string>>(new Set())
+
+  // Pagination (10 per section)
+  const [upcomingPage, setUpcomingPage] = React.useState(1)
+  const [districtPage, setDistrictPage] = React.useState(1)
+  const [districtMeetingsPage, setDistrictMeetingsPage] = React.useState(1)
+
+  // Past events (collapsible + API pagination)
+  const [pastOpen, setPastOpen] = React.useState(false)
+  const [pastSearchQuery, setPastSearchQuery] = React.useState("")
+  const [pastSelectedTypes, setPastSelectedTypes] = React.useState<string[]>([])
+  const [pastDateRange, setPastDateRange] = React.useState<DateRange | undefined>(undefined)
+  const [pastPages, setPastPages] = React.useState<Array<{ events: DisplayEvent[]; nextCursor: string | null }>>([])
+  const [pastPageIndex, setPastPageIndex] = React.useState(0)
+  const [pastLoading, setPastLoading] = React.useState(false)
+  const [pastError, setPastError] = React.useState<string | null>(null)
+  const [pastAppliedQueryKey, setPastAppliedQueryKey] = React.useState<string>("")
   const tabsRef = React.useRef<HTMLDivElement>(null)
   const formRef = React.useRef<HTMLFormElement>(null)
+
+  const debouncedUrlSearchQuery = useDebouncedValue(searchQuery, 500)
+  const debouncedPastSearchQuery = useDebouncedValue(pastSearchQuery, 500)
 
   // Toggle expansion of a recurring event group
   const toggleGroupExpansion = (parentEventId: string) => {
@@ -268,12 +333,18 @@ export function EventsClient({ events }: EventsClientProps) {
   }, [])
 
   // Update URL when filters change
-  const updateURL = React.useCallback((search: string, types: string[], range: DateRange | undefined) => {
+  const updateURL = React.useCallback((
+    search: string,
+    types: string[],
+    range: DateRange | undefined,
+    districtMeetings: boolean
+  ) => {
     const params = new URLSearchParams()
     if (search) params.set("q", search)
     if (types.length > 0) params.set("types", types.join(","))
     if (range?.from) params.set("from", range.from.toISOString().split("T")[0])
     if (range?.to) params.set("to", range.to.toISOString().split("T")[0])
+    if (!districtMeetings) params.set("districtMeetings", "0")
 
     const queryString = params.toString()
     router.replace(queryString ? `?${queryString}` : "/events", { scroll: false })
@@ -282,18 +353,31 @@ export function EventsClient({ events }: EventsClientProps) {
   // Wrapped state setters to update URL
   const handleSearchChange = (value: string) => {
     setSearchQuery(value)
-    updateURL(value, selectedTypes, dateRange)
   }
 
   const handleTypesChange = (types: string[]) => {
     setSelectedTypes(types)
-    updateURL(searchQuery, types, dateRange)
   }
 
   const handleDateRangeChange = (range: DateRange | undefined) => {
     setDateRange(range)
-    updateURL(searchQuery, selectedTypes, range)
   }
+
+  const handleDistrictMeetingsChange = (next: boolean) => {
+    setShowDistrictMeetings(next)
+  }
+
+  // Debounce URL updates for the search query to avoid spamming router.replace while typing.
+  React.useEffect(() => {
+    updateURL(debouncedUrlSearchQuery, selectedTypes, dateRange, showDistrictMeetings)
+  }, [
+    debouncedUrlSearchQuery,
+    selectedTypes.join(","),
+    dateRange?.from?.getTime(),
+    dateRange?.to?.getTime(),
+    showDistrictMeetings,
+    updateURL,
+  ])
 
   // Common filter logic for search and date
   const applyCommonFilters = (event: DisplayEvent) => {
@@ -310,6 +394,17 @@ export function EventsClient({ events }: EventsClientProps) {
 
     return matchesSearch && matchesDateRange
   }
+
+  const districtMeetingEvents = React.useMemo(() => {
+    const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" })
+    const rangeStart = parseLocalDate(todayStr)
+    rangeStart.setDate(rangeStart.getDate() - 1)
+    const rangeEnd = parseLocalDate(todayStr)
+    rangeEnd.setFullYear(rangeEnd.getFullYear() + 1)
+    return buildDistrictMonthlyMeetingOccurrences(rangeStart, rangeEnd)
+  }, [])
+
+  const filteredDistrictMeetingEvents = districtMeetingEvents.filter(applyCommonFilters)
 
   // Types selected excluding District (for main list filtering)
   const nonDistrictSelectedTypes = selectedTypes.filter(t => t !== "District")
@@ -348,17 +443,172 @@ export function EventsClient({ events }: EventsClientProps) {
     return true
   })
 
+  const upcomingGroups = React.useMemo(() => groupEvents(filteredEvents), [filteredEvents])
+  const districtGroups = React.useMemo(() => groupEvents(filteredDistrictEvents), [filteredDistrictEvents])
+  const districtMeetingGroups = React.useMemo(() => groupEvents(filteredDistrictMeetingEvents), [filteredDistrictMeetingEvents])
+
+  const upcomingTotalPages = Math.max(1, Math.ceil(upcomingGroups.length / SECTION_PAGE_SIZE))
+  const districtTotalPages = Math.max(1, Math.ceil(districtGroups.length / SECTION_PAGE_SIZE))
+  const districtMeetingsTotalPages = Math.max(1, Math.ceil(districtMeetingGroups.length / SECTION_PAGE_SIZE))
+
+  React.useEffect(() => {
+    setUpcomingPage((p) => Math.min(Math.max(1, p), upcomingTotalPages))
+  }, [upcomingTotalPages])
+
+  React.useEffect(() => {
+    setDistrictPage((p) => Math.min(Math.max(1, p), districtTotalPages))
+  }, [districtTotalPages])
+
+  React.useEffect(() => {
+    setDistrictMeetingsPage((p) => Math.min(Math.max(1, p), districtMeetingsTotalPages))
+  }, [districtMeetingsTotalPages])
+
+  // When filters change, reset pagination back to the first page.
+  React.useEffect(() => {
+    setUpcomingPage(1)
+    setDistrictPage(1)
+    setDistrictMeetingsPage(1)
+  }, [
+    debouncedUrlSearchQuery,
+    selectedTypes.join(","),
+    dateRange?.from?.getTime(),
+    dateRange?.to?.getTime(),
+  ])
+
+  const pagedUpcomingGroups = upcomingGroups.slice((upcomingPage - 1) * SECTION_PAGE_SIZE, upcomingPage * SECTION_PAGE_SIZE)
+  const pagedDistrictGroups = districtGroups.slice((districtPage - 1) * SECTION_PAGE_SIZE, districtPage * SECTION_PAGE_SIZE)
+  const pagedDistrictMeetingGroups = districtMeetingGroups.slice(
+    (districtMeetingsPage - 1) * SECTION_PAGE_SIZE,
+    districtMeetingsPage * SECTION_PAGE_SIZE
+  )
+
   const clearFilters = () => {
     setSelectedTypes([])
     setDateRange(undefined)
     setSearchQuery("")
-    updateURL("", [], undefined)
+    setShowDistrictMeetings(true)
+    updateURL("", [], undefined, true)
   }
 
-  const hasActiveFilters = selectedTypes.length > 0 || dateRange?.from || searchQuery
+  const hasActiveFilters = selectedTypes.length > 0 || dateRange?.from || searchQuery || !showDistrictMeetings
+
+  const requestPastEventsPage = React.useCallback(async (cursor: string | null, opts: {
+    q: string
+    types: string[]
+    range: DateRange | undefined
+  }) => {
+    const params = new URLSearchParams()
+    params.set("limit", String(SECTION_PAGE_SIZE))
+    if (cursor) params.set("cursor", cursor)
+    if (opts.q.trim()) params.set("q", opts.q.trim())
+    if (opts.types.length > 0) params.set("types", opts.types.join(","))
+    if (opts.range?.from) params.set("from", opts.range.from.toISOString().split("T")[0])
+    if (opts.range?.to) params.set("to", opts.range.to.toISOString().split("T")[0])
+
+    const response = await fetch(`/api/events/past?${params.toString()}`)
+    if (!response.ok) {
+      throw new Error(`Past events API error: ${response.status}`)
+    }
+    return (await response.json()) as { events: DisplayEvent[]; nextCursor: string | null }
+  }, [])
+
+  const pastQueryKey = React.useMemo(() => {
+    const from = pastDateRange?.from ? pastDateRange.from.toISOString().split("T")[0] : ""
+    const to = pastDateRange?.to ? pastDateRange.to.toISOString().split("T")[0] : ""
+    return JSON.stringify({
+      q: debouncedPastSearchQuery.trim(),
+      types: [...pastSelectedTypes].sort(),
+      from,
+      to,
+    })
+  }, [
+    debouncedPastSearchQuery,
+    pastSelectedTypes.join(","),
+    pastDateRange?.from?.getTime(),
+    pastDateRange?.to?.getTime(),
+  ])
+
+  React.useEffect(() => {
+    if (!pastOpen) return
+    if (pastAppliedQueryKey === pastQueryKey && pastPages.length > 0) return
+
+    let active = true
+    setPastLoading(true)
+    setPastError(null)
+
+    void (async () => {
+      try {
+        const data = await requestPastEventsPage(null, {
+          q: debouncedPastSearchQuery,
+          types: pastSelectedTypes,
+          range: pastDateRange,
+        })
+        if (!active) return
+        setPastPages([data])
+        setPastPageIndex(0)
+        setPastAppliedQueryKey(pastQueryKey)
+      } catch (err) {
+        if (!active) return
+        const message = err instanceof Error ? err.message : "Failed to load past events"
+        setPastError(message)
+      } finally {
+        if (!active) return
+        setPastLoading(false)
+      }
+    })()
+
+    return () => {
+      active = false
+    }
+  }, [
+    pastOpen,
+    pastQueryKey,
+    pastAppliedQueryKey,
+    pastPages.length,
+    requestPastEventsPage,
+    debouncedPastSearchQuery,
+    pastSelectedTypes.join(","),
+    pastDateRange?.from?.getTime(),
+    pastDateRange?.to?.getTime(),
+  ])
+
+  const currentPastPage = pastPages[pastPageIndex] || null
+
+  const goToNextPastPage = async () => {
+    if (!currentPastPage?.nextCursor) return
+    const nextIndex = pastPageIndex + 1
+    if (pastPages[nextIndex]) {
+      setPastPageIndex(nextIndex)
+      return
+    }
+    setPastLoading(true)
+    setPastError(null)
+    try {
+      const data = await requestPastEventsPage(currentPastPage.nextCursor, {
+        q: debouncedPastSearchQuery,
+        types: pastSelectedTypes,
+        range: pastDateRange,
+      })
+      setPastPages((prev) => [...prev, data])
+      setPastPageIndex(nextIndex)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load past events"
+      setPastError(message)
+    } finally {
+      setPastLoading(false)
+    }
+  }
+
+  const goToPrevPastPage = () => {
+    setPastPageIndex((p) => Math.max(0, p - 1))
+  }
 
   const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate()
   const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay()
+
+  const calendarEvents = React.useMemo(() => {
+    return showDistrictMeetings ? [...events, ...districtMeetingEvents] : events
+  }, [events, districtMeetingEvents, showDistrictMeetings])
 
   // Compute slot assignments for events in the current month view
   // This ensures multi-day events maintain their vertical position
@@ -368,7 +618,7 @@ export function EventsClient({ events }: EventsClientProps) {
     const monthEnd = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`
     
     // Get all events that appear in this month
-    const monthEvents = events.filter((e) => {
+    const monthEvents = calendarEvents.filter((e) => {
       const eventStart = e.date.substring(0, 10)
       const eventEnd = e.endDate ? e.endDate.substring(0, 10) : eventStart
       // Event overlaps with month if: eventStart <= monthEnd AND eventEnd >= monthStart
@@ -438,7 +688,7 @@ export function EventsClient({ events }: EventsClientProps) {
     }
     
     return slots
-  }, [events, currentMonth, daysInMonth])
+  }, [calendarEvents, currentMonth, daysInMonth])
 
   const prevMonth = () => {
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))
@@ -974,6 +1224,20 @@ export function EventsClient({ events }: EventsClientProps) {
                   placeholder="Event type"
                   className="w-full sm:w-44"
                 />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleDistrictMeetingsChange(!showDistrictMeetings)}
+                  className={`h-9 w-full sm:w-44 justify-between font-normal ${!showDistrictMeetings ? "text-muted-foreground" : ""}`}
+                  aria-pressed={showDistrictMeetings}
+                >
+                  <span className="truncate">District meetings</span>
+                  {showDistrictMeetings ? (
+                    <Check className="ml-2 h-4 w-4 shrink-0 opacity-70" aria-hidden="true" />
+                  ) : (
+                    <span className="ml-2 text-xs shrink-0 opacity-70">Off</span>
+                  )}
+                </Button>
                 <DateRangePicker
                   value={dateRange}
                   onChange={handleDateRangeChange}
@@ -985,6 +1249,18 @@ export function EventsClient({ events }: EventsClientProps) {
               {/* Active filter badges */}
               {hasActiveFilters && (
                 <div className="flex flex-wrap items-center gap-2">
+                  {!showDistrictMeetings && (
+                    <Badge variant="secondary">
+                      District meetings hidden
+                      <button
+                        onClick={() => handleDistrictMeetingsChange(true)}
+                        className="ml-1.5 rounded-full hover:bg-foreground/10"
+                        aria-label="Show district meetings"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  )}
                   {selectedTypes.map((type) => (
                     <Badge
                       key={type}
@@ -1074,7 +1350,8 @@ export function EventsClient({ events }: EventsClientProps) {
                   const day = i + 1
                   const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
                   // Filter calendar events based on search and type filters
-                  const dayEvents = events.filter((e) => {
+                  const dayEvents = calendarEvents.filter((e) => {
+                    const isDistrictMeeting = e.id.startsWith("district-meeting:")
                     // Check if this day falls within the event's date range
                     const eventStart = e.date.substring(0, 10)
                     const eventEnd = e.endDate ? e.endDate.substring(0, 10) : eventStart
@@ -1089,7 +1366,8 @@ export function EventsClient({ events }: EventsClientProps) {
                       if (!matchesSearch) return false
                     }
                     // Apply type filter - event must have at least one matching type
-                    if (selectedTypes.length > 0 && !eventHasType(e, selectedTypes)) {
+                    // District monthly meetings are controlled by their own toggle; they shouldn't disappear when filtering other event types.
+                    if (!isDistrictMeeting && selectedTypes.length > 0 && !eventHasType(e, selectedTypes)) {
                       return false
                     }
                     return true
@@ -1191,7 +1469,7 @@ export function EventsClient({ events }: EventsClientProps) {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {groupEvents(filteredEvents).map((group) => {
+                  {pagedUpcomingGroups.map((group) => {
                     if (group.type === "single" && group.event) {
                       const event = group.event
                       return (
@@ -1459,6 +1737,7 @@ export function EventsClient({ events }: EventsClientProps) {
 
                     return null
                   })}
+                  <SectionPagination page={upcomingPage} totalPages={upcomingTotalPages} onPageChange={setUpcomingPage} />
                 </div>
               )}
             </div>
@@ -1480,7 +1759,7 @@ export function EventsClient({ events }: EventsClientProps) {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {groupEvents(filteredDistrictEvents).map((group) => {
+                  {pagedDistrictGroups.map((group) => {
                     if (group.type === "single" && group.event) {
                       const event = group.event
                       return (
@@ -1748,6 +2027,250 @@ export function EventsClient({ events }: EventsClientProps) {
 
                     return null
                   })}
+                  <SectionPagination page={districtPage} totalPages={districtTotalPages} onPageChange={setDistrictPage} />
+                </div>
+              )}
+            </div>
+
+            {/* District Monthly Meetings */}
+            <div className="mt-12 pt-8 border-t border-border">
+              <h3 id="district-monthly-meetings-heading" className="text-xl font-semibold text-foreground mb-2">
+                District Monthly Meetings
+              </h3>
+              <p className="text-sm text-muted-foreground mb-6">
+                Recurring monthly district meetings, generated from the Districts content.
+              </p>
+
+              {!showDistrictMeetings ? (
+                <div className="text-center py-8 rounded-xl border border-border bg-card">
+                  <Calendar className="mx-auto h-10 w-10 text-muted-foreground" />
+                  <p className="mt-3 text-muted-foreground">
+                    District monthly meetings are hidden. Turn on <span className="font-medium text-foreground">District meetings</span> in the filters.
+                  </p>
+                </div>
+              ) : filteredDistrictMeetingEvents.length === 0 ? (
+                <div className="text-center py-8 rounded-xl border border-border bg-card">
+                  <Calendar className="mx-auto h-10 w-10 text-muted-foreground" />
+                  <p className="mt-3 text-muted-foreground">No district monthly meetings match your filters.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {pagedDistrictMeetingGroups.map((group) => {
+                    if (group.type === "single" && group.event) {
+                      const event = group.event
+                      return (
+                        <article
+                          key={event.id}
+                          className="group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md"
+                        >
+                          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+                            <div className="flex-1">
+                              {event.types.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-2 mb-3">
+                                  {event.types.map((type) => (
+                                    <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
+                                      {type}
+                                    </Badge>
+                                  ))}
+                                  <Badge variant="outline" className="flex items-center gap-1">
+                                    <Repeat className="h-3 w-3" />
+                                    Monthly
+                                  </Badge>
+                                </div>
+                              )}
+                              <h4 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
+                                {event.title}
+                              </h4>
+                              <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{event.description}</p>
+                            </div>
+
+                            <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
+                              <div className="flex items-center gap-2 text-sm text-foreground lg:justify-end">
+                                <Calendar className="h-4 w-4 text-primary flex-shrink-0" aria-hidden="true" />
+                                <span className="font-medium">{formatDateRange(event.date, event.endDate)}</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                <span>{event.timeTBD ? "Time TBD" : formatTimeRange(event.startTime, event.endTime, userTimezone)}</span>
+                              </div>
+                              {event.address ? (
+                                <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
+                                  <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                                  <a
+                                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="lg:text-right text-primary hover:underline"
+                                  >
+                                    {event.address}
+                                  </a>
+                                </div>
+                              ) : (event.locationType === "in-person" || event.locationType === "hybrid") && (
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                  <MapPin className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                  <span>Location TBD</span>
+                                </div>
+                              )}
+                              {(event.locationType === "online" || event.locationType === "hybrid") && (
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                  <Globe className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                  <span>Contact DCM for online meeting details</span>
+                                </div>
+                              )}
+                              <div className="flex items-center gap-2 text-sm lg:justify-end pt-2">
+                                <Button variant="outline" size="sm" asChild>
+                                  <a
+                                    href={generateGoogleCalendarUrl(event)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <CalendarPlus className="h-4 w-4 mr-2" aria-hidden="true" />
+                                    Add to Calendar
+                                  </a>
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </article>
+                      )
+                    }
+
+                    if (group.type === "recurring" && group.occurrences && group.parentEventId) {
+                      const firstOccurrence = group.occurrences[0]
+                      const remainingOccurrences = group.occurrences.slice(1)
+                      const isExpanded = expandedGroups.has(group.parentEventId)
+
+                      return (
+                        <article
+                          key={group.parentEventId}
+                          className="rounded-xl border border-border bg-card overflow-hidden"
+                        >
+                          <div className="p-6 transition-all hover:bg-muted/30">
+                            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+                              <div className="flex-1">
+                                {firstOccurrence.types.length > 0 && (
+                                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                                    {firstOccurrence.types.map((type) => (
+                                      <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
+                                        {type}
+                                      </Badge>
+                                    ))}
+                                    <Badge variant="outline" className="flex items-center gap-1">
+                                      <Repeat className="h-3 w-3" />
+                                      {group.recurrenceDescription}
+                                    </Badge>
+                                  </div>
+                                )}
+                                <h4 className="text-xl font-semibold text-foreground">
+                                  {firstOccurrence.title}
+                                </h4>
+                                <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{firstOccurrence.description}</p>
+                              </div>
+
+                              <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
+                                <div className="flex items-center gap-2 text-sm text-foreground lg:justify-end">
+                                  <Calendar className="h-4 w-4 text-primary flex-shrink-0" aria-hidden="true" />
+                                  <span className="font-medium">Next: {formatDateRange(firstOccurrence.date, firstOccurrence.endDate)}</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                  <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                  <span>{firstOccurrence.timeTBD ? "Time TBD" : formatTimeRange(firstOccurrence.startTime, firstOccurrence.endTime, userTimezone)}</span>
+                                </div>
+                                {firstOccurrence.address ? (
+                                  <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
+                                    <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                                    <a
+                                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(firstOccurrence.address)}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="lg:text-right text-primary hover:underline"
+                                    >
+                                      {firstOccurrence.address}
+                                    </a>
+                                  </div>
+                                ) : (firstOccurrence.locationType === "in-person" || firstOccurrence.locationType === "hybrid") && (
+                                  <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                    <MapPin className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                    <span>Location TBD</span>
+                                  </div>
+                                )}
+                                {(firstOccurrence.locationType === "online" || firstOccurrence.locationType === "hybrid") && (
+                                  <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                    <Globe className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                    <span>Contact DCM for online meeting details</span>
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-2 text-sm lg:justify-end pt-2">
+                                  <Button variant="outline" size="sm" asChild>
+                                    <a
+                                      href={generateGoogleCalendarUrl(firstOccurrence)}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      <CalendarPlus className="h-4 w-4 mr-2" aria-hidden="true" />
+                                      Add to Calendar
+                                    </a>
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {remainingOccurrences.length > 0 && (
+                            <>
+                              <button
+                                onClick={() => toggleGroupExpansion(group.parentEventId!)}
+                                className="w-full px-6 py-3 flex items-center justify-between bg-muted/30 hover:bg-muted/50 transition-colors border-t border-border"
+                              >
+                                <span className="text-sm font-medium text-muted-foreground">
+                                  {remainingOccurrences.length} more occurrence{remainingOccurrences.length > 1 ? "s" : ""} in this series
+                                </span>
+                                <ChevronDown
+                                  className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                                />
+                              </button>
+
+                              {isExpanded && (
+                                <div className="border-t border-border divide-y divide-border">
+                                  {remainingOccurrences.map((occurrence) => (
+                                    <div key={occurrence.id} className="p-4 bg-muted/10 hover:bg-muted/20 transition-colors">
+                                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                        <div className="flex items-center gap-3">
+                                          <Calendar className="h-4 w-4 text-primary flex-shrink-0" aria-hidden="true" />
+                                          <span className="font-medium text-sm">{formatDateRange(occurrence.date, occurrence.endDate)}</span>
+                                          <span className="text-sm text-muted-foreground">
+                                            {occurrence.timeTBD ? "Time TBD" : formatTimeRange(occurrence.startTime, occurrence.endTime, userTimezone)}
+                                          </span>
+                                        </div>
+                                        <Button variant="ghost" size="sm" asChild>
+                                          <a
+                                            href={generateGoogleCalendarUrl(occurrence)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                          >
+                                            <CalendarPlus className="h-4 w-4 mr-1" aria-hidden="true" />
+                                            Add
+                                          </a>
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </article>
+                      )
+                    }
+
+                    return null
+                  })}
+
+                  <SectionPagination
+                    page={districtMeetingsPage}
+                    totalPages={districtMeetingsTotalPages}
+                    onPageChange={setDistrictMeetingsPage}
+                  />
                 </div>
               )}
             </div>
@@ -1792,6 +2315,208 @@ export function EventsClient({ events }: EventsClientProps) {
                   </Link>
                 </Button>
               </div>
+            </div>
+
+            {/* Past Events */}
+            <div className="mt-6 rounded-xl border border-border bg-card overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setPastOpen((v) => !v)}
+                className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-muted/30 transition-colors"
+                aria-expanded={pastOpen}
+              >
+                <div>
+                  <h3 className="text-lg font-semibold text-foreground">Past Events</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    View recent past events. This section starts collapsed to keep the page focused on upcoming items.
+                  </p>
+                </div>
+                <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${pastOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {pastOpen && (
+                <div className="border-t border-border p-6">
+                  {pastError && (
+                    <div className="mb-4 rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
+                      {pastError}
+                    </div>
+                  )}
+
+                  <div className="space-y-3 mb-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                      <div className="relative flex-1 max-w-sm">
+                        <Search
+                          className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                        <Input
+                          type="search"
+                          placeholder="Search past events..."
+                          value={pastSearchQuery}
+                          onChange={(e) => setPastSearchQuery(e.target.value)}
+                          className="pl-9 h-9"
+                          aria-label="Search past events"
+                        />
+                      </div>
+                      <MultiSelect
+                        options={eventTypeOptions}
+                        value={pastSelectedTypes}
+                        onChange={setPastSelectedTypes}
+                        placeholder="Event type"
+                        className="w-full sm:w-44"
+                      />
+                      <DateRangePicker
+                        value={pastDateRange}
+                        onChange={setPastDateRange}
+                        placeholder="Date range"
+                        className="w-full sm:w-52"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="justify-start text-muted-foreground hover:text-foreground"
+                        onClick={() => {
+                          setPastSearchQuery("")
+                          setPastSelectedTypes([])
+                          setPastDateRange(undefined)
+                        }}
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Past events are filtered on the server so results include events beyond what has already been loaded.
+                    </p>
+                    {pastLoading && pastPages.length > 0 && (
+                      <p className="text-xs text-muted-foreground">Updating results…</p>
+                    )}
+                  </div>
+
+                  {pastLoading && pastPages.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">Loading past events...</div>
+                  ) : currentPastPage && currentPastPage.events.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No past events found.</div>
+                  ) : (
+                    <>
+                      <div className="space-y-4">
+                        {(currentPastPage?.events ?? []).map((event) => (
+                          <article
+                            key={event.id}
+                            className="group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md"
+                          >
+                            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+                              <div className="flex-1">
+                                {event.types.length > 0 && (
+                                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                                    {event.types.map((type) => (
+                                      <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
+                                        {type}
+                                      </Badge>
+                                    ))}
+                                    {event.isRecurring && event.recurrenceDescription && (
+                                      <Badge variant="outline" className="flex items-center gap-1">
+                                        <Repeat className="h-3 w-3" />
+                                        {event.recurrenceDescription}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                )}
+                                <h4 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
+                                  {event.title}
+                                </h4>
+                                <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{event.description}</p>
+                              </div>
+
+                              <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
+                                <div className="flex items-center gap-2 text-sm text-foreground lg:justify-end">
+                                  <Calendar className="h-4 w-4 text-primary flex-shrink-0" aria-hidden="true" />
+                                  <span className="font-medium">{formatDateRange(event.date, event.endDate)}</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                  <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                  <span>{event.timeTBD ? "Time TBD" : formatTimeRange(event.startTime, event.endTime, userTimezone)}</span>
+                                </div>
+                                {event.address ? (
+                                  <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
+                                    <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                                    <a
+                                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="lg:text-right text-primary hover:underline"
+                                    >
+                                      {event.address}
+                                    </a>
+                                  </div>
+                                ) : (event.locationType === "in-person" || event.locationType === "hybrid") && (
+                                  <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                    <MapPin className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                    <span>Location TBD</span>
+                                  </div>
+                                )}
+                                {(event.locationType === "online" || event.locationType === "hybrid") && (
+                                  <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                    <Globe className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                    {event.meetingLink ? (
+                                      <a
+                                        href={event.meetingLink}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-primary hover:underline"
+                                      >
+                                        {event.locationType === "hybrid" ? "Online (Hybrid)" : "Online"}
+                                      </a>
+                                    ) : (
+                                      <span>Meeting Link TBD</span>
+                                    )}
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-2 text-sm lg:justify-end pt-2">
+                                  <Button variant="outline" size="sm" asChild>
+                                    <a
+                                      href={generateGoogleCalendarUrl(event)}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      <CalendarPlus className="h-4 w-4 mr-2" aria-hidden="true" />
+                                      Add to Calendar
+                                    </a>
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-3 pt-4">
+                        <div className="text-sm text-muted-foreground">
+                          Page <span className="font-medium text-foreground">{pastPageIndex + 1}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={goToPrevPastPage}
+                            disabled={pastPageIndex <= 0 || pastLoading}
+                          >
+                            Previous
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={goToNextPastPage}
+                            disabled={!currentPastPage?.nextCursor || pastLoading}
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </section>
