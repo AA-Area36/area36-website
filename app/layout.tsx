@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter, Geist_Mono } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
+import { getRequestLocale, localeToHtmlLang } from "@/lib/i18n/get-locale"
 import "./globals.css"
 
 const _inter = Inter({ subsets: ["latin"] })
@@ -14,13 +15,14 @@ export const metadata: Metadata = {
   keywords: ["Alcoholics Anonymous", "AA", "Southern Minnesota", "Area 36", "SMAA", "recovery", "meetings", "sobriety"],
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const locale = await getRequestLocale()
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={localeToHtmlLang(locale)} suppressHydrationWarning>
       <body className="font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <a href="#main-content" className="skip-link">

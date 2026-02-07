@@ -2,7 +2,7 @@ import { auth, signOut } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { CalendarDays, LogOut, Shield, TrendingUp, Mic, Files, FileText } from "lucide-react"
+import { CalendarDays, LogOut, Shield, TrendingUp, Mic, Files, FileText, Languages } from "lucide-react"
 import { createRequestLogger } from "@/lib/logger"
 
 export default async function DashboardLayout({
@@ -66,6 +66,13 @@ export default async function DashboardLayout({
                 >
                   <FileText className="h-4 w-4" />
                   Reports
+                </Link>
+                <Link
+                  href="/admin/content"
+                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Languages className="h-4 w-4" />
+                  Content
                 </Link>
               </nav>
             </div>

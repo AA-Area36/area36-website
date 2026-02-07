@@ -48,8 +48,8 @@ export function EventsLoader() {
 
 function EventsLoading() {
   return (
-    <div className="flex min-h-screen items-center justify-center">
+    <main id="main-content" className="flex-1 flex items-center justify-center">
       <div className="animate-pulse text-muted-foreground">Loading events...</div>
-    </div>
+    </main>
   )
 }

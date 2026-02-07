@@ -2,8 +2,15 @@ import type React from "react"
 import Link from "next/link"
 import { ArrowRight, Calendar, FileText, Users, Newspaper } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { getRequestLocale } from "@/lib/i18n/get-locale"
+import { getContent } from "@/lib/content/repo"
+import { createTranslator } from "@/lib/content/t"
 
-export function HeroSection() {
+export async function HeroSection() {
+  const locale = await getRequestLocale()
+  const homeContent = await getContent("home", locale)
+  const { t } = createTranslator(homeContent)
+
   return (
     <section
       className="relative overflow-hidden bg-gradient-to-b from-primary/5 to-background py-20 sm:py-32"
@@ -15,22 +22,25 @@ export function HeroSection() {
             id="hero-heading"
             className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl lg:text-6xl text-balance"
           >
-            Southern Minnesota <span className="text-primary">Area 36</span>
+            {t("hero.headingPrefix", "Southern Minnesota")}{" "}
+            <span className="text-primary">{t("hero.headingAccent", "Area 36")}</span>
           </h1>
           <p className="mt-6 text-lg leading-relaxed text-muted-foreground sm:text-xl text-pretty">
-            Welcome to the A.A. General Service website for Southern Minnesota Area 36, also known as the Southern
-            Minnesota Area Assembly (SMAA).
+            {t(
+              "hero.intro",
+              "Welcome to the A.A. General Service website for Southern Minnesota Area 36, also known as the Southern Minnesota Area Assembly (SMAA).",
+            )}
           </p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button asChild size="lg" className="w-full sm:w-auto">
-              <Link href="/events">
-                View Events
+              <Link href={t("hero.buttons.events.href", "/events")}>
+                {t("hero.buttons.events.label", "View Events")}
                 <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
               </Link>
             </Button>
             <Button asChild variant="outline" size="lg" className="w-full sm:w-auto bg-transparent">
-              <Link href="https://www.aa.org/find-aa" target="_blank" rel="noopener noreferrer">
-                Find a Meeting
+              <Link href={t("hero.buttons.meeting.href", "https://www.aa.org/find-aa")} target="_blank" rel="noopener noreferrer">
+                {t("hero.buttons.meeting.label", "Find a Meeting")}
               </Link>
             </Button>
           </div>
@@ -39,27 +49,27 @@ export function HeroSection() {
         <div className="mt-20 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           <QuickAccessCard
             icon={Calendar}
-            title="Upcoming Events"
-            description="View assemblies, workshops, and service events."
-            href="/events"
+            title={t("hero.quickCards.events.title", "Upcoming Events")}
+            description={t("hero.quickCards.events.description", "View assemblies, workshops, and service events.")}
+            href={t("hero.quickCards.events.href", "/events")}
           />
           <QuickAccessCard
             icon={Newspaper}
-            title="Newsletter"
-            description="Read the latest Area 36 newsletter online."
-            href="/newsletter"
+            title={t("hero.quickCards.newsletter.title", "Newsletter")}
+            description={t("hero.quickCards.newsletter.description", "Read the latest Area 36 newsletter online.")}
+            href={t("hero.quickCards.newsletter.href", "/newsletter")}
           />
           <QuickAccessCard
             icon={FileText}
-            title="Resources"
-            description="Access forms, documents, and materials."
-            href="/resources"
+            title={t("hero.quickCards.resources.title", "Resources")}
+            description={t("hero.quickCards.resources.description", "Access forms, documents, and materials.")}
+            href={t("hero.quickCards.resources.href", "/resources")}
           />
           <QuickAccessCard
             icon={Users}
-            title="Get Involved"
-            description="Learn about service and how to participate."
-            href="/service"
+            title={t("hero.quickCards.involved.title", "Get Involved")}
+            description={t("hero.quickCards.involved.description", "Learn about service and how to participate.")}
+            href={t("hero.quickCards.involved.href", "/service")}
           />
         </div>
       </div>

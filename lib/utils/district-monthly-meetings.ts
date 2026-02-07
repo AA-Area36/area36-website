@@ -1,5 +1,5 @@
 import type { DisplayEvent } from "@/lib/types/recurrence"
-import { districtDirectory } from "@/lib/constants/district-directory"
+import type { DistrictDirectoryEntry } from "@/lib/constants/district-directory"
 
 const WEEKDAY_TO_INDEX: Record<string, number> = {
   sunday: 0,
@@ -70,7 +70,11 @@ function deriveLocationType(location: string | undefined): "in-person" | "hybrid
   return "in-person"
 }
 
-export function buildDistrictMonthlyMeetingOccurrences(rangeStart: Date, rangeEnd: Date): DisplayEvent[] {
+export function buildDistrictMonthlyMeetingOccurrences(
+  rangeStart: Date,
+  rangeEnd: Date,
+  directory: DistrictDirectoryEntry[],
+): DisplayEvent[] {
   const results: DisplayEvent[] = []
 
   // Normalize to first-of-month and iterate months through rangeEnd.
@@ -78,7 +82,7 @@ export function buildDistrictMonthlyMeetingOccurrences(rangeStart: Date, rangeEn
   const endMonth = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), 1)
 
   // Pre-parse district patterns once.
-  const districtPatterns = districtDirectory
+  const districtPatterns = directory
     .map((district) => {
       if (!district.meetingDay) return null
       const pattern = parseMeetingDayPattern(district.meetingDay)
@@ -86,7 +90,7 @@ export function buildDistrictMonthlyMeetingOccurrences(rangeStart: Date, rangeEn
       return { district, pattern }
     })
     .filter(Boolean) as Array<{
-    district: (typeof districtDirectory)[number]
+    district: DistrictDirectoryEntry
     pattern: NonNullable<ReturnType<typeof parseMeetingDayPattern>>
   }>
 
@@ -157,4 +161,3 @@ export function buildDistrictMonthlyMeetingOccurrences(rangeStart: Date, rangeEn
 
   return results
 }
-

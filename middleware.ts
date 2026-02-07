@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
+import { detectLocaleFromAcceptLanguage } from "@/lib/i18n/accept-language"
+import { DEFAULT_LOCALE, isLocale, LOCALE_COOKIE } from "@/lib/i18n/locales"
 
 // Generate a short request ID for tracing
 function generateRequestId(): string {
@@ -23,6 +25,23 @@ export function middleware(request: NextRequest) {
   // Add request ID header for tracing through the request lifecycle
   const response = NextResponse.next()
   response.headers.set("x-request-id", requestId)
+
+  // Locale selection:
+  // - Respect explicit cookie (user choice)
+  // - Otherwise derive from Accept-Language and persist (browser settings / locale headers)
+  const existing = request.cookies.get(LOCALE_COOKIE)?.value
+  if (!isLocale(existing)) {
+    const detected = detectLocaleFromAcceptLanguage(request.headers.get("accept-language")) ?? DEFAULT_LOCALE
+    response.cookies.set(LOCALE_COOKIE, detected, {
+      path: "/",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 365, // 1 year
+    })
+    response.headers.set("vary", "accept-language")
+    response.headers.set("x-locale", detected)
+  } else {
+    response.headers.set("x-locale", existing)
+  }
   
   // Log API and dynamic routes (skip static assets for noise reduction)
   if (path.startsWith("/api/") || path.includes("[")) {
