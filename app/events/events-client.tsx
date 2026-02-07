@@ -3,8 +3,6 @@
 import * as React from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useGoogleReCaptcha } from "react-google-recaptcha-v3"
-import { Header } from "@/components/header"
-import { Footer } from "@/components/footer"
 import { Calendar, CalendarPlus, MapPin, Clock, ExternalLink, Search, Plus, X, Globe, HelpCircle, Repeat, ChevronDown, Check } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -32,7 +30,6 @@ import { submitEvent } from "./actions"
 import { uploadEventFlyer } from "./flyer-actions"
 import type { Event, LocationType, EventType, EventFlyer } from "@/lib/db/schema"
 import type { DisplayEvent } from "@/lib/types/recurrence"
-import { buildDistrictMonthlyMeetingOccurrences } from "@/lib/utils/district-monthly-meetings"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 
 // Event with types array and flyers (from junction tables)
@@ -395,13 +392,39 @@ export function EventsClient({ events }: EventsClientProps) {
     return matchesSearch && matchesDateRange
   }
 
-  const districtMeetingEvents = React.useMemo(() => {
+  const [districtMeetingEvents, setDistrictMeetingEvents] = React.useState<DisplayEvent[]>([])
+  const [districtMeetingLoadError, setDistrictMeetingLoadError] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    let active = true
     const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" })
     const rangeStart = parseLocalDate(todayStr)
     rangeStart.setDate(rangeStart.getDate() - 1)
     const rangeEnd = parseLocalDate(todayStr)
     rangeEnd.setFullYear(rangeEnd.getFullYear() + 1)
-    return buildDistrictMonthlyMeetingOccurrences(rangeStart, rangeEnd)
+
+    const start = rangeStart.toLocaleDateString("en-CA", { timeZone: "America/Chicago" })
+    const end = rangeEnd.toLocaleDateString("en-CA", { timeZone: "America/Chicago" })
+
+    const load = async () => {
+      try {
+        const res = await fetch(`/api/district-meetings?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`)
+        if (!res.ok) throw new Error(`District meetings API error: ${res.status}`)
+        const data = (await res.json()) as DisplayEvent[]
+        if (!active) return
+        setDistrictMeetingEvents(Array.isArray(data) ? data : [])
+        setDistrictMeetingLoadError(null)
+      } catch (e) {
+        if (!active) return
+        setDistrictMeetingEvents([])
+        setDistrictMeetingLoadError(e instanceof Error ? e.message : "Failed to load district meetings")
+      }
+    }
+
+    load()
+    return () => {
+      active = false
+    }
   }, [])
 
   const filteredDistrictMeetingEvents = districtMeetingEvents.filter(applyCommonFilters)
@@ -787,14 +810,12 @@ export function EventsClient({ events }: EventsClientProps) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <Header />
-      <main id="main-content" className="flex-1">
-        {/* Hero */}
-        <section
-          className="bg-gradient-to-b from-primary/5 to-background py-16 sm:py-20"
-          aria-labelledby="events-heading"
-        >
+    <main id="main-content" className="flex-1">
+      {/* Hero */}
+      <section
+        className="bg-gradient-to-b from-primary/5 to-background py-16 sm:py-20"
+        aria-labelledby="events-heading"
+      >
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
               <div>
@@ -1196,7 +1217,7 @@ export function EventsClient({ events }: EventsClientProps) {
               </div>
             </div>
           </div>
-        </section>
+      </section>
 
         {/* Filters */}
         <section className="border-b border-border bg-muted/30 py-4">
@@ -2520,8 +2541,6 @@ export function EventsClient({ events }: EventsClientProps) {
             </div>
           </div>
         </section>
-      </main>
-      <Footer />
-    </div>
+    </main>
   )
 }

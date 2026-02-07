@@ -302,3 +302,26 @@ export const reportsMonthly = sqliteTable("reports_monthly", {
 
 export type ReportsMonthly = typeof reportsMonthly.$inferSelect
 export type NewReportsMonthly = typeof reportsMonthly.$inferInsert
+
+// Site content documents (i18n + editable content).
+export const contentDocuments = sqliteTable(
+  "content_documents",
+  {
+    scope: text("scope").notNull(),
+    locale: text("locale").notNull(),
+    draftJson: text("draft_json"),
+    publishedJson: text("published_json"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    draftUpdatedAt: text("draft_updated_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    publishedAt: text("published_at"),
+    updatedBy: text("updated_by"),
+  },
+  (table) => [primaryKey({ columns: [table.scope, table.locale] })]
+)
+
+export type ContentDocument = typeof contentDocuments.$inferSelect
+export type NewContentDocument = typeof contentDocuments.$inferInsert

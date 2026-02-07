@@ -52,6 +52,7 @@ next-env.d.ts
 
 # AI assistants
 .opencode/
+.codex/
 
 # OS
 Thumbs.db
