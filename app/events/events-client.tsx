@@ -184,6 +184,56 @@ function groupEvents(events: DisplayEvent[]): EventGroup[] {
   return groups
 }
 
+// Same grouping logic as groupEvents, but sorted for "most recent first" UIs (past events).
+function groupEventsDescending(events: DisplayEvent[]): EventGroup[] {
+  const groups: EventGroup[] = []
+  const recurringGroups = new Map<string, DisplayEvent[]>()
+
+  for (const event of events) {
+    if (event.isRecurringInstance && event.parentEventId) {
+      const existing = recurringGroups.get(event.parentEventId) || []
+      existing.push(event)
+      recurringGroups.set(event.parentEventId, existing)
+    } else if (event.isRecurring && !event.isRecurringInstance) {
+      // Parent recurring event row (shouldn't normally be present in DisplayEvent lists).
+    } else {
+      groups.push({ type: "single", event })
+    }
+  }
+
+  for (const [parentEventId, occurrences] of recurringGroups) {
+    // Sort occurrences by date DESC so the first card shows the most recent occurrence.
+    occurrences.sort((a, b) => {
+      const dateCompare = b.date.localeCompare(a.date)
+      if (dateCompare !== 0) return dateCompare
+      if (!a.startTime && !b.startTime) return 0
+      if (!a.startTime) return 1
+      if (!b.startTime) return -1
+      return b.startTime.localeCompare(a.startTime)
+    })
+
+    groups.push({
+      type: "recurring",
+      parentEventId,
+      occurrences,
+      recurrenceDescription: occurrences[0]?.recurrenceDescription,
+    })
+  }
+
+  groups.sort((a, b) => {
+    const aFirst = a.type === "single" ? a.event! : a.occurrences![0]
+    const bFirst = b.type === "single" ? b.event! : b.occurrences![0]
+    const dateCompare = bFirst.date.localeCompare(aFirst.date)
+    if (dateCompare !== 0) return dateCompare
+    if (!aFirst.startTime && !bFirst.startTime) return 0
+    if (!aFirst.startTime) return 1
+    if (!bFirst.startTime) return -1
+    return bFirst.startTime.localeCompare(aFirst.startTime)
+  })
+
+  return groups
+}
+
 function SectionPagination({
   page,
   totalPages,
@@ -273,6 +323,7 @@ export function EventsClient({ events }: EventsClientProps) {
   const [formStartDate, setFormStartDate] = React.useState("")
   // Track which recurring event groups are expanded
   const [expandedGroups, setExpandedGroups] = React.useState<Set<string>>(new Set())
+  const [expandedPastGroups, setExpandedPastGroups] = React.useState<Set<string>>(new Set())
 
   // Pagination (10 per section)
   const [upcomingPage, setUpcomingPage] = React.useState(1)
@@ -298,6 +349,18 @@ export function EventsClient({ events }: EventsClientProps) {
   // Toggle expansion of a recurring event group
   const toggleGroupExpansion = (parentEventId: string) => {
     setExpandedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(parentEventId)) {
+        next.delete(parentEventId)
+      } else {
+        next.add(parentEventId)
+      }
+      return next
+    })
+  }
+
+  const togglePastGroupExpansion = (parentEventId: string) => {
+    setExpandedPastGroups(prev => {
       const next = new Set(prev)
       if (next.has(parentEventId)) {
         next.delete(parentEventId)
@@ -2421,94 +2484,243 @@ export function EventsClient({ events }: EventsClientProps) {
                   ) : (
                     <>
                       <div className="space-y-4">
-                        {(currentPastPage?.events ?? []).map((event) => (
-                          <article
-                            key={event.id}
-                            className="group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md"
-                          >
-                            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
-                              <div className="flex-1">
-                                {event.types.length > 0 && (
-                                  <div className="flex flex-wrap items-center gap-2 mb-3">
-                                    {event.types.map((type) => (
-                                      <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
-                                        {type}
-                                      </Badge>
-                                    ))}
-                                    {event.isRecurring && event.recurrenceDescription && (
-                                      <Badge variant="outline" className="flex items-center gap-1">
-                                        <Repeat className="h-3 w-3" />
-                                        {event.recurrenceDescription}
-                                      </Badge>
+                        {groupEventsDescending(currentPastPage?.events ?? []).map((group) => {
+                          if (group.type === "single" && group.event) {
+                            const event = group.event
+                            return (
+                              <article
+                                key={event.id}
+                                className="group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md"
+                              >
+                                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+                                  <div className="flex-1">
+                                    {event.types.length > 0 && (
+                                      <div className="flex flex-wrap items-center gap-2 mb-3">
+                                        {event.types.map((type) => (
+                                          <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
+                                            {type}
+                                          </Badge>
+                                        ))}
+                                        {event.isRecurring && event.recurrenceDescription && (
+                                          <Badge variant="outline" className="flex items-center gap-1">
+                                            <Repeat className="h-3 w-3" />
+                                            {event.recurrenceDescription}
+                                          </Badge>
+                                        )}
+                                      </div>
                                     )}
+                                    <h4 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
+                                      {event.title}
+                                    </h4>
+                                    <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{event.description}</p>
                                   </div>
-                                )}
-                                <h4 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
-                                  {event.title}
-                                </h4>
-                                <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{event.description}</p>
-                              </div>
 
-                              <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
-                                <div className="flex items-center gap-2 text-sm text-foreground lg:justify-end">
-                                  <Calendar className="h-4 w-4 text-primary flex-shrink-0" aria-hidden="true" />
-                                  <span className="font-medium">{formatDateRange(event.date, event.endDate)}</span>
-                                </div>
-                                <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
-                                  <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                                  <span>{event.timeTBD ? "Time TBD" : formatTimeRange(event.startTime, event.endTime, userTimezone)}</span>
-                                </div>
-                                {event.address ? (
-                                  <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
-                                    <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
-                                    <a
-                                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="lg:text-right text-primary hover:underline"
-                                    >
-                                      {event.address}
-                                    </a>
-                                  </div>
-                                ) : (event.locationType === "in-person" || event.locationType === "hybrid") && (
-                                  <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
-                                    <MapPin className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                                    <span>Location TBD</span>
-                                  </div>
-                                )}
-                                {(event.locationType === "online" || event.locationType === "hybrid") && (
-                                  <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
-                                    <Globe className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                                    {event.meetingLink ? (
-                                      <a
-                                        href={event.meetingLink}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-primary hover:underline"
-                                      >
-                                        {event.locationType === "hybrid" ? "Online (Hybrid)" : "Online"}
-                                      </a>
-                                    ) : (
-                                      <span>Meeting Link TBD</span>
+                                  <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
+                                    <div className="flex items-center gap-2 text-sm text-foreground lg:justify-end">
+                                      <Calendar className="h-4 w-4 text-primary flex-shrink-0" aria-hidden="true" />
+                                      <span className="font-medium">{formatDateRange(event.date, event.endDate)}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                      <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                      <span>{event.timeTBD ? "Time TBD" : formatTimeRange(event.startTime, event.endTime, userTimezone)}</span>
+                                    </div>
+                                    {event.address ? (
+                                      <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
+                                        <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                                        <a
+                                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="lg:text-right text-primary hover:underline"
+                                        >
+                                          {event.address}
+                                        </a>
+                                      </div>
+                                    ) : (event.locationType === "in-person" || event.locationType === "hybrid") && (
+                                      <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                        <MapPin className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                        <span>Location TBD</span>
+                                      </div>
                                     )}
+                                    {(event.locationType === "online" || event.locationType === "hybrid") && (
+                                      <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                        <Globe className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                        {event.meetingLink ? (
+                                          <a
+                                            href={event.meetingLink}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-primary hover:underline"
+                                          >
+                                            {event.locationType === "hybrid" ? "Online (Hybrid)" : "Online"}
+                                          </a>
+                                        ) : (
+                                          <span>Meeting Link TBD</span>
+                                        )}
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-2 text-sm lg:justify-end pt-2">
+                                      <Button variant="outline" size="sm" asChild>
+                                        <a
+                                          href={generateGoogleCalendarUrl(event)}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          <CalendarPlus className="h-4 w-4 mr-2" aria-hidden="true" />
+                                          Add to Calendar
+                                        </a>
+                                      </Button>
+                                    </div>
                                   </div>
-                                )}
-                                <div className="flex items-center gap-2 text-sm lg:justify-end pt-2">
-                                  <Button variant="outline" size="sm" asChild>
-                                    <a
-                                      href={generateGoogleCalendarUrl(event)}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                    >
-                                      <CalendarPlus className="h-4 w-4 mr-2" aria-hidden="true" />
-                                      Add to Calendar
-                                    </a>
-                                  </Button>
                                 </div>
-                              </div>
-                            </div>
-                          </article>
-                        ))}
+                              </article>
+                            )
+                          }
+
+                          if (group.type === "recurring" && group.occurrences && group.parentEventId) {
+                            const firstOccurrence = group.occurrences[0]
+                            const remainingOccurrences = group.occurrences.slice(1)
+                            const isExpanded = expandedPastGroups.has(group.parentEventId)
+
+                            return (
+                              <article
+                                key={group.parentEventId}
+                                className="rounded-xl border border-border bg-card overflow-hidden"
+                              >
+                                <div className="p-6 transition-all hover:bg-muted/30">
+                                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+                                    <div className="flex-1">
+                                      {firstOccurrence.types.length > 0 && (
+                                        <div className="flex flex-wrap items-center gap-2 mb-3">
+                                          {firstOccurrence.types.map((type) => (
+                                            <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
+                                              {type}
+                                            </Badge>
+                                          ))}
+                                          <Badge variant="outline" className="flex items-center gap-1">
+                                            <Repeat className="h-3 w-3" />
+                                            {group.recurrenceDescription}
+                                          </Badge>
+                                        </div>
+                                      )}
+                                      <h4 className="text-xl font-semibold text-foreground">
+                                        {firstOccurrence.title}
+                                      </h4>
+                                      <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{firstOccurrence.description}</p>
+                                    </div>
+
+                                    <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
+                                      <div className="flex items-center gap-2 text-sm text-foreground lg:justify-end">
+                                        <Calendar className="h-4 w-4 text-primary flex-shrink-0" aria-hidden="true" />
+                                        <span className="font-medium">{formatDateRange(firstOccurrence.date, firstOccurrence.endDate)}</span>
+                                      </div>
+                                      <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                        <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                        <span>{firstOccurrence.timeTBD ? "Time TBD" : formatTimeRange(firstOccurrence.startTime, firstOccurrence.endTime, userTimezone)}</span>
+                                      </div>
+                                      {firstOccurrence.address ? (
+                                        <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
+                                          <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                                          <a
+                                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(firstOccurrence.address)}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="lg:text-right text-primary hover:underline"
+                                          >
+                                            {firstOccurrence.address}
+                                          </a>
+                                        </div>
+                                      ) : (firstOccurrence.locationType === "in-person" || firstOccurrence.locationType === "hybrid") && (
+                                        <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                          <MapPin className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                          <span>Location TBD</span>
+                                        </div>
+                                      )}
+                                      {(firstOccurrence.locationType === "online" || firstOccurrence.locationType === "hybrid") && (
+                                        <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
+                                          <Globe className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+                                          {firstOccurrence.meetingLink ? (
+                                            <a
+                                              href={firstOccurrence.meetingLink}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-primary hover:underline"
+                                            >
+                                              {firstOccurrence.locationType === "hybrid" ? "Online (Hybrid)" : "Online"}
+                                            </a>
+                                          ) : (
+                                            <span>Meeting Link TBD</span>
+                                          )}
+                                        </div>
+                                      )}
+                                      <div className="flex items-center gap-2 text-sm lg:justify-end pt-2">
+                                        <Button variant="outline" size="sm" asChild>
+                                          <a
+                                            href={generateGoogleCalendarUrl(firstOccurrence)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                          >
+                                            <CalendarPlus className="h-4 w-4 mr-2" aria-hidden="true" />
+                                            Add to Calendar
+                                          </a>
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {remainingOccurrences.length > 0 && (
+                                  <>
+                                    <button
+                                      onClick={() => togglePastGroupExpansion(group.parentEventId!)}
+                                      className="w-full px-6 py-3 flex items-center justify-between bg-muted/30 hover:bg-muted/50 transition-colors border-t border-border"
+                                    >
+                                      <span className="text-sm font-medium text-muted-foreground">
+                                        {remainingOccurrences.length} more occurrence{remainingOccurrences.length > 1 ? "s" : ""} in this series
+                                      </span>
+                                      <ChevronDown
+                                        className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                                      />
+                                    </button>
+
+                                    {isExpanded && (
+                                      <div className="border-t border-border divide-y divide-border">
+                                        {remainingOccurrences.map((occurrence) => (
+                                          <div key={occurrence.id} className="p-4 bg-muted/10 hover:bg-muted/20 transition-colors">
+                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                              <div className="flex items-center gap-3">
+                                                <Calendar className="h-4 w-4 text-primary flex-shrink-0" aria-hidden="true" />
+                                                <span className="font-medium text-sm">{formatDateRange(occurrence.date, occurrence.endDate)}</span>
+                                                <span className="text-sm text-muted-foreground">
+                                                  {occurrence.timeTBD ? "Time TBD" : formatTimeRange(occurrence.startTime, occurrence.endTime, userTimezone)}
+                                                </span>
+                                                {occurrence.isModified && (
+                                                  <Badge variant="outline" className="text-xs">Modified</Badge>
+                                                )}
+                                              </div>
+                                              <Button variant="ghost" size="sm" asChild>
+                                                <a
+                                                  href={generateGoogleCalendarUrl(occurrence)}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                >
+                                                  <CalendarPlus className="h-4 w-4 mr-1" aria-hidden="true" />
+                                                  Add
+                                                </a>
+                                              </Button>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                              </article>
+                            )
+                          }
+
+                          return null
+                        })}
                       </div>
 
                       <div className="flex flex-wrap items-center justify-between gap-3 pt-4">
