@@ -25,6 +25,8 @@ export async function Footer() {
     { name: t("footer.areaLinks.newsletter.label", "Newsletter"), href: t("footer.areaLinks.newsletter.href", "/newsletter") },
     { name: t("footer.areaLinks.service.label", "Service Basics"), href: t("footer.areaLinks.service.href", "/service") },
     { name: t("footer.areaLinks.ypaa.label", "YPAA"), href: t("footer.areaLinks.ypaa.href", "/ypaa") },
+    { name: t("footer.areaLinks.professionals.label", "For Professionals"), href: t("footer.areaLinks.professionals.href", "/professionals") },
+    { name: t("footer.areaLinks.gsc.label", "General Service Conference"), href: t("footer.areaLinks.gsc.href", "/general-service-conference") },
     { name: t("footer.areaLinks.contribute.label", "Contribute"), href: t("footer.areaLinks.contribute.href", "/contribute") },
   ]
 
