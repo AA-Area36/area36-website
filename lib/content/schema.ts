@@ -151,6 +151,8 @@ const districtsDefaultsEn = {
       citiesPrefix: "Cities:",
       actions: "Actions",
       positionOpen: "Position currently open",
+      at: "at",
+      countiesMore: "+{count} more",
     },
     actions: {
       emailDcm: "Email DCM",
@@ -326,6 +328,8 @@ export const CONTENT_SCHEMAS: Record<Scope, ContentSchema> = {
           { path: "page.labels.citiesPrefix", label: "Label: Cities prefix", type: "text" },
           { path: "page.labels.actions", label: "Label: Actions", type: "text" },
           { path: "page.labels.positionOpen", label: "Text: Position currently open", type: "text" },
+          { path: "page.labels.at", label: "Label: at (meeting time)", type: "text" },
+          { path: "page.labels.countiesMore", label: 'Counties summary suffix (use "{count}")', type: "text" },
           { path: "page.actions.emailDcm", label: "Action: Email DCM", type: "text" },
           { path: "page.actions.visitWebsite", label: "Action: Visit District Website", type: "text" },
           { path: "page.actions.directions", label: "Action: Get Directions", type: "text" },

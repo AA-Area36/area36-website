@@ -162,7 +162,11 @@ export function DistrictsClient({ content }: { content: ContentDoc }) {
                     <div className="flex items-center gap-4">
                       <span className="text-sm text-muted-foreground hidden sm:block">
                         {district.counties.slice(0, 2).join(", ")}
-                        {district.counties.length > 2 && ` +${district.counties.length - 2} more`}
+                        {district.counties.length > 2 &&
+                          " " +
+                            formatTemplate(t("page.labels.countiesMore", "+{count} more"), {
+                              count: district.counties.length - 2,
+                            })}
                       </span>
                       <ChevronDown
                         className={cn("h-5 w-5 text-muted-foreground transition-transform", isExpanded && "rotate-180")}
@@ -206,7 +210,7 @@ export function DistrictsClient({ content }: { content: ContentDoc }) {
                                   <Calendar className="h-4 w-4 text-muted-foreground" />
                                   <span>
                                     {district.meetingDay}
-                                    {district.meetingTime && ` at ${district.meetingTime}`}
+                                    {district.meetingTime && ` ${t("page.labels.at", "at")} ${district.meetingTime}`}
                                   </span>
                                 </div>
                               )}
@@ -309,4 +313,3 @@ export function DistrictsClient({ content }: { content: ContentDoc }) {
     </main>
   )
 }
-
