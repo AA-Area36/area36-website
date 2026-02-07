@@ -33,16 +33,21 @@ function deepMerge(base: ContentDoc, override: ContentDoc): ContentDoc {
 }
 
 async function getPublishedDoc(scope: Scope, locale: Locale): Promise<ContentDoc | null> {
-  const db = await getDb()
-  const row = await db
-    .select({
-      publishedJson: schema.contentDocuments.publishedJson,
-    })
-    .from(schema.contentDocuments)
-    .where(and(eq(schema.contentDocuments.scope, scope), eq(schema.contentDocuments.locale, locale)))
-    .get()
+  try {
+    const db = await getDb()
+    const row = await db
+      .select({
+        publishedJson: schema.contentDocuments.publishedJson,
+      })
+      .from(schema.contentDocuments)
+      .where(and(eq(schema.contentDocuments.scope, scope), eq(schema.contentDocuments.locale, locale)))
+      .get()
 
-  return safeJsonParse(row?.publishedJson)
+    return safeJsonParse(row?.publishedJson)
+  } catch {
+    // Local dev or fresh environments may not have migrations applied yet.
+    return null
+  }
 }
 
 /**
@@ -70,16 +75,23 @@ export async function getContent(scope: Scope, locale: Locale): Promise<ContentD
 export async function getContentMany(scopes: Scope[], locale: Locale): Promise<Record<Scope, ContentDoc>> {
   noStore()
 
-  const db = await getDb()
-  const rows = await db
-    .select({
-      scope: schema.contentDocuments.scope,
-      locale: schema.contentDocuments.locale,
-      publishedJson: schema.contentDocuments.publishedJson,
-    })
-    .from(schema.contentDocuments)
-    .where(and(inArray(schema.contentDocuments.scope, scopes), inArray(schema.contentDocuments.locale, [DEFAULT_LOCALE, locale])))
-    .all()
+  let rows: Array<{ scope: string; locale: string; publishedJson: string | null }> = []
+  try {
+    const db = await getDb()
+    rows = await db
+      .select({
+        scope: schema.contentDocuments.scope,
+        locale: schema.contentDocuments.locale,
+        publishedJson: schema.contentDocuments.publishedJson,
+      })
+      .from(schema.contentDocuments)
+      .where(
+        and(inArray(schema.contentDocuments.scope, scopes), inArray(schema.contentDocuments.locale, [DEFAULT_LOCALE, locale])),
+      )
+      .all()
+  } catch {
+    rows = []
+  }
 
   const byScopeLocale = new Map<string, ContentDoc>()
   for (const r of rows) {
@@ -99,4 +111,3 @@ export async function getContentMany(scopes: Scope[], locale: Locale): Promise<R
 
   return out as Record<Scope, ContentDoc>
 }
-
