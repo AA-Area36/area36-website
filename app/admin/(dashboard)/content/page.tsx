@@ -1,5 +1,6 @@
 import Link from "next/link"
-import { CONTENT_SCHEMAS, type ContentDoc, type Scope, SUPPORTED_LOCALE_LABELS } from "@/lib/content/schema"
+import { cookies } from "next/headers"
+import { CONTENT_SCHEMAS, type ContentDoc, type Scope } from "@/lib/content/schema"
 import { SUPPORTED_LOCALES, type Locale } from "@/lib/i18n/locales"
 import { loadContentDocs } from "./actions"
 import { ContentEditor } from "./content-editor"
@@ -22,6 +23,9 @@ export default async function AdminContentPage({
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>
 }) {
+  const cookieStore = await cookies()
+  const initialPreviewEnabled = cookieStore.get("a36_content_preview")?.value === "1"
+
   const sp = (await searchParams) ?? {}
   const scopeParam = typeof sp.scope === "string" ? sp.scope : undefined
   const scope: Scope = scopeParam && scopeParam in CONTENT_SCHEMAS ? (scopeParam as Scope) : "global"
@@ -81,27 +85,17 @@ export default async function AdminContentPage({
             ))}
           </nav>
         </Card>
-
-        <Card className="p-4">
-          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Supported locales</div>
-          <div className="mt-3 grid gap-2">
-            {(Object.keys(SUPPORTED_LOCALE_LABELS) as Locale[]).map((loc) => (
-              <div key={loc} className="flex items-center justify-between text-sm">
-                <span className="font-medium">{SUPPORTED_LOCALE_LABELS[loc].nativeName}</span>
-                <span className="font-mono text-xs text-muted-foreground">{loc}</span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 text-xs text-muted-foreground">
-            Locale selection priority: cookie, then <span className="font-mono">Accept-Language</span>. English is the default fallback.
-          </div>
-        </Card>
       </aside>
 
       <section>
-        <ContentEditor scope={scope} initialByLocale={initialByLocale} />
+        {/* Force remount when scope changes (client state shouldn't bleed across scopes). */}
+        <ContentEditor
+          key={scope}
+          scope={scope}
+          initialByLocale={initialByLocale}
+          initialPreviewEnabled={initialPreviewEnabled}
+        />
       </section>
     </div>
   )
 }
-

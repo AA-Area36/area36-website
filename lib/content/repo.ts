@@ -1,8 +1,20 @@
 import { and, eq, inArray } from "drizzle-orm"
 import { unstable_noStore as noStore } from "next/cache"
+import { cookies } from "next/headers"
 import { getDb, schema } from "@/lib/db"
 import { CONTENT_SCHEMAS, type ContentDoc, type Scope } from "@/lib/content/schema"
 import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/locales"
+import { auth } from "@/lib/auth"
+
+const CONTENT_PREVIEW_COOKIE = "a36_content_preview"
+
+async function shouldUseDraftContent(): Promise<boolean> {
+  // Only allow draft preview for authenticated admins.
+  const cookieStore = await cookies()
+  const enabled = cookieStore.get(CONTENT_PREVIEW_COOKIE)?.value === "1"
+  if (!enabled) return false
+  return !!(await auth())
+}
 
 function safeJsonParse(value: string | null | undefined): ContentDoc | null {
   if (!value) return null
@@ -34,16 +46,19 @@ function deepMerge(base: ContentDoc, override: ContentDoc): ContentDoc {
 
 async function getPublishedDoc(scope: Scope, locale: Locale): Promise<ContentDoc | null> {
   try {
+    const useDraft = await shouldUseDraftContent()
     const db = await getDb()
     const row = await db
       .select({
+        draftJson: schema.contentDocuments.draftJson,
         publishedJson: schema.contentDocuments.publishedJson,
       })
       .from(schema.contentDocuments)
       .where(and(eq(schema.contentDocuments.scope, scope), eq(schema.contentDocuments.locale, locale)))
       .get()
 
-    return safeJsonParse(row?.publishedJson)
+    const preferred = useDraft ? row?.draftJson ?? row?.publishedJson : row?.publishedJson
+    return safeJsonParse(preferred)
   } catch {
     // Local dev or fresh environments may not have migrations applied yet.
     return null
@@ -77,12 +92,13 @@ export async function getContentMany(scopes: Scope[], locale: Locale): Promise<R
 
   let rows: Array<{ scope: string; locale: string; publishedJson: string | null }> = []
   try {
+    const useDraft = await shouldUseDraftContent()
     const db = await getDb()
     rows = await db
       .select({
         scope: schema.contentDocuments.scope,
         locale: schema.contentDocuments.locale,
-        publishedJson: schema.contentDocuments.publishedJson,
+        publishedJson: useDraft ? schema.contentDocuments.draftJson : schema.contentDocuments.publishedJson,
       })
       .from(schema.contentDocuments)
       .where(
