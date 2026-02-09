@@ -17,14 +17,6 @@ function normalizeEmail(email?: string | null): string {
   return email?.trim().toLowerCase() ?? ""
 }
 
-function isAllowedAdminEmail(email?: string | null): boolean {
-  const normalized = normalizeEmail(email)
-  if (!normalized || !normalized.endsWith(ALLOWED_DOMAIN)) {
-    return false
-  }
-  return ALLOWED_ADMIN_EMAILS.has(normalized)
-}
-
 function warnAdminConfigOnce(message: string) {
   if (adminConfigWarningLogged) return
   adminConfigWarningLogged = true
@@ -51,7 +43,7 @@ function getAdminDirectoryCredentials(env: CloudflareEnv): AdminDirectoryCredent
   }
 }
 
-async function isAllowedAdminUser(email: string | null | undefined, env: CloudflareEnv): Promise<boolean> {
+async function isAreaAdminUser(email: string | null | undefined, env: CloudflareEnv): Promise<boolean> {
   const normalized = normalizeEmail(email)
   if (!normalized || !normalized.endsWith(ALLOWED_DOMAIN)) {
     return false
@@ -73,6 +65,43 @@ async function isAllowedAdminUser(email: string | null | undefined, env: Cloudfl
   }
 }
 
+async function getDistrictAdminForEmail(email: string, env: CloudflareEnv): Promise<number[]> {
+  const normalized = normalizeEmail(email)
+  if (!normalized) return []
+  if (!env.DB) return []
+
+  try {
+    const res = await env.DB
+      .prepare("SELECT district_number AS districtNumber FROM district_admins WHERE lower(email) = ?")
+      .bind(normalized)
+      .all<{ districtNumber: number }>()
+    return (res?.results ?? [])
+      .map((r) => Number((r as any).districtNumber))
+      .filter((n) => Number.isFinite(n))
+  } catch {
+    // Local dev / fresh environments may not have migrations applied yet.
+    return []
+  }
+}
+
+async function isAllowedSignInEmail(email: string | null | undefined, env: CloudflareEnv): Promise<boolean> {
+  const normalized = normalizeEmail(email)
+  if (!normalized) return false
+  if (await isAreaAdminUser(normalized, env)) return true
+  const districts = await getDistrictAdminForEmail(normalized, env)
+  return districts.length > 0
+}
+
+function cookieDomainForProd(): string | undefined {
+  return process.env.NODE_ENV === "production" ? ".area36.org" : undefined
+}
+
+function isAllowedRedirectHost(hostname: string): boolean {
+  const h = hostname.toLowerCase()
+  if (h === "area36.org" || h === "www.area36.org") return true
+  return /^d(\d{1,2})\.area36\.org$/.test(h)
+}
+
 const nextAuth = NextAuth(async () => {
   const { env } = await getCloudflareContext({ async: true })
 
@@ -90,11 +119,8 @@ const nextAuth = NextAuth(async () => {
     },
     callbacks: {
       async signIn({ profile }) {
-        // Only allow approved Area 36 admin emails or group members
-        if (!(await isAllowedAdminUser(profile?.email, env))) {
-          return false
-        }
-        return true
+        // Allow Area admins OR explicit district-admin allowlist emails (any Google workspace).
+        return await isAllowedSignInEmail(profile?.email, env)
       },
       async session({ session, user }) {
         if (session.user) {
@@ -102,20 +128,74 @@ const nextAuth = NextAuth(async () => {
         }
         return session
       },
+      async redirect({ url, baseUrl }) {
+        // Allow redirects only within Area 36 hostnames to avoid open redirects.
+        try {
+          if (url.startsWith("/")) return `${baseUrl}${url}`
+          const parsed = new URL(url)
+          if (!isAllowedRedirectHost(parsed.hostname)) return baseUrl
+          if (parsed.protocol !== "https:" && parsed.hostname !== "localhost") return baseUrl
+          return parsed.toString()
+        } catch {
+          return baseUrl
+        }
+      },
+    },
+    cookies: {
+      sessionToken: { options: { domain: cookieDomainForProd() } },
+      callbackUrl: { options: { domain: cookieDomainForProd() } },
+      csrfToken: { options: { domain: cookieDomainForProd() } },
+      pkceCodeVerifier: { options: { domain: cookieDomainForProd() } },
+      state: { options: { domain: cookieDomainForProd() } },
+      nonce: { options: { domain: cookieDomainForProd() } },
     },
     trustHost: true,
   }
 })
 
-export async function auth(): Promise<Session | null> {
+export type A36Session = Session & {
+  user: NonNullable<Session["user"]> & { isAreaAdmin: boolean; districtAdminFor: number[] }
+}
+
+function toA36Session(session: Session, isAreaAdmin: boolean, districtAdminFor: number[]): A36Session {
+  const user = session.user ?? {}
+  return {
+    ...session,
+    user: {
+      ...user,
+      isAreaAdmin,
+      districtAdminFor,
+    },
+  } as A36Session
+}
+
+/**
+ * Returns the current session for any allowed user (Area admin OR allowlisted district admin).
+ * Returns null if unauthenticated or not allowlisted.
+ */
+export async function getSession(): Promise<A36Session | null> {
   const session = await nextAuth.auth()
-  if (!session?.user?.email) {
-    return null
-  }
+  if (!session?.user?.email) return null
   const { env } = await getCloudflareContext({ async: true })
-  if (!(await isAllowedAdminUser(session.user.email, env))) {
-    return null
-  }
+
+  const email = normalizeEmail(session.user.email)
+  const [areaAdmin, districtAdminFor] = await Promise.all([
+    isAreaAdminUser(email, env),
+    getDistrictAdminForEmail(email, env),
+  ])
+
+  if (!areaAdmin && districtAdminFor.length === 0) return null
+  return toA36Session(session, areaAdmin, districtAdminFor)
+}
+
+/**
+ * Backward-compatible helper: returns a session only for Area admins.
+ * Use getSession() for district admins.
+ */
+export async function auth(): Promise<A36Session | null> {
+  const session = await getSession()
+  if (!session) return null
+  if (!session.user.isAreaAdmin) return null
   return session
 }
 

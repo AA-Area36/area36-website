@@ -18,7 +18,7 @@ export default async function LoginPage({
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Admin Sign In</CardTitle>
           <CardDescription>
-            Sign in with your approved Area 36 Google account to access the admin panel.
+            Sign in with your approved Google account to access Area and District admin tools.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -61,7 +61,7 @@ export default async function LoginPage({
             </Button>
           </form>
           <p className="text-xs text-center text-muted-foreground">
-            Approved accounts: members of area36-internal@area36.org, webmaster@area36.org, alttechnology@area36.org.
+            Access is controlled by Area admins. Area admins are in the Area 36 internal group; district admins are allowlisted per district.
           </p>
         </CardContent>
       </Card>
