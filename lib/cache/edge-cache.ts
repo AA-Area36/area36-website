@@ -15,6 +15,25 @@ function getCacheKey(key: string): string {
   return `https://cache.internal/${CACHE_PREFIX}${key}`
 }
 
+/**
+ * Best-effort invalidation for a key and its stale companion key.
+ * Useful for server actions that mutate data backing an edge-cached API response.
+ */
+export async function invalidateEdgeCache(key: string): Promise<void> {
+  try {
+    const cachesApi: CacheStorage | undefined = (globalThis as unknown as { caches?: CacheStorage }).caches
+    if (!cachesApi) return
+
+    const cache = await cachesApi.open("edge")
+    await Promise.all([
+      cache.delete(getCacheKey(key)),
+      cache.delete(getCacheKey(`${key}:stale`)),
+    ])
+  } catch {
+    // Cache API may be unavailable in local dev or non-edge runtimes.
+  }
+}
+
 async function getFromCache<T>(key: string): Promise<T | null> {
   try {
     const cache = await caches.open("edge")

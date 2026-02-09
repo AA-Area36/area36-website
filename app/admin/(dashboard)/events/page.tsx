@@ -51,6 +51,22 @@ const statusColors: Record<EventStatus, string> = {
   denied: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
 }
 
+const locationTypeBadgeClasses: Record<LocationType, string> = {
+  "in-person": "border-amber-300/80 bg-amber-50/60 text-amber-950 dark:border-amber-300/30 dark:bg-amber-950/20 dark:text-amber-100",
+  "hybrid": "border-teal-300/80 bg-teal-50/60 text-teal-950 dark:border-teal-300/30 dark:bg-teal-950/20 dark:text-teal-100",
+  "online": "border-sky-300/80 bg-sky-50/60 text-sky-950 dark:border-sky-300/30 dark:bg-sky-950/20 dark:text-sky-100",
+}
+
+function LocationTypeTag({ locationType }: { locationType: LocationType }) {
+  const Icon = locationType === "in-person" ? MapPin : locationType === "online" ? Video : Globe
+  return (
+    <Badge variant="outline" className={`inline-flex items-center gap-1.5 ${locationTypeBadgeClasses[locationType]}`}>
+      <Icon className="h-3 w-3" aria-hidden="true" />
+      {locationTypeLabels[locationType]}
+    </Badge>
+  )
+}
+
 const eventTypeColors: Record<string, string> = {
   Regional: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
   Assembly: "bg-primary/10 text-primary",
@@ -234,6 +250,7 @@ function EventCard({
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
           <div className="flex-1 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
+              <LocationTypeTag locationType={event.locationType} />
               {event.types.map((type) => (
                 <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
                   {type}
@@ -291,6 +308,23 @@ function EventCard({
               <Mail className="h-4 w-4" />
               <span>Submitted by: {event.submitterEmail}</span>
             </div>
+
+            {event.flyers.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                {event.flyers.map((flyer, index) => (
+                  <a
+                    key={flyer.id}
+                    href={`/api/flyers/${flyer.fileKey}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline flex items-center gap-1"
+                    title={flyer.fileName}
+                  >
+                    {event.flyers.length > 1 ? `Flyer ${index + 1}` : "View Flyer"} <ExternalLink className="h-3 w-3" />
+                  </a>
+                ))}
+              </div>
+            )}
 
             {event.flyerUrl && (
               <div className="flex items-center gap-2 text-sm">

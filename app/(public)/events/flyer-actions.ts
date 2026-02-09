@@ -7,6 +7,9 @@ import { eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { verifyEventUploadToken } from "@/lib/security/upload-token"
+import { invalidateEdgeCache } from "@/lib/cache/edge-cache"
+
+const APPROVED_EVENTS_CACHE_KEY = "events:approved"
 
 export interface UploadFlyerResponse {
   success: true
@@ -86,6 +89,7 @@ export async function uploadEventFlyer(
 
   revalidatePath("/events")
   revalidatePath("/admin/events")
+  await invalidateEdgeCache(APPROVED_EVENTS_CACHE_KEY)
 
   return {
     success: true,
@@ -126,6 +130,7 @@ export async function deleteEventFlyer(
 
     revalidatePath("/events")
     revalidatePath("/admin/events")
+    await invalidateEdgeCache(APPROVED_EVENTS_CACHE_KEY)
 
     return { success: true }
   } catch (error) {
@@ -166,6 +171,7 @@ export async function reorderEventFlyers(
 
     revalidatePath("/events")
     revalidatePath("/admin/events")
+    await invalidateEdgeCache(APPROVED_EVENTS_CACHE_KEY)
 
     return { success: true }
   } catch (error) {

@@ -137,7 +137,8 @@ export async function GET() {
     return NextResponse.json(data, {
       headers: {
         "X-Request-Id": log.requestId,
-        "Cache-Control": "public, max-age=300, stale-while-revalidate=3600",
+        // Let the CDN cache, but make the browser revalidate so edits show up quickly on refresh.
+        "Cache-Control": "public, max-age=0, s-maxage=300, stale-while-revalidate=3600",
       },
     })
   } catch (error) {

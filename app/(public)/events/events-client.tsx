@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useGoogleReCaptcha } from "react-google-recaptcha-v3"
-import { Calendar, CalendarPlus, MapPin, Clock, ExternalLink, Search, Plus, X, Globe, HelpCircle, Repeat, ChevronDown, Check } from "lucide-react"
+import { Calendar, CalendarPlus, MapPin, Clock, ExternalLink, Search, Plus, X, Globe, HelpCircle, Repeat, ChevronDown, Check, Video } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -57,7 +57,67 @@ const eventTypeColors: Record<string, string> = {
   District: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
 }
 
+const locationTypeBadgeClasses: Record<LocationType, string> = {
+  // Outline-style, distinct from the "type" color badges and with enough contrast on white.
+  "in-person": "border-amber-300/80 bg-amber-50/60 text-amber-950 dark:border-amber-300/30 dark:bg-amber-950/20 dark:text-amber-100",
+  "hybrid": "border-teal-300/80 bg-teal-50/60 text-teal-950 dark:border-teal-300/30 dark:bg-teal-950/20 dark:text-teal-100",
+  "online": "border-sky-300/80 bg-sky-50/60 text-sky-950 dark:border-sky-300/30 dark:bg-sky-950/20 dark:text-sky-100",
+}
+
+function LocationTypeTag({ locationType }: { locationType: LocationType }) {
+  const Icon = locationType === "in-person" ? MapPin : locationType === "online" ? Video : Globe
+  return (
+    <Badge variant="outline" className={`inline-flex items-center gap-1.5 ${locationTypeBadgeClasses[locationType]}`}>
+      <Icon className="h-3 w-3" aria-hidden="true" />
+      {locationTypeLabels[locationType]}
+    </Badge>
+  )
+}
+
 const SECTION_PAGE_SIZE = 5
+
+function buildMapsHref(address: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
+}
+
+function getPrimaryEventHref(
+  event: Pick<DisplayEvent, "locationType" | "meetingLink" | "address">
+): string | null {
+  // Online wins for Hybrid, per requirement.
+  if ((event.locationType === "online" || event.locationType === "hybrid") && event.meetingLink) {
+    return event.meetingLink
+  }
+  if ((event.locationType === "in-person" || event.locationType === "hybrid") && event.address) {
+    return buildMapsHref(event.address)
+  }
+  return null
+}
+
+function isFromInteractiveElement(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  // Avoid hijacking clicks on links, buttons, form controls, etc.
+  // Important: do not include `[role="link"]` here; the card container itself uses it.
+  return !!target.closest('a,button,input,textarea,select,summary,label,[role="button"],[data-no-card-link]')
+}
+
+function getEventCardLinkProps(href: string | null) {
+  if (!href) return {}
+
+  return {
+    role: "link" as const,
+    tabIndex: 0,
+    onClick: (e: React.MouseEvent) => {
+      if (isFromInteractiveElement(e.target)) return
+      window.open(href, "_blank", "noopener,noreferrer")
+    },
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key !== "Enter" && e.key !== " ") return
+      if (isFromInteractiveElement(e.target)) return
+      e.preventDefault()
+      window.open(href, "_blank", "noopener,noreferrer")
+    },
+  }
+}
 
 // Generate Google Calendar URL for individual events
 function generateGoogleCalendarUrl(event: DisplayEvent): string {
@@ -1553,22 +1613,23 @@ export function EventsClient({ events }: EventsClientProps) {
                   {pagedUpcomingGroups.map((group) => {
                     if (group.type === "single" && group.event) {
                       const event = group.event
+                      const primaryHref = getPrimaryEventHref(event)
                       return (
                         <article
                           key={event.id}
-                          className="group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md"
+                          className={`group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md ${primaryHref ? "cursor-pointer" : ""}`}
+                          {...getEventCardLinkProps(primaryHref)}
                         >
                           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                             <div className="flex-1">
-                              {event.types.length > 0 && (
-                                <div className="flex flex-wrap items-center gap-2 mb-3">
-                                  {event.types.map((type) => (
-                                    <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
-                                      {type}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              )}
+                              <div className="flex flex-wrap items-center gap-2 mb-3">
+                                <LocationTypeTag locationType={event.locationType} />
+                                {event.types.map((type) => (
+                                  <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
+                                    {type}
+                                  </Badge>
+                                ))}
+                              </div>
                               <h2 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                                 {event.title}
                               </h2>
@@ -1588,7 +1649,7 @@ export function EventsClient({ events }: EventsClientProps) {
                                 <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
                                   <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
                                   <a
-                                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`}
+                                    href={buildMapsHref(event.address)}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="lg:text-right text-primary hover:underline"
@@ -1659,6 +1720,7 @@ export function EventsClient({ events }: EventsClientProps) {
                       const firstOccurrence = group.occurrences[0]
                       const remainingOccurrences = group.occurrences.slice(1)
                       const isExpanded = expandedGroups.has(group.parentEventId)
+                      const primaryHref = getPrimaryEventHref(firstOccurrence)
 
                       return (
                         <article
@@ -1666,22 +1728,24 @@ export function EventsClient({ events }: EventsClientProps) {
                           className="rounded-xl border border-border bg-card overflow-hidden"
                         >
                           {/* Main event card (first occurrence) */}
-                          <div className="p-6 transition-all hover:bg-muted/30">
+                          <div
+                            className={`p-6 transition-all hover:bg-muted/30 ${primaryHref ? "cursor-pointer" : ""}`}
+                            {...getEventCardLinkProps(primaryHref)}
+                          >
                             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                               <div className="flex-1">
-                                {firstOccurrence.types.length > 0 && (
-                                  <div className="flex flex-wrap items-center gap-2 mb-3">
-                                    {firstOccurrence.types.map((type) => (
-                                      <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
-                                        {type}
-                                      </Badge>
-                                    ))}
-                                    <Badge variant="outline" className="flex items-center gap-1">
-                                      <Repeat className="h-3 w-3" />
-                                      {group.recurrenceDescription}
+                                <div className="flex flex-wrap items-center gap-2 mb-3">
+                                  <LocationTypeTag locationType={firstOccurrence.locationType} />
+                                  {firstOccurrence.types.map((type) => (
+                                    <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
+                                      {type}
                                     </Badge>
-                                  </div>
-                                )}
+                                  ))}
+                                  <Badge variant="outline" className="flex items-center gap-1">
+                                    <Repeat className="h-3 w-3" />
+                                    {group.recurrenceDescription}
+                                  </Badge>
+                                </div>
                                 <h2 className="text-xl font-semibold text-foreground">
                                   {firstOccurrence.title}
                                 </h2>
@@ -1701,7 +1765,7 @@ export function EventsClient({ events }: EventsClientProps) {
                                   <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
                                     <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
                                     <a
-                                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(firstOccurrence.address)}`}
+                                      href={buildMapsHref(firstOccurrence.address)}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="lg:text-right text-primary hover:underline"
@@ -1843,22 +1907,23 @@ export function EventsClient({ events }: EventsClientProps) {
                   {pagedDistrictGroups.map((group) => {
                     if (group.type === "single" && group.event) {
                       const event = group.event
+                      const primaryHref = getPrimaryEventHref(event)
                       return (
                         <article
                           key={event.id}
-                          className="group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md"
+                          className={`group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md ${primaryHref ? "cursor-pointer" : ""}`}
+                          {...getEventCardLinkProps(primaryHref)}
                         >
                           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                             <div className="flex-1">
-                              {event.types.length > 0 && (
-                                <div className="flex flex-wrap items-center gap-2 mb-3">
-                                  {event.types.map((type) => (
-                                    <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
-                                      {type}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              )}
+                              <div className="flex flex-wrap items-center gap-2 mb-3">
+                                <LocationTypeTag locationType={event.locationType} />
+                                {event.types.map((type) => (
+                                  <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
+                                    {type}
+                                  </Badge>
+                                ))}
+                              </div>
                               <h4 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                                 {event.title}
                               </h4>
@@ -1878,7 +1943,7 @@ export function EventsClient({ events }: EventsClientProps) {
                                 <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
                                   <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
                                   <a
-                                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`}
+                                    href={buildMapsHref(event.address)}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="lg:text-right text-primary hover:underline"
@@ -1949,6 +2014,7 @@ export function EventsClient({ events }: EventsClientProps) {
                       const firstOccurrence = group.occurrences[0]
                       const remainingOccurrences = group.occurrences.slice(1)
                       const isExpanded = expandedGroups.has(group.parentEventId)
+                      const primaryHref = getPrimaryEventHref(firstOccurrence)
 
                       return (
                         <article
@@ -1956,22 +2022,24 @@ export function EventsClient({ events }: EventsClientProps) {
                           className="rounded-xl border border-border bg-card overflow-hidden"
                         >
                           {/* Main event card (first occurrence) */}
-                          <div className="p-6 transition-all hover:bg-muted/30">
+                          <div
+                            className={`p-6 transition-all hover:bg-muted/30 ${primaryHref ? "cursor-pointer" : ""}`}
+                            {...getEventCardLinkProps(primaryHref)}
+                          >
                             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                               <div className="flex-1">
-                                {firstOccurrence.types.length > 0 && (
-                                  <div className="flex flex-wrap items-center gap-2 mb-3">
-                                    {firstOccurrence.types.map((type) => (
-                                      <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
-                                        {type}
-                                      </Badge>
-                                    ))}
-                                    <Badge variant="outline" className="flex items-center gap-1">
-                                      <Repeat className="h-3 w-3" />
-                                      {group.recurrenceDescription}
+                                <div className="flex flex-wrap items-center gap-2 mb-3">
+                                  <LocationTypeTag locationType={firstOccurrence.locationType} />
+                                  {firstOccurrence.types.map((type) => (
+                                    <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
+                                      {type}
                                     </Badge>
-                                  </div>
-                                )}
+                                  ))}
+                                  <Badge variant="outline" className="flex items-center gap-1">
+                                    <Repeat className="h-3 w-3" />
+                                    {group.recurrenceDescription}
+                                  </Badge>
+                                </div>
                                 <h4 className="text-xl font-semibold text-foreground">
                                   {firstOccurrence.title}
                                 </h4>
@@ -1991,7 +2059,7 @@ export function EventsClient({ events }: EventsClientProps) {
                                   <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
                                     <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
                                     <a
-                                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(firstOccurrence.address)}`}
+                                      href={buildMapsHref(firstOccurrence.address)}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="lg:text-right text-primary hover:underline"
@@ -2139,26 +2207,27 @@ export function EventsClient({ events }: EventsClientProps) {
                   {pagedDistrictMeetingGroups.map((group) => {
                     if (group.type === "single" && group.event) {
                       const event = group.event
+                      const primaryHref = getPrimaryEventHref(event)
                       return (
                         <article
                           key={event.id}
-                          className="group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md"
+                          className={`group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md ${primaryHref ? "cursor-pointer" : ""}`}
+                          {...getEventCardLinkProps(primaryHref)}
                         >
                           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                             <div className="flex-1">
-                              {event.types.length > 0 && (
-                                <div className="flex flex-wrap items-center gap-2 mb-3">
-                                  {event.types.map((type) => (
-                                    <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
-                                      {type}
-                                    </Badge>
-                                  ))}
-                                  <Badge variant="outline" className="flex items-center gap-1">
-                                    <Repeat className="h-3 w-3" />
-                                    Monthly
+                              <div className="flex flex-wrap items-center gap-2 mb-3">
+                                <LocationTypeTag locationType={event.locationType} />
+                                {event.types.map((type) => (
+                                  <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
+                                    {type}
                                   </Badge>
-                                </div>
-                              )}
+                                ))}
+                                <Badge variant="outline" className="flex items-center gap-1">
+                                  <Repeat className="h-3 w-3" />
+                                  Monthly
+                                </Badge>
+                              </div>
                               <h4 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                                 {event.title}
                               </h4>
@@ -2178,7 +2247,7 @@ export function EventsClient({ events }: EventsClientProps) {
                                 <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
                                   <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
                                   <a
-                                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`}
+                                    href={buildMapsHref(event.address)}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="lg:text-right text-primary hover:underline"
@@ -2220,28 +2289,31 @@ export function EventsClient({ events }: EventsClientProps) {
                       const firstOccurrence = group.occurrences[0]
                       const remainingOccurrences = group.occurrences.slice(1)
                       const isExpanded = expandedGroups.has(group.parentEventId)
+                      const primaryHref = getPrimaryEventHref(firstOccurrence)
 
                       return (
                         <article
                           key={group.parentEventId}
                           className="rounded-xl border border-border bg-card overflow-hidden"
                         >
-                          <div className="p-6 transition-all hover:bg-muted/30">
+                          <div
+                            className={`p-6 transition-all hover:bg-muted/30 ${primaryHref ? "cursor-pointer" : ""}`}
+                            {...getEventCardLinkProps(primaryHref)}
+                          >
                             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                               <div className="flex-1">
-                                {firstOccurrence.types.length > 0 && (
-                                  <div className="flex flex-wrap items-center gap-2 mb-3">
-                                    {firstOccurrence.types.map((type) => (
-                                      <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
-                                        {type}
-                                      </Badge>
-                                    ))}
-                                    <Badge variant="outline" className="flex items-center gap-1">
-                                      <Repeat className="h-3 w-3" />
-                                      {group.recurrenceDescription}
+                                <div className="flex flex-wrap items-center gap-2 mb-3">
+                                  <LocationTypeTag locationType={firstOccurrence.locationType} />
+                                  {firstOccurrence.types.map((type) => (
+                                    <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
+                                      {type}
                                     </Badge>
-                                  </div>
-                                )}
+                                  ))}
+                                  <Badge variant="outline" className="flex items-center gap-1">
+                                    <Repeat className="h-3 w-3" />
+                                    {group.recurrenceDescription}
+                                  </Badge>
+                                </div>
                                 <h4 className="text-xl font-semibold text-foreground">
                                   {firstOccurrence.title}
                                 </h4>
@@ -2261,7 +2333,7 @@ export function EventsClient({ events }: EventsClientProps) {
                                   <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
                                     <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
                                     <a
-                                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(firstOccurrence.address)}`}
+                                      href={buildMapsHref(firstOccurrence.address)}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="lg:text-right text-primary hover:underline"
@@ -2484,28 +2556,29 @@ export function EventsClient({ events }: EventsClientProps) {
                         {groupEventsDescending(currentPastPage?.events ?? []).map((group) => {
                           if (group.type === "single" && group.event) {
                             const event = group.event
+                            const primaryHref = getPrimaryEventHref(event)
                             return (
                               <article
                                 key={event.id}
-                                className="group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md"
+                                className={`group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md ${primaryHref ? "cursor-pointer" : ""}`}
+                                {...getEventCardLinkProps(primaryHref)}
                               >
                                 <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                                   <div className="flex-1">
-                                    {event.types.length > 0 && (
-                                      <div className="flex flex-wrap items-center gap-2 mb-3">
-                                        {event.types.map((type) => (
-                                          <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
-                                            {type}
-                                          </Badge>
-                                        ))}
-                                        {event.isRecurring && event.recurrenceDescription && (
-                                          <Badge variant="outline" className="flex items-center gap-1">
-                                            <Repeat className="h-3 w-3" />
-                                            {event.recurrenceDescription}
-                                          </Badge>
-                                        )}
-                                      </div>
-                                    )}
+                                    <div className="flex flex-wrap items-center gap-2 mb-3">
+                                      <LocationTypeTag locationType={event.locationType} />
+                                      {event.types.map((type) => (
+                                        <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
+                                          {type}
+                                        </Badge>
+                                      ))}
+                                      {event.isRecurring && event.recurrenceDescription && (
+                                        <Badge variant="outline" className="flex items-center gap-1">
+                                          <Repeat className="h-3 w-3" />
+                                          {event.recurrenceDescription}
+                                        </Badge>
+                                      )}
+                                    </div>
                                     <h4 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                                       {event.title}
                                     </h4>
@@ -2525,7 +2598,7 @@ export function EventsClient({ events }: EventsClientProps) {
                                       <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
                                         <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
                                         <a
-                                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.address)}`}
+                                          href={buildMapsHref(event.address)}
                                           target="_blank"
                                           rel="noopener noreferrer"
                                           className="lg:text-right text-primary hover:underline"
@@ -2578,28 +2651,31 @@ export function EventsClient({ events }: EventsClientProps) {
                             const firstOccurrence = group.occurrences[0]
                             const remainingOccurrences = group.occurrences.slice(1)
                             const isExpanded = expandedPastGroups.has(group.parentEventId)
+                            const primaryHref = getPrimaryEventHref(firstOccurrence)
 
                             return (
                               <article
                                 key={group.parentEventId}
                                 className="rounded-xl border border-border bg-card overflow-hidden"
                               >
-                                <div className="p-6 transition-all hover:bg-muted/30">
+                                <div
+                                  className={`p-6 transition-all hover:bg-muted/30 ${primaryHref ? "cursor-pointer" : ""}`}
+                                  {...getEventCardLinkProps(primaryHref)}
+                                >
                                   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                                     <div className="flex-1">
-                                      {firstOccurrence.types.length > 0 && (
-                                        <div className="flex flex-wrap items-center gap-2 mb-3">
-                                          {firstOccurrence.types.map((type) => (
-                                            <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
-                                              {type}
-                                            </Badge>
-                                          ))}
-                                          <Badge variant="outline" className="flex items-center gap-1">
-                                            <Repeat className="h-3 w-3" />
-                                            {group.recurrenceDescription}
+                                      <div className="flex flex-wrap items-center gap-2 mb-3">
+                                        <LocationTypeTag locationType={firstOccurrence.locationType} />
+                                        {firstOccurrence.types.map((type) => (
+                                          <Badge key={type} variant="secondary" className={eventTypeColors[type]}>
+                                            {type}
                                           </Badge>
-                                        </div>
-                                      )}
+                                        ))}
+                                        <Badge variant="outline" className="flex items-center gap-1">
+                                          <Repeat className="h-3 w-3" />
+                                          {group.recurrenceDescription}
+                                        </Badge>
+                                      </div>
                                       <h4 className="text-xl font-semibold text-foreground">
                                         {firstOccurrence.title}
                                       </h4>
@@ -2619,7 +2695,7 @@ export function EventsClient({ events }: EventsClientProps) {
                                         <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
                                           <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
                                           <a
-                                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(firstOccurrence.address)}`}
+                                            href={buildMapsHref(firstOccurrence.address)}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="lg:text-right text-primary hover:underline"

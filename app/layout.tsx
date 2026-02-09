@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter, Geist_Mono } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "sonner"
 import { getRequestLocale, localeToHtmlLang } from "@/lib/i18n/get-locale"
 import "./globals.css"
 
@@ -29,6 +30,7 @@ export default async function RootLayout({
             Skip to main content
           </a>
           {children}
+          <Toaster richColors closeButton position="bottom-right" />
         </ThemeProvider>
       </body>
     </html>
