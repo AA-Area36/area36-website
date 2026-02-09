@@ -51,7 +51,12 @@ export function LanguageSelector() {
           <span className="sr-only">Current language: {languages.find((l) => l.code === currentLanguage)?.name}</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" className="w-56">
+        <div className="px-2 py-1.5">
+          <p className="text-xs text-muted-foreground">
+            Translations are in progress. Some content may remain in English.
+          </p>
+        </div>
         {languages.map((language) => (
           <DropdownMenuItem
             key={language.code}

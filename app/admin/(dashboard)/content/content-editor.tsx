@@ -2,20 +2,60 @@
 
 import * as React from "react"
 import Link from "next/link"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Switch } from "@/components/ui/switch"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
-import { CONTENT_SCHEMAS, SUPPORTED_LOCALE_LABELS, type ContentDoc, type Scope } from "@/lib/content/schema"
+import { toast } from "sonner"
+import {
+  Copy,
+  Eye,
+  ExternalLink,
+  Info,
+  Loader2,
+  MoreHorizontal,
+  RefreshCw,
+  RotateCcw,
+  Save,
+  Upload,
+} from "lucide-react"
+import {
+  CONTENT_SCHEMAS,
+  SUPPORTED_LOCALE_LABELS,
+  type ContentDoc,
+  type ContentSection,
+  type Scope,
+} from "@/lib/content/schema"
 import { getAtPath, setAtPath } from "@/lib/content/t"
 import type { Locale } from "@/lib/i18n/locales"
 import { publishContent, saveContentDraft, setContentPreviewEnabled } from "./actions"
+
+/* ---------------------------------- Types --------------------------------- */
 
 type LocaleState = {
   doc: ContentDoc
@@ -25,16 +65,21 @@ type LocaleState = {
   updatedBy: string | null
 }
 
+/* --------------------------------- Helpers -------------------------------- */
+
 function safeJsonParse(value: string | null | undefined): ContentDoc | null {
   if (!value) return null
   try {
     const parsed = JSON.parse(value) as unknown
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as ContentDoc
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
+      return parsed as ContentDoc
     return null
   } catch {
     return null
   }
 }
+
+/* ============================== Main Editor =============================== */
 
 export function ContentEditor({
   scope,
@@ -46,28 +91,41 @@ export function ContentEditor({
   initialPreviewEnabled: boolean
 }) {
   const schema = CONTENT_SCHEMAS[scope]
+  const locales = Object.keys(SUPPORTED_LOCALE_LABELS) as Locale[]
+
+  /* ------------------------------ Core state ------------------------------ */
   const [activeLocale, setActiveLocale] = React.useState<Locale>("en")
   const [byLocale, setByLocale] = React.useState<Record<Locale, LocaleState>>(initialByLocale)
-  const [pendingLocale, startTransition] = React.useTransition()
+  const [pending, startTransition] = React.useTransition()
   const [jsonText, setJsonText] = React.useState<Record<string, string>>({})
   const [jsonError, setJsonError] = React.useState<Record<string, string>>({})
-  const [actionError, setActionError] = React.useState<string | null>(null)
 
-  const [previewEnabled, setPreviewEnabled] = React.useState<boolean>(initialPreviewEnabled)
-  const [previewPath, setPreviewPath] = React.useState<string>(() => {
-    if (scope === "districts") return "/districts"
-    return "/"
-  })
+  /* ----------------------------- Preview state ----------------------------- */
+  const [previewEnabled, setPreviewEnabled] = React.useState(initialPreviewEnabled)
+  const [previewPath, setPreviewPath] = React.useState(() =>
+    scope === "districts" ? "/districts" : "/",
+  )
   const [previewNonce, setPreviewNonce] = React.useState(0)
+  const [previewOpen, setPreviewOpen] = React.useState(false)
+
+  /* ----------------------------- Dirty tracking ---------------------------- */
+  const [savedSnapshot, setSavedSnapshot] = React.useState<Record<Locale, string>>(() =>
+    Object.fromEntries(locales.map((loc) => [loc, JSON.stringify(initialByLocale[loc].doc)])) as Record<Locale, string>,
+  )
+  const isDirty = React.useMemo(
+    () => JSON.stringify(byLocale[activeLocale].doc) !== savedSnapshot[activeLocale],
+    [byLocale, activeLocale, savedSnapshot],
+  )
 
   const defaultsEn = schema.defaultsEn
 
+  /* ----------------------------- Field helpers ----------------------------- */
+
   function updateField(locale: Locale, path: string, value: string) {
-    setByLocale((prev) => {
-      const next = { ...prev }
-      next[locale] = { ...next[locale], doc: setAtPath(next[locale].doc, path, value) }
-      return next
-    })
+    setByLocale((prev) => ({
+      ...prev,
+      [locale]: { ...prev[locale], doc: setAtPath(prev[locale].doc, path, value) },
+    }))
   }
 
   function resetLocaleToDefaults(locale: Locale) {
@@ -75,6 +133,7 @@ export function ContentEditor({
       ...prev,
       [locale]: { ...prev[locale], doc: locale === "en" ? structuredClone(defaultsEn) : {} },
     }))
+    toast.info(`Reset ${SUPPORTED_LOCALE_LABELS[locale].nativeName} to defaults`)
   }
 
   function jsonKey(locale: Locale, path: string) {
@@ -91,13 +150,15 @@ export function ContentEditor({
         delete next[key]
         return next
       })
-      setByLocale((prev) => {
-        const next = { ...prev }
-        next[locale] = { ...next[locale], doc: setAtPath(next[locale].doc, path, parsed) }
-        return next
-      })
+      setByLocale((prev) => ({
+        ...prev,
+        [locale]: { ...prev[locale], doc: setAtPath(prev[locale].doc, path, parsed) },
+      }))
     } catch (e) {
-      setJsonError((prev) => ({ ...prev, [key]: e instanceof Error ? e.message : "Invalid JSON" }))
+      setJsonError((prev) => ({
+        ...prev,
+        [key]: e instanceof Error ? e.message : "Invalid JSON",
+      }))
     }
   }
 
@@ -106,10 +167,9 @@ export function ContentEditor({
     const currentText = jsonText[key] ?? ""
     try {
       const parsed = JSON.parse(currentText) as unknown
-      const formatted = JSON.stringify(parsed, null, 2)
-      updateJsonField(locale, path, formatted)
+      updateJsonField(locale, path, JSON.stringify(parsed, null, 2))
     } catch {
-      // Leave as-is if invalid.
+      /* leave as-is */
     }
   }
 
@@ -118,6 +178,7 @@ export function ContentEditor({
     setByLocale((prev) => {
       const next = { ...prev }
       let doc = next[locale].doc
+      let copied = 0
       for (const section of schema.sections) {
         for (const field of section.fields) {
           if (field.translatable === false) continue
@@ -125,13 +186,19 @@ export function ContentEditor({
           const current = getAtPath(doc, field.path)
           if (typeof current === "string" && current.trim() !== "") continue
           const enVal = getAtPath(prev.en.doc, field.path)
-          if (typeof enVal === "string") doc = setAtPath(doc, field.path, enVal)
+          if (typeof enVal === "string") {
+            doc = setAtPath(doc, field.path, enVal)
+            copied++
+          }
         }
       }
       next[locale] = { ...next[locale], doc }
+      toast.info(`Copied ${copied} field${copied === 1 ? "" : "s"} from English`)
       return next
     })
   }
+
+  /* ----------------------------- Count helpers ----------------------------- */
 
   function missingCount(locale: Locale): number {
     let missing = 0
@@ -150,17 +217,41 @@ export function ContentEditor({
     return missing
   }
 
+  function sectionMissingCount(section: ContentSection, locale: Locale): number {
+    let missing = 0
+    const doc = byLocale[locale].doc
+    for (const field of section.fields) {
+      if (locale !== "en" && field.translatable === false) continue
+      const v = getAtPath(doc, field.path)
+      if (field.type === "json") {
+        if (v === undefined || v === null) missing++
+        continue
+      }
+      if (typeof v !== "string" || v.trim() === "") missing++
+    }
+    return missing
+  }
+
+  /* ----------------------------- Save / Publish ----------------------------- */
+
+  const saveRef = React.useRef(save)
+  saveRef.current = save
+  const publishRef = React.useRef(publish)
+  publishRef.current = publish
+
   async function save(locale: Locale) {
     const doc = byLocale[locale].doc
     startTransition(async () => {
       const hasJsonErr = Object.keys(jsonError).some((k) => k.startsWith(`${locale}:`))
-      if (hasJsonErr) return
-      const res = await saveContentDraft({ scope, locale, doc })
-      if (!res.ok) {
-        setActionError(res.error ?? "Failed to save draft")
+      if (hasJsonErr) {
+        toast.error("Fix JSON errors before saving")
         return
       }
-      setActionError(null)
+      const res = await saveContentDraft({ scope, locale, doc })
+      if (!res.ok) {
+        toast.error(res.error ?? "Failed to save draft")
+        return
+      }
       setByLocale((prev) => ({
         ...prev,
         [locale]: {
@@ -169,6 +260,8 @@ export function ContentEditor({
           updatedBy: res.updatedBy,
         },
       }))
+      setSavedSnapshot((prev) => ({ ...prev, [locale]: JSON.stringify(doc) }))
+      toast.success(`Draft saved for ${SUPPORTED_LOCALE_LABELS[locale].nativeName}`)
       if (previewEnabled) setPreviewNonce((n) => n + 1)
     })
   }
@@ -176,13 +269,15 @@ export function ContentEditor({
   async function publish(locale: Locale) {
     startTransition(async () => {
       const hasJsonErr = Object.keys(jsonError).some((k) => k.startsWith(`${locale}:`))
-      if (hasJsonErr) return
-      const res = await publishContent({ scope, locale })
-      if (!res.ok) {
-        setActionError(res.error ?? "Failed to publish")
+      if (hasJsonErr) {
+        toast.error("Fix JSON errors before publishing")
         return
       }
-      setActionError(null)
+      const res = await publishContent({ scope, locale })
+      if (!res.ok) {
+        toast.error(res.error ?? "Failed to publish")
+        return
+      }
       setByLocale((prev) => ({
         ...prev,
         [locale]: {
@@ -192,9 +287,12 @@ export function ContentEditor({
           updatedBy: res.updatedBy,
         },
       }))
+      toast.success(`Published ${SUPPORTED_LOCALE_LABELS[locale].nativeName} content`)
       if (previewEnabled) setPreviewNonce((n) => n + 1)
     })
   }
+
+  /* ------------------------------ Preview --------------------------------- */
 
   function normalizePreviewPath(value: string): string {
     const trimmed = value.trim()
@@ -207,10 +305,9 @@ export function ContentEditor({
     startTransition(async () => {
       const res = await setContentPreviewEnabled(nextEnabled)
       if (!res.ok) {
-        setActionError(res.error ?? "Failed to update preview setting")
+        toast.error(res.error ?? "Failed to update preview setting")
         return
       }
-      setActionError(null)
       setPreviewEnabled(nextEnabled)
       setPreviewNonce((n) => n + 1)
     })
@@ -222,323 +319,521 @@ export function ContentEditor({
     return `${p}${join}__contentPreview=${previewNonce}`
   }, [previewPath, previewNonce])
 
-  const locales = Object.keys(SUPPORTED_LOCALE_LABELS) as Locale[]
+  /* ----------------------------- Keyboard shortcuts ----------------------- */
+
+  React.useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+        e.preventDefault()
+        saveRef.current(activeLocale)
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "p" || e.key === "P")) {
+        e.preventDefault()
+        publishRef.current(activeLocale)
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [activeLocale])
+
+  /* ----------------------------- Section scroll --------------------------- */
+
+  function scrollToSection(sectionId: string) {
+    const el = document.getElementById(`section-${sectionId}`)
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" })
+  }
+
+  /* ================================ Render ================================ */
 
   return (
-    <div className="grid gap-6">
-      <Card className="relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-0 opacity-[0.06] dark:opacity-[0.08]">
-          <div className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-primary blur-3xl" />
-          <div className="absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-foreground blur-3xl" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(0,0,0,.15)_1px,transparent_0)] [background-size:22px_22px] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,.14)_1px,transparent_0)]" />
-        </div>
-        <CardHeader className="relative">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <CardTitle className="text-xl">{schema.title} Content</CardTitle>
-              <CardDescription>{schema.description}</CardDescription>
+    <div className="space-y-4">
+      {/* ======================== Sticky Toolbar ========================= */}
+      <div className="sticky top-16 z-10 -mx-4 sm:-mx-6 lg:-mx-8 border-b border-border bg-background/80 backdrop-blur-sm px-4 sm:px-6 lg:px-8 py-2.5">
+        <div className="flex items-center justify-between gap-3">
+          {/* Left: Locale selector + status */}
+          <div className="flex items-center gap-3">
+            {/* Locale pills */}
+            <div className="flex items-center gap-0.5 rounded-lg bg-muted p-1">
+              {locales.map((loc) => {
+                const missing = missingCount(loc)
+                const isActive = loc === activeLocale
+                return (
+                  <button
+                    key={loc}
+                    onClick={() => setActiveLocale(loc)}
+                    className={cn(
+                      "relative rounded-md px-2.5 py-1 text-xs font-semibold transition-all",
+                      isActive
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {loc.toUpperCase()}
+                    <span
+                      className={cn(
+                        "absolute -top-0.5 -right-0.5 size-2 rounded-full border border-background",
+                        missing === 0 ? "bg-emerald-500" : "bg-amber-500",
+                      )}
+                    />
+                  </button>
+                )
+              })}
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary" className="font-mono text-[11px]">
-                scope:{scope}
-              </Badge>
-              <Badge className={cn("text-[11px]", missingCount(activeLocale) === 0 ? "bg-emerald-600" : "bg-amber-600")}>
-                {missingCount(activeLocale) === 0 ? "Complete" : `${missingCount(activeLocale)} missing`}
-              </Badge>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="relative">
-          <div className="grid gap-4">
-            <Card className="overflow-hidden">
-              <CardHeader className="gap-3">
-                <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <CardTitle className="text-base">Page Preview</CardTitle>
-                    <CardDescription>Preview saved drafts on the actual site layout.</CardDescription>
+
+            {/* Status popover */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-muted-foreground h-7 px-2">
+                  <Info className="size-3.5" />
+                  <span className="hidden sm:inline">Status</span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-72 p-3">
+                <div className="space-y-3 text-sm">
+                  <div className="font-medium">
+                    {SUPPORTED_LOCALE_LABELS[activeLocale].nativeName} ({activeLocale})
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Switch checked={previewEnabled} onCheckedChange={togglePreview} disabled={pendingLocale} />
-                    <span className="text-xs font-mono text-muted-foreground">{previewEnabled ? "drafts:on" : "drafts:off"}</span>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Missing fields</span>
+                      <span className="font-mono">{missingCount(activeLocale)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Draft saved</span>
+                      <span className="font-mono truncate max-w-[140px]">
+                        {byLocale[activeLocale]?.draftUpdatedAt ?? "Never"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Published</span>
+                      <span className="font-mono truncate max-w-[140px]">
+                        {byLocale[activeLocale]?.publishedAt ?? "Never"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Updated by</span>
+                      <span className="font-mono truncate max-w-[140px]">
+                        {byLocale[activeLocale]?.updatedBy ?? "---"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="border-t border-border pt-2">
+                    <p className="text-[11px] text-muted-foreground">
+                      Missing translations fall back to English. Published content goes live immediately.
+                    </p>
                   </div>
                 </div>
+              </PopoverContent>
+            </Popover>
 
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                  <div className="grid flex-1 gap-2">
-                    <Label className="text-xs text-muted-foreground">Path</Label>
+            {/* Missing count badge */}
+            {missingCount(activeLocale) > 0 && (
+              <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-300 dark:text-amber-400 dark:border-amber-700 hidden sm:inline-flex">
+                {missingCount(activeLocale)} missing
+              </Badge>
+            )}
+
+            {/* Dirty indicator */}
+            {isDirty && (
+              <span className="size-2 rounded-full bg-amber-500 animate-pulse" title="Unsaved changes" />
+            )}
+          </div>
+
+          {/* Right: Actions */}
+          <div className="flex items-center gap-1.5">
+            {/* Copy from EN (non-EN only, hidden on mobile) */}
+            {activeLocale !== "en" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => copyMissingFromEnglish(activeLocale)}
+                disabled={pending}
+                className="hidden sm:inline-flex gap-1.5 text-xs h-8"
+              >
+                <Copy className="size-3.5" />
+                Copy from EN
+              </Button>
+            )}
+
+            {/* Overflow menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon-sm" className="size-8">
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {activeLocale !== "en" && (
+                  <DropdownMenuItem
+                    onClick={() => copyMissingFromEnglish(activeLocale)}
+                    disabled={pending}
+                    className="sm:hidden"
+                  >
+                    <Copy className="size-4" />
+                    Copy missing from English
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                  onClick={() => resetLocaleToDefaults(activeLocale)}
+                  disabled={pending}
+                >
+                  <RotateCcw className="size-4" />
+                  Reset to defaults
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <div className="px-2 py-1.5 text-[11px] text-muted-foreground">
+                  <span className="font-mono">Cmd+S</span> save &middot; <span className="font-mono">Cmd+Shift+P</span> publish
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Save draft */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => save(activeLocale)}
+              disabled={pending}
+              className="gap-1.5 h-8"
+            >
+              {pending ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Save className="size-3.5" />
+              )}
+              <span className="hidden sm:inline">Save draft</span>
+              <span className="sm:hidden">Save</span>
+              {isDirty && <span className="size-1.5 rounded-full bg-amber-400" />}
+            </Button>
+
+            {/* Publish */}
+            <Button
+              size="sm"
+              onClick={() => publish(activeLocale)}
+              disabled={pending}
+              className="gap-1.5 h-8"
+            >
+              {pending ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Upload className="size-3.5" />
+              )}
+              Publish
+            </Button>
+
+            {/* Preview trigger */}
+            <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5 h-8">
+                  <Eye className="size-3.5" />
+                  <span className="hidden sm:inline">Preview</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent
+                className="fixed inset-y-0 right-0 left-auto h-screen w-[min(640px,90vw)] max-w-none translate-x-0 translate-y-0 top-0 rounded-l-xl rounded-r-none data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-300 flex flex-col gap-0 p-0"
+              >
+                <DialogHeader className="px-5 pt-5 pb-3 border-b border-border shrink-0">
+                  <DialogTitle className="text-base">Page Preview</DialogTitle>
+                  <DialogDescription className="text-xs">
+                    Preview saved drafts on the actual site layout.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex flex-col gap-3 px-5 py-3 shrink-0">
+                  <div className="flex items-center gap-3">
+                    <Switch
+                      checked={previewEnabled}
+                      onCheckedChange={togglePreview}
+                      disabled={pending}
+                    />
+                    <span className="text-xs font-mono text-muted-foreground">
+                      {previewEnabled ? "Draft mode" : "Published mode"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
                     <Input
                       value={previewPath}
                       onChange={(e) => setPreviewPath(e.target.value)}
+                      className="flex-1 h-8 text-sm font-mono"
                       placeholder={scope === "districts" ? "/districts" : "/"}
                     />
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => setPreviewNonce((n) => n + 1)}>
-                      Refresh
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      onClick={() => setPreviewNonce((n) => n + 1)}
+                      className="size-8 shrink-0"
+                    >
+                      <RefreshCw className="size-3.5" />
                     </Button>
-                    <Button asChild type="button" variant="secondary" size="sm">
-                      <Link href={normalizePreviewPath(previewPath)} target="_blank" rel="noreferrer">
-                        Open
+                    <Button variant="outline" size="icon-sm" asChild className="size-8 shrink-0">
+                      <Link
+                        href={normalizePreviewPath(previewPath)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <ExternalLink className="size-3.5" />
                       </Link>
                     </Button>
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="overflow-hidden rounded-lg border border-border">
-                  <iframe
-                    key={previewSrc}
-                    src={previewSrc}
-                    className="h-[640px] w-full bg-background"
-                    title="Content preview"
-                  />
+                <div className="flex-1 overflow-hidden border-t border-border">
+                  {previewOpen && (
+                    <iframe
+                      key={previewSrc}
+                      src={previewSrc}
+                      className="h-full w-full bg-background"
+                      title="Content preview"
+                    />
+                  )}
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  Tip: Toggle drafts on, then click <span className="font-medium">Save draft</span> to update this preview without publishing.
-                </div>
-              </CardContent>
-            </Card>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+      </div>
 
-            {actionError && (
-              <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-                {actionError}
-              </div>
-            )}
+      {/* ==================== Section Nav + Field Editor =================== */}
+      <div className="grid gap-6 lg:grid-cols-[200px_1fr] lg:items-start">
+        {/* Section nav sidebar (lg+) */}
+        <nav className="hidden lg:block sticky top-32 self-start space-y-1">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+            Sections
+          </div>
+          {schema.sections.map((section) => {
+            const missing = sectionMissingCount(section, activeLocale)
+            return (
+              <button
+                key={section.id}
+                onClick={() => scrollToSection(section.id)}
+                className="flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-left"
+              >
+                <span className="truncate">{section.title}</span>
+                <span
+                  className={cn(
+                    "text-[10px] font-mono tabular-nums ml-2",
+                    missing > 0 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground/50",
+                  )}
+                >
+                  {section.fields.length - missing}/{section.fields.length}
+                </span>
+              </button>
+            )
+          })}
 
-            <div className="grid gap-4 lg:grid-cols-[1fr_320px] lg:items-start">
-              <Tabs value={activeLocale} onValueChange={(v) => setActiveLocale(v as Locale)}>
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <TabsList className="w-full lg:w-auto">
-                    {locales.map((loc) => (
-                      <TabsTrigger key={loc} value={loc} className="gap-2">
-                        <span className="font-medium">{SUPPORTED_LOCALE_LABELS[loc].nativeName}</span>
-                        <span className="hidden sm:inline text-muted-foreground">({SUPPORTED_LOCALE_LABELS[loc].name})</span>
-                        {missingCount(loc) > 0 ? (
-                          <span className="ml-1 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                            {missingCount(loc)}
-                          </span>
-                        ) : (
-                          <span className="ml-1 rounded bg-emerald-600/15 px-1.5 py-0.5 text-[10px] text-emerald-700 dark:text-emerald-300">
-                            ok
-                          </span>
-                        )}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
+          {activeLocale !== "en" && (
+            <div className="mt-4 rounded-md bg-muted/50 px-2.5 py-2">
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                English values shown as reference below each field.
+              </p>
+            </div>
+          )}
+        </nav>
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    {activeLocale !== "en" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => copyMissingFromEnglish(activeLocale)}
-                        disabled={pendingLocale}
-                      >
-                        Copy missing from English
-                      </Button>
+        {/* Mobile section nav (horizontal pills) */}
+        <div className="flex gap-1.5 overflow-x-auto pb-2 lg:hidden -mx-4 px-4 sm:-mx-6 sm:px-6">
+          {schema.sections.map((section) => {
+            const missing = sectionMissingCount(section, activeLocale)
+            return (
+              <button
+                key={section.id}
+                onClick={() => scrollToSection(section.id)}
+                className="shrink-0 flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {section.title}
+                {missing > 0 && (
+                  <span className="size-1.5 rounded-full bg-amber-500" />
+                )}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Field sections */}
+        <div>
+          <Accordion
+            type="multiple"
+            defaultValue={schema.sections.map((s) => s.id)}
+            className="space-y-3"
+          >
+            {schema.sections.map((section) => {
+              const missing = sectionMissingCount(section, activeLocale)
+              const total = section.fields.length
+
+              return (
+                <AccordionItem
+                  key={section.id}
+                  value={section.id}
+                  id={`section-${section.id}`}
+                  className="rounded-lg border border-border bg-card overflow-hidden scroll-mt-28"
+                >
+                  <AccordionTrigger className="px-4 py-3 hover:no-underline">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-semibold">{section.title}</span>
+                      <span className="text-xs text-muted-foreground font-mono tabular-nums">
+                        {total - missing}/{total}
+                      </span>
+                      {missing > 0 && (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] text-amber-600 border-amber-300 dark:text-amber-400 dark:border-amber-700"
+                        >
+                          {missing} missing
+                        </Badge>
+                      )}
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-4 pb-5">
+                    {section.description && (
+                      <p className="mb-4 text-xs text-muted-foreground">
+                        {section.description}
+                      </p>
                     )}
-                    <Button variant="outline" size="sm" onClick={() => resetLocaleToDefaults(activeLocale)} disabled={pendingLocale}>
-                      Reset
-                    </Button>
-                    <Button variant="secondary" size="sm" onClick={() => save(activeLocale)} disabled={pendingLocale}>
-                      Save draft
-                    </Button>
-                    <Button size="sm" onClick={() => publish(activeLocale)} disabled={pendingLocale}>
-                      Publish
-                    </Button>
-                  </div>
-                </div>
+                    <div className="grid gap-5">
+                      {section.fields.map((field) => {
+                        const loc = activeLocale
+                        const current = getAtPath(byLocale[loc].doc, field.path)
+                        const currentStr = typeof current === "string" ? current : ""
+                        const isTranslatable = field.translatable !== false
+                        const en = getAtPath(byLocale.en.doc, field.path)
+                        const enStr = typeof en === "string" ? en : ""
+                        const enJson =
+                          field.type === "json"
+                            ? JSON.stringify(en ?? null, null, 2)
+                            : ""
 
-                {locales.map((loc) => (
-                  <TabsContent key={loc} value={loc} className="mt-6">
-                    <ScrollArea className="rounded-lg border border-border bg-background">
-                      <div className="p-4">
-                        <div className="space-y-8">
-                          {schema.sections.map((section) => (
-                            <section key={section.id} className="space-y-4">
-                              <div className="flex items-end justify-between gap-4">
-                                <div>
-                                  <h3 className="text-sm font-semibold tracking-tight text-foreground">{section.title}</h3>
-                                  {section.description && (
-                                    <p className="mt-1 text-xs text-muted-foreground">{section.description}</p>
+                        const jKey = jsonKey(loc, field.path)
+                        const currentJsonText =
+                          jsonText[jKey] ??
+                          (field.type === "json"
+                            ? JSON.stringify(current ?? null, null, 2)
+                            : "")
+                        const currentJsonErr = jsonError[jKey]
+
+                        // Status
+                        const isSet =
+                          field.type === "json"
+                            ? current != null
+                            : currentStr.trim() !== ""
+                        const statusLabel =
+                          loc !== "en" && !isTranslatable
+                            ? "inherited"
+                            : isSet
+                              ? "set"
+                              : "missing"
+                        const isDisabled = loc !== "en" && !isTranslatable
+
+                        return (
+                          <div key={field.path} className="grid gap-1.5">
+                            {/* Label + status */}
+                            <div className="flex items-center justify-between gap-2">
+                              <Label className="text-sm font-medium">{field.label}</Label>
+                              <span
+                                className={cn(
+                                  "inline-flex items-center gap-1 text-[11px] font-mono",
+                                  isSet || statusLabel === "inherited"
+                                    ? "text-muted-foreground"
+                                    : "text-amber-600 dark:text-amber-400",
+                                )}
+                              >
+                                <span
+                                  className={cn(
+                                    "size-1.5 rounded-full",
+                                    statusLabel === "inherited"
+                                      ? "bg-muted-foreground/40"
+                                      : isSet
+                                        ? "bg-emerald-500"
+                                        : "bg-amber-500",
+                                  )}
+                                />
+                                {statusLabel}
+                              </span>
+                            </div>
+
+                            {/* Field input */}
+                            {field.type === "json" ? (
+                              <div className="grid gap-2">
+                                <Textarea
+                                  value={isDisabled ? enJson : currentJsonText}
+                                  rows={field.rows ?? 18}
+                                  onChange={(e) =>
+                                    updateJsonField(loc, field.path, e.target.value)
+                                  }
+                                  className="font-mono text-xs"
+                                  disabled={isDisabled}
+                                />
+                                {currentJsonErr && !isDisabled && (
+                                  <p className="text-xs text-destructive">
+                                    Invalid JSON: {currentJsonErr}
+                                  </p>
+                                )}
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => formatJsonField(loc, field.path)}
+                                    disabled={pending || isDisabled}
+                                    className="h-7 text-xs"
+                                  >
+                                    Format JSON
+                                  </Button>
+                                  {field.help && (
+                                    <p className="text-xs text-muted-foreground">
+                                      {field.help}
+                                    </p>
                                   )}
                                 </div>
-                                {loc !== "en" && (
-                                  <Badge variant="outline" className="text-[11px]">
-                                    English shown as reference
-                                  </Badge>
+                                {isDisabled && (
+                                  <p className="text-xs text-muted-foreground">
+                                    This field inherits from English (edit on the EN tab).
+                                  </p>
                                 )}
                               </div>
+                            ) : field.type === "textarea" ? (
+                              <Textarea
+                                value={currentStr}
+                                rows={field.rows ?? 4}
+                                onChange={(e) =>
+                                  updateField(loc, field.path, e.target.value)
+                                }
+                                placeholder={loc === "en" ? undefined : enStr || undefined}
+                                disabled={isDisabled}
+                              />
+                            ) : (
+                              <Input
+                                value={currentStr}
+                                onChange={(e) =>
+                                  updateField(loc, field.path, e.target.value)
+                                }
+                                placeholder={loc === "en" ? undefined : enStr || undefined}
+                                disabled={isDisabled}
+                                className="h-9"
+                              />
+                            )}
 
-                              <div className="grid gap-4">
-                                {section.fields.map((field) => {
-                                  const current = getAtPath(byLocale[loc].doc, field.path)
-                                  const currentStr = typeof current === "string" ? current : ""
-                                  const isTranslatable = field.translatable !== false
-                                  const en = getAtPath(byLocale.en.doc, field.path)
-                                  const enStr = typeof en === "string" ? en : ""
-                                  const enJson = field.type === "json" ? JSON.stringify(en ?? null, null, 2) : ""
+                            {/* English reference (non-EN locales) */}
+                            {loc !== "en" && enStr && isTranslatable && field.type !== "json" && (
+                              <p className="text-xs text-muted-foreground pl-0.5">
+                                <span className="font-mono text-[10px] text-muted-foreground/60 mr-1">
+                                  EN
+                                </span>
+                                {enStr}
+                              </p>
+                            )}
 
-                                  const key = jsonKey(loc, field.path)
-                                  const currentJsonText =
-                                    jsonText[key] ??
-                                    (field.type === "json" ? JSON.stringify(current ?? null, null, 2) : "")
-                                  const currentJsonErr = jsonError[key]
-
-                                  return (
-                                    <div key={field.path} className="grid gap-2">
-                                      <div className="flex items-baseline justify-between gap-4">
-                                        <Label className="text-sm">{field.label}</Label>
-                                        <span
-                                          className={cn(
-                                            "text-[11px] font-mono",
-                                            field.type === "json"
-                                              ? current != null
-                                                ? "text-muted-foreground"
-                                                : "text-amber-600 dark:text-amber-400"
-                                              : currentStr.trim()
-                                                ? "text-muted-foreground"
-                                                : "text-amber-600 dark:text-amber-400",
-                                          )}
-                                        >
-                                          {loc !== "en" && !isTranslatable
-                                            ? "inherited"
-                                            : field.type === "json"
-                                              ? current != null
-                                                ? "set"
-                                                : "missing"
-                                              : currentStr.trim()
-                                                ? "set"
-                                                : "missing"}
-                                        </span>
-                                      </div>
-
-                                      {field.type === "json" ? (
-                                        <div className="grid gap-2">
-                                          <Textarea
-                                            value={loc !== "en" && !isTranslatable ? enJson : currentJsonText}
-                                            rows={field.rows ?? 18}
-                                            onChange={(e) => updateJsonField(loc, field.path, e.target.value)}
-                                            className="font-mono text-xs"
-                                            disabled={loc !== "en" && !isTranslatable}
-                                          />
-                                          {currentJsonErr && !(loc !== "en" && !isTranslatable) && (
-                                            <p className="text-xs text-destructive">Invalid JSON: {currentJsonErr}</p>
-                                          )}
-                                          <div className="flex flex-wrap items-center gap-2">
-                                            <Button
-                                              type="button"
-                                              variant="outline"
-                                              size="sm"
-                                              onClick={() => formatJsonField(loc, field.path)}
-                                              disabled={pendingLocale || (loc !== "en" && !isTranslatable)}
-                                            >
-                                              Format JSON
-                                            </Button>
-                                            {field.help && <p className="text-xs text-muted-foreground">{field.help}</p>}
-                                          </div>
-                                          {loc !== "en" && !isTranslatable && (
-                                            <p className="text-xs text-muted-foreground">
-                                              This field inherits from English (edit it on the English tab).
-                                            </p>
-                                          )}
-                                        </div>
-                                      ) : field.type === "textarea" ? (
-                                        <Textarea
-                                          value={currentStr}
-                                          rows={field.rows ?? 4}
-                                          onChange={(e) => updateField(loc, field.path, e.target.value)}
-                                          placeholder={loc === "en" ? "" : enStr}
-                                          disabled={loc !== "en" && !isTranslatable}
-                                        />
-                                      ) : (
-                                        <Input
-                                          value={currentStr}
-                                          onChange={(e) => updateField(loc, field.path, e.target.value)}
-                                          placeholder={loc === "en" ? "" : enStr}
-                                          disabled={loc !== "en" && !isTranslatable}
-                                        />
-                                      )}
-
-                                      {loc !== "en" && enStr && isTranslatable && (
-                                        <p className="text-xs text-muted-foreground">
-                                          <span className="font-mono">en:</span> {enStr}
-                                        </p>
-                                      )}
-                                      {field.help && field.type !== "json" && (
-                                        <p className="text-xs text-muted-foreground">{field.help}</p>
-                                      )}
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            </section>
-                          ))}
-                        </div>
-                      </div>
-                    </ScrollArea>
-                  </TabsContent>
-                ))}
-              </Tabs>
-
-              <div className="grid gap-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Status</CardTitle>
-                    <CardDescription>Draft/publish info and supported locales.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-3 text-sm">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-muted-foreground">Locale</span>
-                        <span className="font-mono text-xs">
-                          {SUPPORTED_LOCALE_LABELS[activeLocale].nativeName} ({activeLocale})
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-muted-foreground">Missing fields</span>
-                        <span className="font-mono">{missingCount(activeLocale)}</span>
-                      </div>
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-muted-foreground">Draft updated</span>
-                        <span className="font-mono text-xs">{byLocale[activeLocale]?.draftUpdatedAt ?? "n/a"}</span>
-                      </div>
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-muted-foreground">Published</span>
-                        <span className="font-mono text-xs">{byLocale[activeLocale]?.publishedAt ?? "n/a"}</span>
-                      </div>
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-muted-foreground">Updated by</span>
-                        <span className="font-mono text-xs">{byLocale[activeLocale]?.updatedBy ?? "n/a"}</span>
-                      </div>
-                      <div className="pt-1 text-xs text-muted-foreground">
-                        Public pages use published content immediately. Missing translations fall back to English.
-                      </div>
-                    </div>
-
-                    <div className="h-px w-full bg-border" />
-
-                    <div className="space-y-2">
-                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Supported locales</div>
-                      <div className="grid gap-2">
-                        {(Object.keys(SUPPORTED_LOCALE_LABELS) as Locale[]).map((loc) => (
-                          <div key={loc} className="flex items-center justify-between text-sm">
-                            <span className="font-medium">{SUPPORTED_LOCALE_LABELS[loc].nativeName}</span>
-                            <span className="font-mono text-xs text-muted-foreground">{loc}</span>
+                            {/* Help text */}
+                            {field.help && field.type !== "json" && (
+                              <p className="text-xs text-muted-foreground/80">{field.help}</p>
+                            )}
                           </div>
-                        ))}
-                      </div>
-                      <div className="pt-1 text-xs text-muted-foreground">
-                        Locale selection priority: cookie, then <span className="font-mono">Accept-Language</span>. English is the default fallback.
-                      </div>
+                        )
+                      })}
                     </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+                  </AccordionContent>
+                </AccordionItem>
+              )
+            })}
+          </Accordion>
+        </div>
+      </div>
     </div>
   )
 }

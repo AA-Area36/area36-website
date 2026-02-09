@@ -4,7 +4,6 @@ import { CONTENT_SCHEMAS, type ContentDoc, type Scope } from "@/lib/content/sche
 import { SUPPORTED_LOCALES, type Locale } from "@/lib/i18n/locales"
 import { loadContentDocs } from "./actions"
 import { ContentEditor } from "./content-editor"
-import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 
 function safeParse(value: string | null): ContentDoc | null {
@@ -56,46 +55,40 @@ export default async function AdminContentPage({
   ) as Record<Locale, any>
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-      <aside className="space-y-3">
-        <div>
-          <h1 className="text-lg font-semibold">Content Studio</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Edit and publish site copy per language. Public pages read published content from D1.
-          </p>
-        </div>
+    <div className="space-y-6">
+      {/* Page header */}
+      <div>
+        <h1 className="text-lg font-semibold tracking-tight">Content Studio</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Edit and publish site copy per language. Changes go live immediately on publish.
+        </p>
+      </div>
 
-        <Card className="p-2">
-          <nav className="grid gap-1">
-            {Object.values(CONTENT_SCHEMAS).map((s) => (
-              <Link
-                key={s.scope}
-                href={`/admin/content?scope=${encodeURIComponent(s.scope)}`}
-                className={cn(
-                  "rounded-md px-3 py-2 text-sm transition-colors",
-                  s.scope === scope ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                )}
-              >
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="font-medium">{s.title}</span>
-                  <span className="font-mono text-[11px] opacity-70">{s.scope}</span>
-                </div>
-                <div className="mt-1 text-xs opacity-80">{s.description}</div>
-              </Link>
-            ))}
-          </nav>
-        </Card>
-      </aside>
+      {/* Scope tabs */}
+      <div className="flex items-center gap-1 border-b border-border -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
+        {Object.values(CONTENT_SCHEMAS).map((s) => (
+          <Link
+            key={s.scope}
+            href={`/admin/content?scope=${encodeURIComponent(s.scope)}`}
+            className={cn(
+              "relative px-4 py-2.5 text-sm font-medium transition-colors",
+              s.scope === scope
+                ? "text-foreground after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-primary after:rounded-full"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {s.title}
+          </Link>
+        ))}
+      </div>
 
-      <section>
-        {/* Force remount when scope changes (client state shouldn't bleed across scopes). */}
-        <ContentEditor
-          key={scope}
-          scope={scope}
-          initialByLocale={initialByLocale}
-          initialPreviewEnabled={initialPreviewEnabled}
-        />
-      </section>
+      {/* Editor */}
+      <ContentEditor
+        key={scope}
+        scope={scope}
+        initialByLocale={initialByLocale}
+        initialPreviewEnabled={initialPreviewEnabled}
+      />
     </div>
   )
 }

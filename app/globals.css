@@ -126,6 +126,22 @@
   }
 }
 
+/* Subtle page transition animation */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    translate: 0 4px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@utility animate-fade-in {
+  animation: fade-in 150ms ease-out both;
+}
+
 /* Focus styles for accessibility */
 :focus-visible {
   outline: 2px solid var(--ring);

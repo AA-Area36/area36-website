@@ -3,8 +3,8 @@ import { eq } from "drizzle-orm"
 import { getCloudflareContext } from "@opennextjs/cloudflare"
 import { getDb } from "@/lib/db"
 import { reportsMonthly } from "@/lib/db/schema"
-import { ReportContent } from "@/app/(public)/reports/[report]/report-content"
-import type { ReportData } from "@/app/(public)/reports/[report]/types"
+import { ReportContent } from "./report-content"
+import type { ReportData } from "./types"
 
 const MONTH_RE = /^\d{4}-\d{2}$/
 
@@ -24,12 +24,12 @@ export async function generateMetadata({ params }: Props) {
   const monthName = date.toLocaleDateString("en-US", { month: "long", year: "numeric" })
 
   return {
-    title: `${monthName} Report (Admin) - Area 36`,
+    title: `${monthName} Report - Area 36`,
     description: `Monthly operational report for Area 36 web services - ${monthName}`,
   }
 }
 
-export default async function AdminReportPage({ params }: Props) {
+export default async function ReportPage({ params }: Props) {
   const { report: month } = await params
 
   if (!MONTH_RE.test(month)) {
@@ -56,14 +56,5 @@ export default async function AdminReportPage({ params }: Props) {
 
   const data = (await object.json()) as ReportData
 
-  return (
-    <div className="space-y-6">
-      <ReportContent 
-        data={data} 
-        month={month} 
-        generatedAt={report.generatedAt} 
-        showAllStatuses={true}
-      />
-    </div>
-  )
+  return <ReportContent data={data} month={month} generatedAt={report.generatedAt} />
 }
