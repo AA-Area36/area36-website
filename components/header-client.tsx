@@ -145,7 +145,7 @@ export function HeaderClient({
 
       {/* Mobile menu */}
       {mobileMenuOpen && (
-        <div className="lg:hidden" id="mobile-menu" role="menu">
+        <nav className="lg:hidden" id="mobile-menu" aria-label="Mobile navigation">
           <div className="space-y-1 px-4 pb-4">
             {navigation.map((item) =>
               item.children ? (
@@ -163,7 +163,6 @@ export function HeaderClient({
                           : "text-muted-foreground hover:text-foreground hover:bg-muted",
                       )}
                       aria-current={pathname === child.href ? "page" : undefined}
-                      role="menuitem"
                     >
                       {child.name}
                     </Link>
@@ -181,16 +180,14 @@ export function HeaderClient({
                       : "text-muted-foreground hover:text-foreground hover:bg-muted",
                   )}
                   aria-current={pathname === item.href ? "page" : undefined}
-                  role="menuitem"
                 >
                   {item.name}
                 </Link>
               ),
             )}
           </div>
-        </div>
+        </nav>
       )}
     </header>
   )
 }
-
