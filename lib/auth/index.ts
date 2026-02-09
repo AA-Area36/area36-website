@@ -99,7 +99,10 @@ function cookieDomainForProd(): string | undefined {
 function isAllowedRedirectHost(hostname: string): boolean {
   const h = hostname.toLowerCase()
   if (h === "area36.org" || h === "www.area36.org") return true
-  return /^d(\d{1,2})\.area36\.org$/.test(h)
+  const m = h.match(/^d(\d{1,2})\.area36\.org$/)
+  if (!m) return false
+  const n = Number(m[1])
+  return Number.isFinite(n) && n >= 1 && n <= 27 && n !== 10
 }
 
 const nextAuth = NextAuth(async () => {
