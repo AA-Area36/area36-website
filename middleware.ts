@@ -107,7 +107,7 @@ export function middleware(request: NextRequest) {
       // Hosted district site.
       // Rewrite:
       // - /admin/* -> /admin/districts/{n}/*
-      // - public pages -> /_district/{n}/*
+      // - public pages -> /district-site/{n}/*
       if (pathname.startsWith("/admin/login")) {
         const callbackUrl = `https://d${site.districtNumber}.area36.org/admin`
         const r = NextResponse.redirect(
@@ -144,7 +144,7 @@ export function middleware(request: NextRequest) {
       }
 
       const url = request.nextUrl.clone()
-      url.pathname = `/_district/${site.districtNumber}${pathname === "/" ? "" : pathname}`
+      url.pathname = `/district-site/${site.districtNumber}${pathname === "/" ? "" : pathname}`
       const r = NextResponse.rewrite(url)
       applyRequestHeadersAndLocale(r)
       return r
