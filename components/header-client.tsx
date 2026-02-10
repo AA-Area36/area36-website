@@ -362,11 +362,11 @@ export function HeaderClient({
         </div>
       </nav>
 
-      {/* Mobile menu with smooth transition */}
-      <div
+      {/* Mobile menu (collapsible) */}
+      <nav
         id="mobile-menu"
         ref={mobileMenuRef}
-        role="menu"
+        aria-label="Mobile navigation"
         className={cn(
           "lg:hidden overflow-hidden transition-all duration-300 ease-in-out",
           mobileMenuOpen ? "max-h-[80vh] opacity-100" : "max-h-0 opacity-0",
@@ -376,21 +376,16 @@ export function HeaderClient({
           {navigation.map((item, itemIndex) =>
             item.children ? (
               <div key={item.name}>
-                {/* Border separator between major nav groups */}
-                {itemIndex > 0 && (
-                  <div className="border-t border-border/50 my-2" />
-                )}
+                {itemIndex > 0 && <div className="border-t border-border/50 my-2" />}
                 <button
                   data-mobile-group
                   onClick={() => toggleGroup(item.name)}
                   className={cn(
                     "flex w-full items-center justify-between px-4 py-3 text-base font-semibold rounded-md transition-colors bg-muted/50",
-                    isChildActive(item.children)
-                      ? "text-primary"
-                      : "text-foreground",
+                    isChildActive(item.children) ? "text-primary" : "text-foreground",
                   )}
                   aria-expanded={!!expandedGroups[item.name]}
-                  role="menuitem"
+                  aria-controls={`mobile-group-${itemIndex}`}
                 >
                   {item.name}
                   <ChevronDown
@@ -402,11 +397,10 @@ export function HeaderClient({
                   />
                 </button>
                 <div
+                  id={`mobile-group-${itemIndex}`}
                   className={cn(
                     "overflow-hidden transition-all duration-200 ease-in-out",
-                    expandedGroups[item.name]
-                      ? "max-h-[50vh] opacity-100"
-                      : "max-h-0 opacity-0",
+                    expandedGroups[item.name] ? "max-h-[50vh] opacity-100" : "max-h-0 opacity-0",
                   )}
                 >
                   {item.children.map((child) => (
@@ -420,10 +414,7 @@ export function HeaderClient({
                           ? "bg-primary/10 text-primary"
                           : "text-muted-foreground hover:text-foreground hover:bg-muted",
                       )}
-                      aria-current={
-                        pathname === child.href ? "page" : undefined
-                      }
-                      role="menuitem"
+                      aria-current={pathname === child.href ? "page" : undefined}
                     >
                       {child.name}
                     </Link>
@@ -432,11 +423,9 @@ export function HeaderClient({
               </div>
             ) : (
               <div key={item.name}>
-                {/* Border separator before standalone links that follow a group */}
-                {itemIndex > 0 &&
-                  navigation[itemIndex - 1]?.children && (
-                    <div className="border-t border-border/50 my-2" />
-                  )}
+                {itemIndex > 0 && navigation[itemIndex - 1]?.children && (
+                  <div className="border-t border-border/50 my-2" />
+                )}
                 <Link
                   href={item.href}
                   onClick={() => setMobileMenuOpen(false)}
@@ -447,7 +436,6 @@ export function HeaderClient({
                       : "text-muted-foreground hover:text-foreground hover:bg-muted",
                   )}
                   aria-current={pathname === item.href ? "page" : undefined}
-                  role="menuitem"
                 >
                   {item.name}
                 </Link>
@@ -455,7 +443,7 @@ export function HeaderClient({
             ),
           )}
         </div>
-      </div>
+      </nav>
     </header>
   )
 }

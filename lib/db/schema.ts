@@ -81,6 +81,8 @@ export const events = sqliteTable("events", {
   address: text("address"),
   meetingLink: text("meeting_link"),
   description: text("description").notNull(),
+  // Optional district scope for district sub-sites (null = Area-level / general)
+  districtNumber: integer("district_number"),
   type: text("type").$type<EventType>(), // Kept for backward compat, use eventToTypes for new events
   status: text("status").notNull().default("pending").$type<EventStatus>(),
   submitterEmail: text("submitter_email").notNull(),
@@ -109,6 +111,127 @@ export const events = sqliteTable("events", {
 
 export type Event = typeof events.$inferSelect
 export type NewEvent = typeof events.$inferInsert
+
+/* -------------------------------------------------------------------------- */
+/*                               District Sites                               */
+/* -------------------------------------------------------------------------- */
+
+export const districtSiteModes = ["hosted", "external_redirect"] as const
+export type DistrictSiteMode = (typeof districtSiteModes)[number]
+
+export const districtSites = sqliteTable("district_sites", {
+  districtNumber: integer("district_number").primaryKey(),
+  subdomain: text("subdomain").notNull().unique(),
+  displayName: text("display_name").notNull().default(""),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
+  mode: text("mode").notNull().$type<DistrictSiteMode>(),
+  redirectUrl: text("redirect_url"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+})
+
+export type DistrictSite = typeof districtSites.$inferSelect
+export type NewDistrictSite = typeof districtSites.$inferInsert
+
+export const districtAdminRoles = ["manager", "editor"] as const
+export type DistrictAdminRole = (typeof districtAdminRoles)[number]
+
+export const districtAdmins = sqliteTable(
+  "district_admins",
+  {
+    districtNumber: integer("district_number")
+      .notNull()
+      .references(() => districtSites.districtNumber, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    role: text("role").notNull().default("editor").$type<DistrictAdminRole>(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    updatedAt: text("updated_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => [primaryKey({ columns: [table.districtNumber, table.email] })]
+)
+
+export type DistrictAdmin = typeof districtAdmins.$inferSelect
+export type NewDistrictAdmin = typeof districtAdmins.$inferInsert
+
+export const districtContactCategories = ["officer", "chair", "other"] as const
+export type DistrictContactCategory = (typeof districtContactCategories)[number]
+
+export const districtContacts = sqliteTable("district_contacts", {
+  id: text("id").primaryKey(),
+  districtNumber: integer("district_number")
+    .notNull()
+    .references(() => districtSites.districtNumber, { onDelete: "cascade" }),
+  category: text("category").notNull().default("other").$type<DistrictContactCategory>(),
+  role: text("role").notNull(),
+  name: text("name"),
+  email: text("email"),
+  phone: text("phone"),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+})
+
+export type DistrictContact = typeof districtContacts.$inferSelect
+export type NewDistrictContact = typeof districtContacts.$inferInsert
+
+export const districtPositionStatuses = ["open", "filled"] as const
+export type DistrictPositionStatus = (typeof districtPositionStatuses)[number]
+
+export const districtPositions = sqliteTable("district_positions", {
+  id: text("id").primaryKey(),
+  districtNumber: integer("district_number")
+    .notNull()
+    .references(() => districtSites.districtNumber, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  status: text("status").notNull().default("open").$type<DistrictPositionStatus>(),
+  contactName: text("contact_name"),
+  contactEmail: text("contact_email"),
+  notes: text("notes"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+})
+
+export type DistrictPosition = typeof districtPositions.$inferSelect
+export type NewDistrictPosition = typeof districtPositions.$inferInsert
+
+export const districtUpdates = sqliteTable("district_updates", {
+  id: text("id").primaryKey(),
+  districtNumber: integer("district_number")
+    .notNull()
+    .references(() => districtSites.districtNumber, { onDelete: "cascade" }),
+  committee: text("committee"),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  publishedAt: text("published_at"),
+  authorEmail: text("author_email"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+})
+
+export type DistrictUpdate = typeof districtUpdates.$inferSelect
+export type NewDistrictUpdate = typeof districtUpdates.$inferInsert
 
 // Event Flyers table (multiple flyers per event)
 export const eventFlyers = sqliteTable("event_flyers", {

@@ -9,6 +9,7 @@ import {
   TrendingUp,
   FileText,
   Languages,
+  Map,
   MoreHorizontal,
   Menu,
   LogOut,
@@ -40,6 +41,7 @@ const secondaryLinks = [
   { href: "/admin/subscription-drives", label: "Subscription Drives", icon: TrendingUp },
   { href: "/admin/reports", label: "Reports", icon: FileText },
   { href: "/admin/content", label: "Content", icon: Languages },
+  { href: "/admin/district-sites", label: "District Sites", icon: Map },
 ] as const
 
 const allLinks = [...primaryLinks, ...secondaryLinks]

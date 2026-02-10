@@ -16,10 +16,20 @@ import { withEdgeCache } from "@/lib/cache/edge-cache"
 import { createRequestLogger } from "@/lib/logger"
 import { recordError } from "@/lib/monitoring/errors"
 
-const CACHE_KEY = "events:approved"
+const CACHE_KEY_BASE = "events:approved"
 const CACHE_TTL = 60 * 5 // 5 minutes
 
-async function buildApprovedEvents(log: ReturnType<typeof createRequestLogger>): Promise<DisplayEvent[]> {
+function parseDistrictParam(value: string | null): number | null {
+  if (!value) return null
+  const n = Number(value)
+  if (!Number.isFinite(n) || n < 1 || n > 27 || n === 10) return null
+  return n
+}
+
+async function buildApprovedEvents(
+  log: ReturnType<typeof createRequestLogger>,
+  districtNumber: number | null
+): Promise<DisplayEvent[]> {
   const db = await log.tracker.time("db.connect", () => getDb())
 
   // Get today's date in Central time (Area 36 is in Minnesota)
@@ -29,28 +39,31 @@ async function buildApprovedEvents(log: ReturnType<typeof createRequestLogger>):
   yesterday.setDate(yesterday.getDate() - 1)
   const yesterdayStr = yesterday.toLocaleDateString("en-CA", { timeZone: "America/Chicago" })
 
+  const baseWhere = [
+    eq(events.status, "approved"),
+    or(
+      and(
+        eq(events.isRecurring, false),
+        or(
+          gt(events.endDate, yesterdayStr),
+          and(isNull(events.endDate), gt(events.date, yesterdayStr))
+        )
+      ),
+      and(
+        eq(events.isRecurring, true),
+        or(isNull(events.recurUntil), gte(events.recurUntil, todayStr))
+      )
+    ),
+  ]
+  if (districtNumber !== null) {
+    baseWhere.push(eq(events.districtNumber, districtNumber))
+  }
+
   const eventsData = await log.tracker.time("db.events", () =>
     db
       .select()
       .from(events)
-      .where(
-        and(
-          eq(events.status, "approved"),
-          or(
-            and(
-              eq(events.isRecurring, false),
-              or(
-                gt(events.endDate, yesterdayStr),
-                and(isNull(events.endDate), gt(events.date, yesterdayStr))
-              )
-            ),
-            and(
-              eq(events.isRecurring, true),
-              or(isNull(events.recurUntil), gte(events.recurUntil, todayStr))
-            )
-          )
-        )
-      )
+      .where(and(...baseWhere))
       .orderBy(asc(events.date))
   )
 
@@ -118,13 +131,15 @@ async function buildApprovedEvents(log: ReturnType<typeof createRequestLogger>):
   return displayEvents
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const log = createRequestLogger("/api/events", "GET")
+  const districtNumber = parseDistrictParam(new URL(request.url).searchParams.get("district"))
 
   try {
+    const cacheKey = districtNumber ? `${CACHE_KEY_BASE}:district:${districtNumber}` : CACHE_KEY_BASE
     const { data, status } = await withEdgeCache(
-      CACHE_KEY,
-      () => buildApprovedEvents(log),
+      cacheKey,
+      () => buildApprovedEvents(log, districtNumber),
       { ttl: CACHE_TTL }
     )
 
