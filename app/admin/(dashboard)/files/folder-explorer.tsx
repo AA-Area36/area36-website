@@ -20,6 +20,7 @@ import { FileMetadataDialog } from "./file-metadata-dialog"
 
 interface FolderExplorerProps {
   folders: FolderNode[]
+  onMetadataUpdated?: () => void | Promise<void>
 }
 
 // Check if node or any child matches search
@@ -168,7 +169,7 @@ function FolderItem({
   )
 }
 
-export function FolderExplorer({ folders }: FolderExplorerProps) {
+export function FolderExplorer({ folders, onMetadataUpdated }: FolderExplorerProps) {
   const [search, setSearch] = React.useState("")
   const [editingFile, setEditingFile] = React.useState<FileNode | null>(null)
 
@@ -215,6 +216,7 @@ export function FolderExplorer({ folders }: FolderExplorerProps) {
         file={editingFile}
         open={!!editingFile}
         onOpenChange={(open: boolean) => !open && setEditingFile(null)}
+        onSaved={onMetadataUpdated}
       />
     </div>
   )

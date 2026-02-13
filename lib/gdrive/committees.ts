@@ -3,6 +3,7 @@
 import { listFolders, listAllFiles, getPreviewUrl, getDownloadUrl, getGDriveCredentials } from "./client"
 import { getFromCache, setInCache } from "./cache"
 import type { DriveFile, GDriveCredentials } from "./types"
+import { filterArchivedFolders } from "./archive"
 
 export interface CommitteeFile {
   id: string
@@ -71,7 +72,7 @@ export async function getCommitteeFiles(
 
   try {
     // Get all subfolders (each represents a committee)
-    const folders = await listFolders(credentials, committeesFolderId)
+    const folders = filterArchivedFolders(await listFolders(credentials, committeesFolderId))
 
     // Fetch files from each folder in parallel
     await Promise.all(

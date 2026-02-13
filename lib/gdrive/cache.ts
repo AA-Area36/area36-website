@@ -74,6 +74,19 @@ export async function deleteFromCache(key: string): Promise<boolean> {
 }
 
 /**
+ * Invalidate one or more cache keys, including their stale variants
+ */
+export async function invalidateCacheEntries(keys: string[]): Promise<void> {
+  try {
+    const cache = await caches.open("gdrive")
+    const expandedKeys = [...new Set(keys.flatMap((key) => [key, `${key}:stale`]))]
+    await Promise.all(expandedKeys.map((key) => cache.delete(getCacheKey(key))))
+  } catch {
+    // Cache API not available, silently fail
+  }
+}
+
+/**
  * Cache wrapper - get from cache or fetch and cache
  * Supports stale-while-revalidate pattern for better performance
  */

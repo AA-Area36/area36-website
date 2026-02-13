@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { getDb } from "@/lib/db"
 import { fileMetadata } from "@/lib/db/schema"
+import { filterArchivedFolders } from "@/lib/gdrive/archive"
 
 // Types for folder structure
 interface FolderNode {
@@ -37,6 +38,7 @@ const FOLDER_CONFIG: Record<FolderType, { envKey: string; name: string }> = {
 
 // Cache TTL for admin files (shorter since admins need fresh data)
 const CACHE_TTL = 60 * 5 // 5 minutes
+const NO_STORE_HEADERS = { "Cache-Control": "no-store" } as const
 
 // Get environment variables from Cloudflare context
 async function getEnv() {
@@ -95,11 +97,12 @@ async function buildSingleFolderTree(
           listFolders(credentials, currentFolderId),
           listAllFiles(credentials, currentFolderId, { orderBy: "name" }),
         ])
+        const visibleSubfolders = filterArchivedFolders(subfolders)
 
         const children: (FolderNode | FileNode)[] = []
 
         // Add subfolders recursively
-        for (const subfolder of subfolders) {
+        for (const subfolder of visibleSubfolders) {
           const childFolder = await buildTree(subfolder.id, subfolder.name)
           children.push(childFolder)
         }
@@ -142,7 +145,7 @@ export async function GET(request: NextRequest) {
   // Check authentication
   const session = await auth()
   if (!session?.user?.email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: NO_STORE_HEADERS })
   }
 
   try {
@@ -161,16 +164,19 @@ export async function GET(request: NextRequest) {
       if (!FOLDER_CONFIG[folderType]) {
         return NextResponse.json(
           { error: `Invalid folder type. Valid types: ${Object.keys(FOLDER_CONFIG).join(", ")}` },
-          { status: 400 }
+          { status: 400, headers: NO_STORE_HEADERS }
         )
       }
 
       const folder = await buildSingleFolderTree(folderType, metadataMap)
       
-      return NextResponse.json({
-        folder,
-        metadata: allMetadata,
-      })
+      return NextResponse.json(
+        {
+          folder,
+          metadata: allMetadata,
+        },
+        { headers: NO_STORE_HEADERS }
+      )
     }
 
     // Otherwise, return just metadata and folder config (for initial load)
@@ -186,15 +192,18 @@ export async function GET(request: NextRequest) {
         name: config.name,
       }))
 
-    return NextResponse.json({
-      availableFolders,
-      metadata: allMetadata,
-    })
+    return NextResponse.json(
+      {
+        availableFolders,
+        metadata: allMetadata,
+      },
+      { headers: NO_STORE_HEADERS }
+    )
   } catch (error) {
     console.error("Error fetching admin files data:", error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to fetch files" },
-      { status: 500 }
+      { status: 500, headers: NO_STORE_HEADERS }
     )
   }
 }

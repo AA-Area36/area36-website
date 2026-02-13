@@ -9,6 +9,7 @@ import {
 } from "./client"
 import { withCache, CACHE_KEYS } from "./cache"
 import type { Newsletter, DriveFile, GDriveCredentials } from "./types"
+import { filterArchivedFolders } from "./archive"
 
 // Month name to number mapping
 const MONTH_MAP: Record<string, number> = {
@@ -192,11 +193,12 @@ export async function getNewsletters(
           orderBy: "name desc",
         }),
       ])
+      const visibleYearFolders = filterArchivedFolders(yearFolders)
 
       // Process all year folders in parallel
       const yearResults = await Promise.all(
-        yearFolders
-          .filter((folder) => !isNaN(parseInt(folder.name, 10)))
+        visibleYearFolders
+          .filter((folder) => /^20\d{2}$/.test(folder.name.trim()))
           .map(async (folder) => {
             const folderYear = parseInt(folder.name, 10)
             const files = await listAllFiles(credentials, folder.id, {

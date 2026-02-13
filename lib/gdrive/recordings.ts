@@ -6,6 +6,7 @@ import {
   getStreamUrl,
 } from "./client"
 import { withCache, CACHE_KEYS } from "./cache"
+import { filterArchivedFolders } from "./archive"
 import type {
   Recording,
   RecordingsData,
@@ -208,10 +209,11 @@ export async function getRecordings(
         listFolders(credentials, recordingsFolderId),
         listAllFiles(credentials, recordingsFolderId, { orderBy: "name desc" }),
       ])
+      const visibleCategoryFolders = filterArchivedFolders(categoryFolders)
 
       // Process all category folders in parallel
       const categoryResults = await Promise.all(
-        categoryFolders.map(async (folder) => {
+        visibleCategoryFolders.map(async (folder) => {
           const categoryId = folderNameToSlug(folder.name)
           const categoryName = formatCategoryName(folder.name)
           const categoryRecordings: Recording[] = []
@@ -222,7 +224,7 @@ export async function getRecordings(
             listAllFiles(credentials, folder.id, { orderBy: "name desc" }),
           ])
 
-          const yearSubfolders = subfolders.filter((sf) => /^20\d{2}$/.test(sf.name))
+          const yearSubfolders = filterArchivedFolders(subfolders).filter((sf) => /^20\d{2}$/.test(sf.name))
 
           if (yearSubfolders.length > 0) {
             // Process all year subfolders in parallel

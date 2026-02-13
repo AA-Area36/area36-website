@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { FolderExplorer } from "./folder-explorer"
-import { Loader2, AlertCircle, RefreshCw, CheckCircle2, FolderOpen } from "lucide-react"
+import { Loader2, AlertCircle, RefreshCw, CheckCircle2, FolderOpen, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { bustFileCaches, cleanupStaleFileMetadata } from "./actions"
 import type { FolderNode } from "./actions"
 
 interface FileMetadata {
@@ -43,6 +44,10 @@ export function AdminFilesLoader() {
   const [folderStates, setFolderStates] = useState<Record<string, FolderLoadState>>({})
   const [isInitialLoading, setIsInitialLoading] = useState(true)
   const [initialError, setInitialError] = useState<string | null>(null)
+  const [isBustingCache, setIsBustingCache] = useState(false)
+  const [isCleaningMetadata, setIsCleaningMetadata] = useState(false)
+  const [maintenanceMessage, setMaintenanceMessage] = useState<string | null>(null)
+  const [maintenanceError, setMaintenanceError] = useState<string | null>(null)
 
   // Fetch initial data (available folders + metadata)
   const fetchInitialData = useCallback(async () => {
@@ -119,6 +124,57 @@ export function AdminFilesLoader() {
     }
   }, [initialData, fetchFolder])
 
+  const handleMetadataUpdated = useCallback(async () => {
+    await fetchInitialData()
+  }, [fetchInitialData])
+
+  const handleBustCache = useCallback(async () => {
+    setMaintenanceError(null)
+    setMaintenanceMessage(null)
+    setIsBustingCache(true)
+
+    try {
+      const result = await bustFileCaches()
+      if (!result.success) {
+        setMaintenanceError(result.message || "Failed to clear caches.")
+        return
+      }
+
+      setMaintenanceMessage(result.message || "File caches were cleared.")
+      await fetchInitialData()
+    } catch (error) {
+      setMaintenanceError(error instanceof Error ? error.message : "Failed to clear caches.")
+    } finally {
+      setIsBustingCache(false)
+    }
+  }, [fetchInitialData])
+
+  const handleCleanupStaleMetadata = useCallback(async () => {
+    const approved = window.confirm(
+      "Clean stale metadata now? This will remove metadata for files that no longer exist or are inside archived folders."
+    )
+    if (!approved) return
+
+    setMaintenanceError(null)
+    setMaintenanceMessage(null)
+    setIsCleaningMetadata(true)
+
+    try {
+      const result = await cleanupStaleFileMetadata()
+      if (!result.success) {
+        setMaintenanceError(result.message || "Failed to clean stale metadata.")
+        return
+      }
+
+      setMaintenanceMessage(result.message || "Stale metadata cleanup completed.")
+      await fetchInitialData()
+    } catch (error) {
+      setMaintenanceError(error instanceof Error ? error.message : "Failed to clean stale metadata.")
+    } finally {
+      setIsCleaningMetadata(false)
+    }
+  }, [fetchInitialData])
+
   // Initial load
   useEffect(() => {
     fetchInitialData()
@@ -190,12 +246,53 @@ export function AdminFilesLoader() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">File Management</h1>
-        <p className="text-muted-foreground mt-1">
-          Set custom display names and passwords for files across all Google Drive folders.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">File Management</h1>
+          <p className="text-muted-foreground mt-1">
+            Set custom display names and passwords for files across all Google Drive folders.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleBustCache}
+            disabled={isBustingCache || isCleaningMetadata}
+          >
+            {isBustingCache ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            Bust Cache
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCleanupStaleMetadata}
+            disabled={isCleaningMetadata || isBustingCache}
+          >
+            {isCleaningMetadata ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4 mr-2" />
+            )}
+            Clean Stale Metadata
+          </Button>
+        </div>
       </div>
+
+      {maintenanceMessage && (
+        <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+          {maintenanceMessage}
+        </div>
+      )}
+      {maintenanceError && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {maintenanceError}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -307,7 +404,7 @@ export function AdminFilesLoader() {
         </CardHeader>
         <CardContent>
           {folders.length > 0 ? (
-            <FolderExplorer folders={folders} />
+            <FolderExplorer folders={folders} onMetadataUpdated={handleMetadataUpdated} />
           ) : loadingFolders > 0 ? (
             <div className="flex items-center justify-center py-8 text-muted-foreground">
               <Loader2 className="h-6 w-6 animate-spin mr-2" />

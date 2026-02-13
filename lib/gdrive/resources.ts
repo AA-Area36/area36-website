@@ -7,6 +7,7 @@ import {
   getPreviewUrl,
 } from "./client"
 import { withCache, CACHE_KEYS } from "./cache"
+import { filterArchivedFolders } from "./archive"
 import type {
   Resource,
   ResourceCategory,
@@ -149,10 +150,11 @@ export async function getResources(
         listFolders(credentials, resourcesFolderId),
         listAllFiles(credentials, resourcesFolderId, { orderBy: "modifiedTime desc" }),
       ])
+      const visibleCategoryFolders = filterArchivedFolders(categoryFolders)
 
       // Process all category folders in parallel
       const categoryResults = await Promise.all(
-        categoryFolders.map(async (folder) => {
+        visibleCategoryFolders.map(async (folder) => {
           const category = getCategoryFromFolderName(folder.name)
           if (!category) {
             console.warn(`Unknown resource category folder: ${folder.name}`)
@@ -261,7 +263,7 @@ export async function getOldConferenceReports(
     async () => {
       try {
         // Find Conference Materials folder
-        const categoryFolders = await listFolders(credentials, resourcesFolderId)
+        const categoryFolders = filterArchivedFolders(await listFolders(credentials, resourcesFolderId))
         const conferenceMaterialsFolder = categoryFolders.find(
           (f) => f.name.toLowerCase().includes("conference")
         )
@@ -271,7 +273,7 @@ export async function getOldConferenceReports(
         }
         
         // Find "Old Reports" subfolder
-        const subfolders = await listFolders(credentials, conferenceMaterialsFolder.id)
+        const subfolders = filterArchivedFolders(await listFolders(credentials, conferenceMaterialsFolder.id))
         const oldReportsFolder = subfolders.find(
           (f) => f.name.toLowerCase().includes("old") || f.name.toLowerCase().includes("report")
         )

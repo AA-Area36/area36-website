@@ -427,8 +427,9 @@ export async function GET(
     return NextResponse.json(data, {
       headers: {
         "X-Request-Id": requestId,
-        // Browser cache for 5 minutes, allow stale for 1 hour while revalidating
-        "Cache-Control": "public, max-age=300, stale-while-revalidate=3600",
+        // Force browser revalidation so admin metadata updates appear on refresh,
+        // while still allowing shared/CDN caching.
+        "Cache-Control": "public, max-age=0, s-maxage=300, stale-while-revalidate=3600",
       },
     })
   } catch (error) {

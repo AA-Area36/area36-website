@@ -22,12 +22,14 @@ interface FileMetadataDialogProps {
   file: FileNode | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  onSaved?: () => void | Promise<void>
 }
 
 export function FileMetadataDialog({
   file,
   open,
   onOpenChange,
+  onSaved,
 }: FileMetadataDialogProps) {
   const [displayName, setDisplayName] = React.useState("")
   const [password, setPassword] = React.useState("")
@@ -87,6 +89,7 @@ export function FileMetadataDialog({
           category: category.trim() || null,
         })
         onOpenChange(false)
+        await onSaved?.()
       } catch (err) {
         setError("Failed to save metadata")
       }
@@ -100,6 +103,7 @@ export function FileMetadataDialog({
       try {
         await deleteFileMetadata(file.id)
         onOpenChange(false)
+        await onSaved?.()
       } catch (err) {
         setError("Failed to delete metadata")
       }
