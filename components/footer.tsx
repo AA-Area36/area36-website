@@ -9,6 +9,8 @@ export async function Footer() {
   const locale = await getRequestLocale()
   const globalContent = await getContent("global", locale)
   const { t } = createTranslator(globalContent)
+  const serviceAreaHrefRaw = t("footer.areaLinks.service.href", "/service-basics")
+  const serviceAreaHref = serviceAreaHrefRaw === "/service" ? "/service-basics" : serviceAreaHrefRaw
 
   const quickLinks = [
     { name: t("footer.quickLinks.findMeeting.label", "Find a Meeting"), href: t("footer.quickLinks.findMeeting.href", "https://www.aa.org/find-aa"), external: true },
@@ -23,7 +25,7 @@ export async function Footer() {
     { name: t("footer.areaLinks.districts.label", "Districts"), href: t("footer.areaLinks.districts.href", "/districts") },
     { name: t("footer.areaLinks.resources.label", "Resources"), href: t("footer.areaLinks.resources.href", "/resources") },
     { name: t("footer.areaLinks.newsletter.label", "Newsletter"), href: t("footer.areaLinks.newsletter.href", "/newsletter") },
-    { name: t("footer.areaLinks.service.label", "Service Basics"), href: t("footer.areaLinks.service.href", "/service") },
+    { name: t("footer.areaLinks.service.label", "Service Basics"), href: serviceAreaHref },
     { name: t("footer.areaLinks.ypaa.label", "YPAA"), href: t("footer.areaLinks.ypaa.href", "/ypaa") },
     { name: t("footer.areaLinks.professionals.label", "For Professionals"), href: t("footer.areaLinks.professionals.href", "/professionals") },
     { name: t("footer.areaLinks.gsc.label", "General Service Conference"), href: t("footer.areaLinks.gsc.href", "/general-service-conference") },

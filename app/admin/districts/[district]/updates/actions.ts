@@ -2,6 +2,8 @@
 
 import { requireHostedDistrictAccessSession } from "@/lib/auth/guards"
 import { getDb, schema } from "@/lib/db"
+import { ensureDistrictSiteExists } from "@/lib/district/ensure-site"
+import { parseOptionalText, parseRequiredText } from "@/lib/district/validation"
 import { and, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { sql } from "drizzle-orm"
@@ -19,14 +21,12 @@ export async function createDistrictUpdate(formData: FormData) {
   const session = await requireHostedDistrictAccessSession(districtNumber)
   if (!session?.user?.email) throw new Error("Unauthorized")
 
-  const committee = String(formData.get("committee") ?? "").trim() || null
-  const title = String(formData.get("title") ?? "").trim()
-  const body = String(formData.get("body") ?? "").trim()
-
-  if (!title) throw new Error("Title is required")
-  if (!body) throw new Error("Body is required")
+  const committee = parseOptionalText(formData.get("committee"), "Committee", 120)
+  const title = parseRequiredText(formData.get("title"), "Title", 200)
+  const body = parseRequiredText(formData.get("body"), "Body", 10000)
 
   const db = await getDb()
+  await ensureDistrictSiteExists(db, districtNumber)
   await db.insert(schema.districtUpdates).values({
     id: crypto.randomUUID(),
     districtNumber,
@@ -50,12 +50,9 @@ export async function updateDistrictUpdate(formData: FormData) {
   const id = String(formData.get("id") ?? "").trim()
   if (!id) throw new Error("Missing id")
 
-  const committee = String(formData.get("committee") ?? "").trim() || null
-  const title = String(formData.get("title") ?? "").trim()
-  const body = String(formData.get("body") ?? "").trim()
-
-  if (!title) throw new Error("Title is required")
-  if (!body) throw new Error("Body is required")
+  const committee = parseOptionalText(formData.get("committee"), "Committee", 120)
+  const title = parseRequiredText(formData.get("title"), "Title", 200)
+  const body = parseRequiredText(formData.get("body"), "Body", 10000)
 
   const db = await getDb()
   await db

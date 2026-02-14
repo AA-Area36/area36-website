@@ -3,6 +3,11 @@ import { getDb, schema } from "@/lib/db"
 import { asc, eq } from "drizzle-orm"
 import { createDistrictContact, updateDistrictContact, deleteDistrictContact } from "./actions"
 import { districtContactCategories } from "@/lib/db/schema"
+import { FormSubmitButton } from "@/components/form-submit-button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 function coerceDistrict(param: string): number | null {
   const n = Number(param)
@@ -11,6 +16,10 @@ function coerceDistrict(param: string): number | null {
 }
 
 export const dynamic = "force-dynamic"
+
+function formatCategoryLabel(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1)
+}
 
 export default async function DistrictContactsAdminPage({
   params,
@@ -41,40 +50,60 @@ export default async function DistrictContactsAdminPage({
         <form action={createDistrictContact} className="mt-4 grid gap-3 md:grid-cols-2">
           <input type="hidden" name="districtNumber" value={districtNumber} />
           <div>
-            <label className="block text-xs font-medium text-muted-foreground">Category</label>
-            <select name="category" defaultValue="other" className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm">
-              {districtContactCategories.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
+            <Label htmlFor="new-contact-category" className="text-xs font-medium text-muted-foreground">
+              Category
+            </Label>
+            <Select name="category" defaultValue="other">
+              <SelectTrigger id="new-contact-category" className="mt-1 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {districtContactCategories.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {formatCategoryLabel(c)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted-foreground">Sort order</label>
-            <input name="sortOrder" defaultValue="0" className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+            <Label htmlFor="new-contact-sort-order" className="text-xs font-medium text-muted-foreground">
+              Sort order
+            </Label>
+            <Input id="new-contact-sort-order" name="sortOrder" type="number" step={1} min={-9999} max={9999} defaultValue="0" className="mt-1" />
           </div>
           <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-muted-foreground">Role</label>
-            <input name="role" className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" placeholder="DCM" />
+            <Label htmlFor="new-contact-role" className="text-xs font-medium text-muted-foreground">
+              Role
+            </Label>
+            <Input id="new-contact-role" name="role" className="mt-1" placeholder="DCM" maxLength={120} required />
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted-foreground">Name</label>
-            <input name="name" className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+            <Label htmlFor="new-contact-name" className="text-xs font-medium text-muted-foreground">
+              Name
+            </Label>
+            <Input id="new-contact-name" name="name" className="mt-1" maxLength={120} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted-foreground">Email</label>
-            <input name="email" className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+            <Label htmlFor="new-contact-email" className="text-xs font-medium text-muted-foreground">
+              Email
+            </Label>
+            <Input id="new-contact-email" name="email" type="email" className="mt-1" maxLength={254} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted-foreground">Phone</label>
-            <input name="phone" className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+            <Label htmlFor="new-contact-phone" className="text-xs font-medium text-muted-foreground">
+              Phone
+            </Label>
+            <Input id="new-contact-phone" name="phone" type="tel" className="mt-1" maxLength={40} />
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="active" defaultChecked className="h-4 w-4" /> Active
-          </label>
+          <div className="flex items-center gap-2 pt-6 text-sm">
+            <Checkbox id="new-contact-active" name="active" defaultChecked />
+            <Label htmlFor="new-contact-active" className="cursor-pointer font-normal">
+              Active
+            </Label>
+          </div>
           <div className="md:col-span-2">
-            <button type="submit" className="h-9 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground">
-              Create
-            </button>
+            <FormSubmitButton pendingText="Creating...">Create</FormSubmitButton>
           </div>
         </form>
       </section>
@@ -103,48 +132,84 @@ export default async function DistrictContactsAdminPage({
                   <input type="hidden" name="districtNumber" value={districtNumber} />
                   <input type="hidden" name="id" value={c.id} />
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground">Category</label>
-                    <select name="category" defaultValue={c.category} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm">
-                      {districtContactCategories.map((cat) => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
+                    <Label htmlFor={`contact-category-${c.id}`} className="text-xs font-medium text-muted-foreground">
+                      Category
+                    </Label>
+                    <Select name="category" defaultValue={c.category}>
+                      <SelectTrigger id={`contact-category-${c.id}`} className="mt-1 w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {districtContactCategories.map((cat) => (
+                          <SelectItem key={cat} value={cat}>
+                            {formatCategoryLabel(cat)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground">Sort order</label>
-                    <input name="sortOrder" defaultValue={String(c.sortOrder)} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+                    <Label htmlFor={`contact-sort-order-${c.id}`} className="text-xs font-medium text-muted-foreground">
+                      Sort order
+                    </Label>
+                    <Input
+                      id={`contact-sort-order-${c.id}`}
+                      name="sortOrder"
+                      type="number"
+                      step={1}
+                      min={-9999}
+                      max={9999}
+                      defaultValue={String(c.sortOrder)}
+                      className="mt-1"
+                    />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-xs font-medium text-muted-foreground">Role</label>
-                    <input name="role" defaultValue={c.role} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+                    <Label htmlFor={`contact-role-${c.id}`} className="text-xs font-medium text-muted-foreground">
+                      Role
+                    </Label>
+                    <Input id={`contact-role-${c.id}`} name="role" defaultValue={c.role} className="mt-1" maxLength={120} required />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground">Name</label>
-                    <input name="name" defaultValue={c.name ?? ""} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+                    <Label htmlFor={`contact-name-${c.id}`} className="text-xs font-medium text-muted-foreground">
+                      Name
+                    </Label>
+                    <Input id={`contact-name-${c.id}`} name="name" defaultValue={c.name ?? ""} className="mt-1" maxLength={120} />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground">Email</label>
-                    <input name="email" defaultValue={c.email ?? ""} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+                    <Label htmlFor={`contact-email-${c.id}`} className="text-xs font-medium text-muted-foreground">
+                      Email
+                    </Label>
+                    <Input
+                      id={`contact-email-${c.id}`}
+                      name="email"
+                      type="email"
+                      defaultValue={c.email ?? ""}
+                      className="mt-1"
+                      maxLength={254}
+                    />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground">Phone</label>
-                    <input name="phone" defaultValue={c.phone ?? ""} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+                    <Label htmlFor={`contact-phone-${c.id}`} className="text-xs font-medium text-muted-foreground">
+                      Phone
+                    </Label>
+                    <Input id={`contact-phone-${c.id}`} name="phone" type="tel" defaultValue={c.phone ?? ""} className="mt-1" maxLength={40} />
                   </div>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" name="active" defaultChecked={c.active} className="h-4 w-4" /> Active
-                  </label>
+                  <div className="flex items-center gap-2 pt-6 text-sm">
+                    <Checkbox id={`contact-active-${c.id}`} name="active" defaultChecked={c.active} />
+                    <Label htmlFor={`contact-active-${c.id}`} className="cursor-pointer font-normal">
+                      Active
+                    </Label>
+                  </div>
                   <div className="md:col-span-2 flex items-center gap-3">
-                    <button type="submit" className="h-9 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground">
-                      Save
-                    </button>
+                    <FormSubmitButton pendingText="Saving...">Save</FormSubmitButton>
                   </div>
                 </form>
                 <form action={deleteDistrictContact} className="mt-3">
                   <input type="hidden" name="districtNumber" value={districtNumber} />
                   <input type="hidden" name="id" value={c.id} />
-                  <button type="submit" className="h-9 rounded-md border border-border bg-background px-4 text-sm">
+                  <FormSubmitButton type="submit" variant="outline" pendingText="Deleting...">
                     Delete contact
-                  </button>
+                  </FormSubmitButton>
                 </form>
               </details>
             ))}

@@ -24,6 +24,8 @@ export function DistrictsClient({ content }: { content: ContentDoc }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { t } = createTranslator(content)
+  const learnMoreHrefRaw = t("page.about.learnMoreHref", "/service-basics")
+  const learnMoreHref = learnMoreHrefRaw === "/service" ? "/service-basics" : learnMoreHrefRaw
 
   const directoryRaw = getAtPath(content, "directory")
   const districts: DistrictDirectoryEntry[] = isDistrictDirectory(directoryRaw) ? directoryRaw : []
@@ -298,7 +300,7 @@ export function DistrictsClient({ content }: { content: ContentDoc }) {
               <p className="text-muted-foreground leading-relaxed mt-4">{t("page.about.p3")}</p>
             </div>
             <div className="mt-6">
-              <Link href={t("page.about.learnMoreHref", "/service")} className="inline-flex items-center gap-2 text-primary font-medium hover:underline">
+              <Link href={learnMoreHref} className="inline-flex items-center gap-2 text-primary font-medium hover:underline">
                 {t("page.about.learnMore", "Learn more about service structure")}
               </Link>
             </div>

@@ -1,11 +1,7 @@
+import { ExternalLink, FileText } from "lucide-react"
 import { notFound } from "next/navigation"
-import { getDistrictPublishedUpdates, getDistrictSiteConfig } from "@/lib/district/queries"
-
-function coerceDistrict(param: string): number | null {
-  const n = Number(param)
-  if (!Number.isFinite(n) || n < 1 || n > 27 || n === 10) return null
-  return n
-}
+import { getDistrictPublishedUpdates } from "@/lib/district/queries"
+import { coerceDistrict, formatDistrictPublished, getAgendaDocumentLink, resolveDistrictSiteForRender } from "../district-utils"
 
 export const dynamic = "force-dynamic"
 
@@ -18,38 +14,59 @@ export default async function DistrictUpdatesPage({
   const districtNumber = coerceDistrict(p.district)
   if (!districtNumber) notFound()
 
-  const site = await getDistrictSiteConfig(districtNumber)
-  if (!site || !site.enabled || site.mode !== "hosted") notFound()
+  const site = await resolveDistrictSiteForRender(districtNumber)
+  if (!site) notFound()
 
   const updates = await getDistrictPublishedUpdates(districtNumber)
-  const title = site.displayName?.trim() || `District ${districtNumber}`
+  const { title } = site
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">{title} Updates</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Committee activity and district news.</p>
-      </div>
+    <div className="space-y-6">
+      <section className="rounded-2xl border border-border bg-card p-6 lg:p-7">
+        <p className="text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">Committee Communications</p>
+        <h1 className="mt-2 text-3xl font-semibold [font-family:var(--font-district-display)]">{title} Agenda Notes</h1>
+        <p className="mt-2 text-sm text-muted-foreground">Published notes are linked as external documents.</p>
+      </section>
 
       {updates.length === 0 ? (
-        <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground">
-          No updates published yet.
-        </div>
+        <section className="rounded-2xl border border-border bg-card p-6">
+          <p className="text-sm text-muted-foreground">No agenda notes published yet.</p>
+        </section>
       ) : (
-        <div className="space-y-4">
-          {updates.map((u) => (
-            <article key={u.id} className="rounded-xl border border-border bg-card p-6">
-              <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
-                <h3 className="text-lg font-semibold">{u.title}</h3>
-                <div className="text-xs text-muted-foreground">{u.publishedAt ?? ""}</div>
-              </div>
-              {u.committee && <p className="mt-1 text-sm text-muted-foreground">{u.committee}</p>}
-              <div className="mt-4 whitespace-pre-line text-sm">{u.body}</div>
-            </article>
-          ))}
-        </div>
+        <section className="space-y-3">
+          {updates.map((update) => {
+            const documentLink = getAgendaDocumentLink(update.body)
+            return (
+              <article key={update.id} className="rounded-2xl border border-border bg-card p-6">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <h2 className="text-xl font-semibold [font-family:var(--font-district-display)]">{update.title}</h2>
+                    {update.committee && <p className="mt-1 text-xs uppercase tracking-wide text-muted-foreground">{update.committee}</p>}
+                  </div>
+                  <p className="text-xs text-muted-foreground">{formatDistrictPublished(update.publishedAt)}</p>
+                </div>
+
+                <div className="mt-4">
+                  {documentLink ? (
+                    <a
+                      href={documentLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-primary hover:bg-muted"
+                    >
+                      <FileText className="h-4 w-4" />
+                      Open agenda document
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Document link not provided.</p>
+                  )}
+                </div>
+              </article>
+            )
+          })}
+        </section>
       )}
     </div>
   )
 }
-

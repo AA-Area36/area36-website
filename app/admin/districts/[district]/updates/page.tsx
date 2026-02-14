@@ -8,6 +8,10 @@ import {
   unpublishDistrictUpdate,
   deleteDistrictUpdate,
 } from "./actions"
+import { FormSubmitButton } from "@/components/form-submit-button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 
 function coerceDistrict(param: string): number | null {
   const n = Number(param)
@@ -38,7 +42,7 @@ export default async function DistrictUpdatesAdminPage({
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Updates</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Draft and publish committee updates for the district site.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Draft and publish agenda note links (Google Docs/Word files) for the district site.</p>
       </div>
 
       <section className="rounded-xl border border-border bg-card p-6">
@@ -47,22 +51,35 @@ export default async function DistrictUpdatesAdminPage({
           <input type="hidden" name="districtNumber" value={districtNumber} />
           <div className="grid gap-3 md:grid-cols-2">
             <div>
-              <label className="block text-xs font-medium text-muted-foreground">Committee (optional)</label>
-              <input name="committee" className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" placeholder="PI Committee" />
+              <Label htmlFor="new-update-committee" className="text-xs font-medium text-muted-foreground">
+                Committee (optional)
+              </Label>
+              <Input id="new-update-committee" name="committee" className="mt-1" placeholder="PI Committee" maxLength={120} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground">Title</label>
-              <input name="title" className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+              <Label htmlFor="new-update-title" className="text-xs font-medium text-muted-foreground">
+                Title
+              </Label>
+              <Input id="new-update-title" name="title" className="mt-1" maxLength={200} required />
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted-foreground">Body</label>
-            <textarea name="body" className="mt-1 min-h-28 w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
+            <Label htmlFor="new-update-body" className="text-xs font-medium text-muted-foreground">
+              Document URL
+            </Label>
+            <Textarea
+              id="new-update-body"
+              name="body"
+              className="mt-1 min-h-20"
+              maxLength={10000}
+              placeholder="https://docs.google.com/... or https://.../agenda.docx"
+              required
+            />
           </div>
           <div>
-            <button type="submit" className="h-9 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground">
+            <FormSubmitButton pendingText="Creating...">
               Create draft
-            </button>
+            </FormSubmitButton>
           </div>
         </form>
       </section>
@@ -92,22 +109,42 @@ export default async function DistrictUpdatesAdminPage({
                   <input type="hidden" name="id" value={u.id} />
                   <div className="grid gap-3 md:grid-cols-2">
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground">Committee</label>
-                      <input name="committee" defaultValue={u.committee ?? ""} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+                      <Label htmlFor={`update-committee-${u.id}`} className="text-xs font-medium text-muted-foreground">
+                        Committee
+                      </Label>
+                      <Input
+                        id={`update-committee-${u.id}`}
+                        name="committee"
+                        defaultValue={u.committee ?? ""}
+                        className="mt-1"
+                        maxLength={120}
+                      />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground">Title</label>
-                      <input name="title" defaultValue={u.title} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+                      <Label htmlFor={`update-title-${u.id}`} className="text-xs font-medium text-muted-foreground">
+                        Title
+                      </Label>
+                      <Input id={`update-title-${u.id}`} name="title" defaultValue={u.title} className="mt-1" maxLength={200} required />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground">Body</label>
-                    <textarea name="body" defaultValue={u.body} className="mt-1 min-h-28 w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
+                    <Label htmlFor={`update-body-${u.id}`} className="text-xs font-medium text-muted-foreground">
+                      Document URL
+                    </Label>
+                    <Textarea
+                      id={`update-body-${u.id}`}
+                      name="body"
+                      defaultValue={u.body}
+                      className="mt-1 min-h-20"
+                      maxLength={10000}
+                      placeholder="https://docs.google.com/... or https://.../agenda.docx"
+                      required
+                    />
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
-                    <button type="submit" className="h-9 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground">
+                    <FormSubmitButton pendingText="Saving...">
                       Save
-                    </button>
+                    </FormSubmitButton>
                   </div>
                 </form>
 
@@ -116,25 +153,25 @@ export default async function DistrictUpdatesAdminPage({
                     <form action={unpublishDistrictUpdate}>
                       <input type="hidden" name="districtNumber" value={districtNumber} />
                       <input type="hidden" name="id" value={u.id} />
-                      <button type="submit" className="h-9 rounded-md border border-border bg-background px-4 text-sm">
+                      <FormSubmitButton type="submit" variant="outline" pendingText="Unpublishing...">
                         Unpublish
-                      </button>
+                      </FormSubmitButton>
                     </form>
                   ) : (
                     <form action={publishDistrictUpdate}>
                       <input type="hidden" name="districtNumber" value={districtNumber} />
                       <input type="hidden" name="id" value={u.id} />
-                      <button type="submit" className="h-9 rounded-md border border-border bg-background px-4 text-sm">
+                      <FormSubmitButton type="submit" variant="outline" pendingText="Publishing...">
                         Publish
-                      </button>
+                      </FormSubmitButton>
                     </form>
                   )}
                   <form action={deleteDistrictUpdate}>
                     <input type="hidden" name="districtNumber" value={districtNumber} />
                     <input type="hidden" name="id" value={u.id} />
-                    <button type="submit" className="h-9 rounded-md border border-border bg-background px-4 text-sm">
+                    <FormSubmitButton type="submit" variant="outline" pendingText="Deleting...">
                       Delete
-                    </button>
+                    </FormSubmitButton>
                   </form>
                 </div>
               </details>

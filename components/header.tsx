@@ -28,7 +28,7 @@ export async function Header() {
         { name: t("header.nav.resources.newsletter", "Newsletter"), href: "/newsletter" },
         { name: t("header.nav.resources.recordings", "Recordings"), href: "/recordings" },
         { name: t("header.nav.resources.generalServiceConference", "General Service Conference"), href: "/general-service-conference" },
-        { name: t("header.nav.resources.serviceBasics", "Service Basics"), href: "/service" },
+        { name: t("header.nav.resources.serviceBasics", "Service Basics"), href: "/service-basics" },
         { name: t("header.nav.resources.temporaryContactProgram", "Temporary Contact Program"), href: "/temporary-contact-programs" },
         { name: t("header.nav.resources.forProfessionals", "For Professionals"), href: "/professionals" },
         { name: t("header.nav.resources.grapevine", "Grapevine & La Viña"), href: "/grapevine" },
@@ -47,4 +47,3 @@ export async function Header() {
     />
   )
 }
-

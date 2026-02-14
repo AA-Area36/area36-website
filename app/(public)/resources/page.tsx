@@ -42,7 +42,7 @@ export default function ResourcesPage() {
                 <Link href="/newsletter">Latest Newsletter</Link>
               </Button>
               <Button asChild variant="outline" size="sm">
-                <Link href="/service">Service Basics</Link>
+                <Link href="/service-basics">Service Basics</Link>
               </Button>
               <Button asChild variant="outline" size="sm">
                 <Link href="/recordings">Recordings</Link>

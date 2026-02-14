@@ -2,7 +2,14 @@ import { notFound } from "next/navigation"
 import { getDb, schema } from "@/lib/db"
 import { asc, eq } from "drizzle-orm"
 import { createDistrictEvent, updateDistrictEvent, deleteDistrictEvent } from "./actions"
-import { eventTypes, locationTypes } from "@/lib/db/schema"
+import { locationTypes, type LocationType } from "@/lib/db/schema"
+import { TIMEZONES } from "@/lib/timezone"
+import { FormSubmitButton } from "@/components/form-submit-button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { EventTypesField } from "./event-types-field"
 
 function coerceDistrict(param: string): number | null {
   const n = Number(param)
@@ -11,6 +18,20 @@ function coerceDistrict(param: string): number | null {
 }
 
 export const dynamic = "force-dynamic"
+
+const locationTypeLabels: Record<LocationType, string> = {
+  "in-person": "In Person",
+  hybrid: "Hybrid",
+  online: "Online",
+}
+
+function getTimezoneOptions(selectedTimezone: string) {
+  if (TIMEZONES.some((tz) => tz.value === selectedTimezone)) {
+    return TIMEZONES
+  }
+
+  return [{ value: selectedTimezone, label: selectedTimezone }, ...TIMEZONES]
+}
 
 export default async function DistrictCalendarAdminPage({
   params,
@@ -49,60 +70,93 @@ export default async function DistrictCalendarAdminPage({
         <form action={createDistrictEvent} className="mt-4 grid gap-3 md:grid-cols-2">
           <input type="hidden" name="districtNumber" value={districtNumber} />
           <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-muted-foreground">Title</label>
-            <input name="title" className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+            <Label htmlFor="new-event-title" className="text-xs font-medium text-muted-foreground">
+              Title
+            </Label>
+            <Input id="new-event-title" name="title" className="mt-1" maxLength={200} required />
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted-foreground">Date (YYYY-MM-DD)</label>
-            <input name="date" className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" placeholder="2026-03-21" />
+            <Label htmlFor="new-event-date" className="text-xs font-medium text-muted-foreground">
+              Date
+            </Label>
+            <Input id="new-event-date" name="date" type="date" className="mt-1" required />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-muted-foreground">Start</label>
-              <input name="startTime" className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" placeholder="09:00" />
+              <Label htmlFor="new-event-start-time" className="text-xs font-medium text-muted-foreground">
+                Start
+              </Label>
+              <Input id="new-event-start-time" name="startTime" type="time" className="mt-1" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground">End</label>
-              <input name="endTime" className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" placeholder="16:00" />
+              <Label htmlFor="new-event-end-time" className="text-xs font-medium text-muted-foreground">
+                End
+              </Label>
+              <Input id="new-event-end-time" name="endTime" type="time" className="mt-1" />
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted-foreground">Location type</label>
-            <select name="locationType" defaultValue="in-person" className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm">
-              {locationTypes.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
+            <Label htmlFor="new-event-location-type" className="text-xs font-medium text-muted-foreground">
+              Location type
+            </Label>
+            <Select name="locationType" defaultValue="in-person">
+              <SelectTrigger id="new-event-location-type" className="mt-1 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {locationTypes.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {locationTypeLabels[t]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted-foreground">Timezone</label>
-            <input name="timezone" defaultValue="America/Chicago" className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+            <Label htmlFor="new-event-timezone" className="text-xs font-medium text-muted-foreground">
+              Timezone
+            </Label>
+            <Select name="timezone" defaultValue="America/Chicago">
+              <SelectTrigger id="new-event-timezone" className="mt-1 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TIMEZONES.map((tz) => (
+                  <SelectItem key={tz.value} value={tz.value}>
+                    {tz.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-muted-foreground">Address</label>
-            <input name="address" className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+            <Label htmlFor="new-event-address" className="text-xs font-medium text-muted-foreground">
+              Address
+            </Label>
+            <Input id="new-event-address" name="address" className="mt-1" maxLength={500} />
           </div>
           <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-muted-foreground">Meeting link</label>
-            <input name="meetingLink" className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+            <Label htmlFor="new-event-link" className="text-xs font-medium text-muted-foreground">
+              Meeting link
+            </Label>
+            <Input id="new-event-link" name="meetingLink" type="url" className="mt-1" maxLength={2048} />
           </div>
           <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-muted-foreground">Types (comma-separated)</label>
-            <input name="types" defaultValue="District" className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" placeholder={eventTypes.join(", ")} />
+            <Label className="text-xs font-medium text-muted-foreground">Types</Label>
+            <div className="mt-1">
+              <EventTypesField name="types" defaultValue="District" />
+            </div>
           </div>
           <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-muted-foreground">Description</label>
-            <textarea name="description" className="mt-1 min-h-28 w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
+            <Label htmlFor="new-event-description" className="text-xs font-medium text-muted-foreground">
+              Description
+            </Label>
+            <Textarea id="new-event-description" name="description" className="mt-1 min-h-28" maxLength={4000} required />
           </div>
           <div className="md:col-span-2">
-            <button type="submit" className="h-9 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground">
-              Create
-            </button>
+            <FormSubmitButton pendingText="Creating...">Create</FormSubmitButton>
           </div>
         </form>
-        <p className="mt-3 text-xs text-muted-foreground">
-          Types must be one of: {eventTypes.join(", ")}.
-        </p>
       </section>
 
       <section className="rounded-xl border border-border bg-card overflow-hidden">
@@ -115,13 +169,16 @@ export default async function DistrictCalendarAdminPage({
           <div className="divide-y divide-border">
             {events.map((e) => {
               const types = typesMap.get(e.id) ?? (e.type ? [e.type] : [])
+              const timezoneOptions = getTimezoneOptions(e.timezone)
+
               return (
                 <details key={e.id} className="px-6 py-4">
                   <summary className="cursor-pointer select-none">
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
                       <div className="font-medium">{e.title}</div>
                       <div className="text-sm text-muted-foreground">
-                        {e.date}{e.startTime ? ` • ${e.startTime}` : ""}
+                        {e.date}
+                        {e.startTime ? ` • ${e.startTime}` : ""}
                       </div>
                     </div>
                     <div className="mt-1 text-xs text-muted-foreground">
@@ -133,63 +190,125 @@ export default async function DistrictCalendarAdminPage({
                     <input type="hidden" name="districtNumber" value={districtNumber} />
                     <input type="hidden" name="eventId" value={e.id} />
                     <div className="md:col-span-2">
-                      <label className="block text-xs font-medium text-muted-foreground">Title</label>
-                      <input name="title" defaultValue={e.title} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+                      <Label htmlFor={`event-title-${e.id}`} className="text-xs font-medium text-muted-foreground">
+                        Title
+                      </Label>
+                      <Input id={`event-title-${e.id}`} name="title" defaultValue={e.title} className="mt-1" maxLength={200} required />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground">Date</label>
-                      <input name="date" defaultValue={e.date} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+                      <Label htmlFor={`event-date-${e.id}`} className="text-xs font-medium text-muted-foreground">
+                        Date
+                      </Label>
+                      <Input id={`event-date-${e.id}`} name="date" type="date" defaultValue={e.date} className="mt-1" required />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-medium text-muted-foreground">Start</label>
-                        <input name="startTime" defaultValue={e.startTime ?? ""} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+                        <Label htmlFor={`event-start-${e.id}`} className="text-xs font-medium text-muted-foreground">
+                          Start
+                        </Label>
+                        <Input
+                          id={`event-start-${e.id}`}
+                          name="startTime"
+                          type="time"
+                          defaultValue={e.startTime ?? ""}
+                          className="mt-1"
+                        />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-muted-foreground">End</label>
-                        <input name="endTime" defaultValue={e.endTime ?? ""} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+                        <Label htmlFor={`event-end-${e.id}`} className="text-xs font-medium text-muted-foreground">
+                          End
+                        </Label>
+                        <Input
+                          id={`event-end-${e.id}`}
+                          name="endTime"
+                          type="time"
+                          defaultValue={e.endTime ?? ""}
+                          className="mt-1"
+                        />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground">Location type</label>
-                      <select name="locationType" defaultValue={e.locationType} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm">
-                        {locationTypes.map((t) => (
-                          <option key={t} value={t}>{t}</option>
-                        ))}
-                      </select>
+                      <Label htmlFor={`event-location-type-${e.id}`} className="text-xs font-medium text-muted-foreground">
+                        Location type
+                      </Label>
+                      <Select name="locationType" defaultValue={e.locationType}>
+                        <SelectTrigger id={`event-location-type-${e.id}`} className="mt-1 w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {locationTypes.map((t) => (
+                            <SelectItem key={t} value={t}>
+                              {locationTypeLabels[t]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground">Timezone</label>
-                      <input name="timezone" defaultValue={e.timezone} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+                      <Label htmlFor={`event-timezone-${e.id}`} className="text-xs font-medium text-muted-foreground">
+                        Timezone
+                      </Label>
+                      <Select name="timezone" defaultValue={e.timezone}>
+                        <SelectTrigger id={`event-timezone-${e.id}`} className="mt-1 w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {timezoneOptions.map((tz) => (
+                            <SelectItem key={tz.value} value={tz.value}>
+                              {tz.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-xs font-medium text-muted-foreground">Address</label>
-                      <input name="address" defaultValue={e.address ?? ""} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+                      <Label htmlFor={`event-address-${e.id}`} className="text-xs font-medium text-muted-foreground">
+                        Address
+                      </Label>
+                      <Input id={`event-address-${e.id}`} name="address" defaultValue={e.address ?? ""} className="mt-1" maxLength={500} />
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-xs font-medium text-muted-foreground">Meeting link</label>
-                      <input name="meetingLink" defaultValue={e.meetingLink ?? ""} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+                      <Label htmlFor={`event-link-${e.id}`} className="text-xs font-medium text-muted-foreground">
+                        Meeting link
+                      </Label>
+                      <Input
+                        id={`event-link-${e.id}`}
+                        name="meetingLink"
+                        type="url"
+                        defaultValue={e.meetingLink ?? ""}
+                        className="mt-1"
+                        maxLength={2048}
+                      />
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-xs font-medium text-muted-foreground">Types</label>
-                      <input name="types" defaultValue={types.join(", ") || "District"} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+                      <Label className="text-xs font-medium text-muted-foreground">Types</Label>
+                      <div className="mt-1">
+                        <EventTypesField name="types" defaultValue={types.join(", ") || "District"} />
+                      </div>
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-xs font-medium text-muted-foreground">Description</label>
-                      <textarea name="description" defaultValue={e.description} className="mt-1 min-h-28 w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
+                      <Label htmlFor={`event-description-${e.id}`} className="text-xs font-medium text-muted-foreground">
+                        Description
+                      </Label>
+                      <Textarea
+                        id={`event-description-${e.id}`}
+                        name="description"
+                        defaultValue={e.description}
+                        className="mt-1 min-h-28"
+                        maxLength={4000}
+                        required
+                      />
                     </div>
                     <div className="md:col-span-2 flex items-center gap-3">
-                      <button type="submit" className="h-9 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground">
-                        Save
-                      </button>
+                      <FormSubmitButton pendingText="Saving...">Save</FormSubmitButton>
                     </div>
                   </form>
                   <form action={deleteDistrictEvent} className="mt-3">
                     <input type="hidden" name="districtNumber" value={districtNumber} />
                     <input type="hidden" name="eventId" value={e.id} />
-                    <button type="submit" className="h-9 rounded-md border border-border bg-background px-4 text-sm">
+                    <FormSubmitButton type="submit" variant="outline" pendingText="Deleting...">
                       Delete event
-                    </button>
+                    </FormSubmitButton>
                   </form>
                 </details>
               )

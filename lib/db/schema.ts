@@ -118,6 +118,8 @@ export type NewEvent = typeof events.$inferInsert
 
 export const districtSiteModes = ["hosted", "external_redirect"] as const
 export type DistrictSiteMode = (typeof districtSiteModes)[number]
+export const districtMeetingRecurrenceModes = ["weekday_of_month", "day_of_month"] as const
+export type DistrictMeetingRecurrenceMode = (typeof districtMeetingRecurrenceModes)[number]
 
 export const districtSites = sqliteTable("district_sites", {
   districtNumber: integer("district_number").primaryKey(),
@@ -126,6 +128,21 @@ export const districtSites = sqliteTable("district_sites", {
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
   mode: text("mode").notNull().$type<DistrictSiteMode>(),
   redirectUrl: text("redirect_url"),
+  meetingRecurrenceMode: text("meeting_recurrence_mode")
+    .notNull()
+    .default("weekday_of_month")
+    .$type<DistrictMeetingRecurrenceMode>(),
+  meetingWeekOfMonth: integer("meeting_week_of_month"),
+  meetingWeekday: integer("meeting_weekday"),
+  meetingDayOfMonth: integer("meeting_day_of_month"),
+  meetingTime: text("meeting_time"),
+  meetingLocationType: text("meeting_location_type").$type<LocationType>(),
+  meetingLocationName: text("meeting_location_name"),
+  meetingAddress: text("meeting_address"),
+  meetingLink: text("meeting_link"),
+  meetingId: text("meeting_id"),
+  meetingPasscode: text("meeting_passcode"),
+  meetingContactForDetails: integer("meeting_contact_for_details", { mode: "boolean" }).notNull().default(false),
   createdAt: text("created_at")
     .notNull()
     .default(sql`(datetime('now'))`),

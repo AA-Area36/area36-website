@@ -22,7 +22,7 @@ export function CTASection() {
                 }
               </p>
               <Button asChild variant="secondary" className="mt-6">
-                <Link href="/service">
+                <Link href="/service-basics">
                   Learn Service Basics
                   <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
                 </Link>

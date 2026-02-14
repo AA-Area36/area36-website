@@ -13,6 +13,7 @@ const routeLabels: Record<string, string> = {
   "/newsletter": "Newsletter",
   "/recordings": "Recordings",
   "/service": "Service Basics",
+  "/service-basics": "Service Basics",
   "/general-service-conference": "General Service Conference",
   "/grapevine": "Grapevine",
   "/ypaa": "YPAA",

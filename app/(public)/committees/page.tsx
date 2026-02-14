@@ -344,7 +344,7 @@ export default function CommitteesPage() {
                   </p>
                   <div className="mt-6 flex flex-wrap gap-4">
                     <Link
-                      href="/service"
+                      href="/service-basics"
                       className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
                     >
                       Learn about service basics →

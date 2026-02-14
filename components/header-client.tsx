@@ -66,7 +66,7 @@ const navItemMeta: Record<
     description: "GSC materials",
     group: "Programs",
   },
-  "/service": {
+  "/service-basics": {
     icon: Heart,
     description: "Getting involved",
     group: "Programs",
@@ -184,17 +184,17 @@ export function HeaderClient({
                   <Link
                     href={child.href}
                     className={cn(
-                      "flex items-start gap-3 px-2 py-2",
+                      "group flex items-start gap-3 rounded-sm px-2 py-2 transition-colors",
                       pathname === child.href && "bg-primary/10 text-primary",
                     )}
                   >
                     {Icon && (
-                      <Icon className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
+                      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-foreground/70 transition-colors group-data-[highlighted]:text-accent-foreground group-data-[highlighted]:opacity-100" />
                     )}
                     <div className="flex flex-col">
                       <span className="text-sm font-medium">{child.name}</span>
                       {meta?.description && (
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-xs text-foreground/70 transition-colors group-data-[highlighted]:text-accent-foreground/90">
                           {meta.description}
                         </span>
                       )}
@@ -219,17 +219,17 @@ export function HeaderClient({
                   <Link
                     href={child.href}
                     className={cn(
-                      "flex items-start gap-3 px-2 py-2",
+                      "group flex items-start gap-3 rounded-sm px-2 py-2 transition-colors",
                       pathname === child.href && "bg-primary/10 text-primary",
                     )}
                   >
                     {Icon && (
-                      <Icon className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
+                      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-foreground/70 transition-colors group-data-[highlighted]:text-accent-foreground group-data-[highlighted]:opacity-100" />
                     )}
                     <div className="flex flex-col">
                       <span className="text-sm font-medium">{child.name}</span>
                       {meta?.description && (
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-xs text-foreground/70 transition-colors group-data-[highlighted]:text-accent-foreground/90">
                           {meta.description}
                         </span>
                       )}

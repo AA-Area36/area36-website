@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { getDb, schema } from "@/lib/db"
-import { and, eq, asc } from "drizzle-orm"
+import { eq, asc } from "drizzle-orm"
 import { upsertDistrictSite, addDistrictAdmin, removeDistrictAdmin } from "../actions"
 
 export const dynamic = "force-dynamic"
@@ -23,7 +23,15 @@ export default async function DistrictSiteDetailPage({
 
   const db = await getDb()
   const site = await db
-    .select()
+    .select({
+      districtNumber: schema.districtSites.districtNumber,
+      subdomain: schema.districtSites.subdomain,
+      displayName: schema.districtSites.displayName,
+      enabled: schema.districtSites.enabled,
+      mode: schema.districtSites.mode,
+      redirectUrl: schema.districtSites.redirectUrl,
+      updatedAt: schema.districtSites.updatedAt,
+    })
     .from(schema.districtSites)
     .where(eq(schema.districtSites.districtNumber, districtNumber))
     .get()
@@ -180,4 +188,3 @@ export default async function DistrictSiteDetailPage({
     </div>
   )
 }
-

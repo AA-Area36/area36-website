@@ -4,21 +4,23 @@ import { requireHostedDistrictAccessSession } from "@/lib/auth/guards"
 import { getDb, schema } from "@/lib/db"
 import { and, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
-import { eventTypes, type EventType, type LocationType } from "@/lib/db/schema"
+import type { EventType } from "@/lib/db/schema"
+import {
+  parseDate,
+  parseEventTypes,
+  parseLocationType,
+  parseOptionalText,
+  parseOptionalTime,
+  parseOptionalUrl,
+  parseRequiredText,
+  parseTimezone,
+  validateTimeRange,
+} from "@/lib/district/validation"
 
 function coerceDistrict(value: unknown): number | null {
   const n = Number(value)
   if (!Number.isFinite(n) || n < 1 || n > 27 || n === 10) return null
   return n
-}
-
-function parseTypes(raw: string): EventType[] {
-  const allowed = new Set(eventTypes)
-  return raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .filter((t): t is EventType => allowed.has(t as EventType))
 }
 
 export async function createDistrictEvent(formData: FormData) {
@@ -28,21 +30,18 @@ export async function createDistrictEvent(formData: FormData) {
   const session = await requireHostedDistrictAccessSession(districtNumber)
   if (!session?.user?.email) throw new Error("Unauthorized")
 
-  const title = String(formData.get("title") ?? "").trim()
-  const date = String(formData.get("date") ?? "").trim()
-  const startTime = String(formData.get("startTime") ?? "").trim() || null
-  const endTime = String(formData.get("endTime") ?? "").trim() || null
-  const timezone = String(formData.get("timezone") ?? "America/Chicago").trim() || "America/Chicago"
-  const locationType = String(formData.get("locationType") ?? "in-person") as LocationType
-  const address = String(formData.get("address") ?? "").trim() || null
-  const meetingLink = String(formData.get("meetingLink") ?? "").trim() || null
-  const description = String(formData.get("description") ?? "").trim()
-  const parsedTypes = parseTypes(String(formData.get("types") ?? "District"))
-  const types = parsedTypes.length ? parsedTypes : ["District"]
+  const title = parseRequiredText(formData.get("title"), "Title", 200)
+  const date = parseDate(formData.get("date"))
+  const startTime = parseOptionalTime(formData.get("startTime"), "Start time")
+  const endTime = parseOptionalTime(formData.get("endTime"), "End time")
+  const timezone = parseTimezone(formData.get("timezone") ?? "America/Chicago")
+  const locationType = parseLocationType(formData.get("locationType") ?? "in-person")
+  const address = parseOptionalText(formData.get("address"), "Address", 500)
+  const meetingLink = parseOptionalUrl(formData.get("meetingLink"), "Meeting link")
+  const description = parseRequiredText(formData.get("description"), "Description", 4000)
+  const types: EventType[] = parseEventTypes(formData.get("types") ?? "District")
 
-  if (!title) throw new Error("Title is required")
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Date must be YYYY-MM-DD")
-  if (!description) throw new Error("Description is required")
+  validateTimeRange(startTime, endTime)
 
   const db = await getDb()
   const id = crypto.randomUUID()
@@ -59,6 +58,8 @@ export async function createDistrictEvent(formData: FormData) {
     address,
     meetingLink,
     description,
+    // Keep legacy single-type column populated for DB compatibility.
+    type: types[0],
     status: "approved",
     submitterEmail: session.user.email,
     districtNumber,
@@ -89,21 +90,18 @@ export async function updateDistrictEvent(formData: FormData) {
   const eventId = String(formData.get("eventId") ?? "").trim()
   if (!eventId) throw new Error("Missing eventId")
 
-  const title = String(formData.get("title") ?? "").trim()
-  const date = String(formData.get("date") ?? "").trim()
-  const startTime = String(formData.get("startTime") ?? "").trim() || null
-  const endTime = String(formData.get("endTime") ?? "").trim() || null
-  const timezone = String(formData.get("timezone") ?? "America/Chicago").trim() || "America/Chicago"
-  const locationType = String(formData.get("locationType") ?? "in-person") as LocationType
-  const address = String(formData.get("address") ?? "").trim() || null
-  const meetingLink = String(formData.get("meetingLink") ?? "").trim() || null
-  const description = String(formData.get("description") ?? "").trim()
-  const parsedTypes = parseTypes(String(formData.get("types") ?? "District"))
-  const types = parsedTypes.length ? parsedTypes : ["District"]
+  const title = parseRequiredText(formData.get("title"), "Title", 200)
+  const date = parseDate(formData.get("date"))
+  const startTime = parseOptionalTime(formData.get("startTime"), "Start time")
+  const endTime = parseOptionalTime(formData.get("endTime"), "End time")
+  const timezone = parseTimezone(formData.get("timezone") ?? "America/Chicago")
+  const locationType = parseLocationType(formData.get("locationType") ?? "in-person")
+  const address = parseOptionalText(formData.get("address"), "Address", 500)
+  const meetingLink = parseOptionalUrl(formData.get("meetingLink"), "Meeting link")
+  const description = parseRequiredText(formData.get("description"), "Description", 4000)
+  const types: EventType[] = parseEventTypes(formData.get("types") ?? "District")
 
-  if (!title) throw new Error("Title is required")
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Date must be YYYY-MM-DD")
-  if (!description) throw new Error("Description is required")
+  validateTimeRange(startTime, endTime)
 
   const db = await getDb()
   const event = await db
@@ -125,6 +123,8 @@ export async function updateDistrictEvent(formData: FormData) {
       address,
       meetingLink,
       description,
+      // Keep legacy single-type column in sync with the selected list.
+      type: types[0],
       timeTBD: !startTime,
       addressTBD: !address,
       meetingLinkTBD: locationType !== "in-person" && !meetingLink,

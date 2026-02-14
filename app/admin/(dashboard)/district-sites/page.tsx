@@ -7,7 +7,19 @@ export const dynamic = "force-dynamic"
 
 export default async function DistrictSitesPage() {
   const db = await getDb()
-  const rows = await db.select().from(schema.districtSites).orderBy(desc(schema.districtSites.updatedAt)).all()
+  const rows = await db
+    .select({
+      districtNumber: schema.districtSites.districtNumber,
+      subdomain: schema.districtSites.subdomain,
+      displayName: schema.districtSites.displayName,
+      enabled: schema.districtSites.enabled,
+      mode: schema.districtSites.mode,
+      redirectUrl: schema.districtSites.redirectUrl,
+      updatedAt: schema.districtSites.updatedAt,
+    })
+    .from(schema.districtSites)
+    .orderBy(desc(schema.districtSites.updatedAt))
+    .all()
   const byNumber = new Map<number, (typeof rows)[number]>()
   for (const r of rows) byNumber.set(r.districtNumber, r)
 
@@ -64,4 +76,3 @@ export default async function DistrictSitesPage() {
     </div>
   )
 }
-

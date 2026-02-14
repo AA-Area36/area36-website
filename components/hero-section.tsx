@@ -10,6 +10,8 @@ export async function HeroSection() {
   const locale = await getRequestLocale()
   const homeContent = await getContent("home", locale)
   const { t } = createTranslator(homeContent)
+  const involvedHrefRaw = t("hero.quickCards.involved.href", "/service-basics")
+  const involvedHref = involvedHrefRaw === "/service" ? "/service-basics" : involvedHrefRaw
 
   return (
     <section
@@ -69,7 +71,7 @@ export async function HeroSection() {
             icon={Users}
             title={t("hero.quickCards.involved.title", "Get Involved")}
             description={t("hero.quickCards.involved.description", "Learn about service and how to participate.")}
-            href={t("hero.quickCards.involved.href", "/service")}
+            href={involvedHref}
           />
         </div>
       </div>

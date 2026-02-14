@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-export function AccessibilityMenu() {
+export function AccessibilityMenu({ aslHref = "/resources#asl" }: { aslHref?: string }) {
   const [fontSize, setFontSize] = React.useState(100)
 
   const increaseFontSize = () => {
@@ -70,7 +70,7 @@ export function AccessibilityMenu() {
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <a href="/resources#asl" className="cursor-pointer">
+          <a href={aslHref} className="cursor-pointer">
             ASL Resources
           </a>
         </DropdownMenuItem>

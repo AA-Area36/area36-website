@@ -88,7 +88,7 @@ const globalDefaultsEn = {
       districts: { label: "Districts", href: "/districts" },
       resources: { label: "Resources", href: "/resources" },
       newsletter: { label: "Newsletter", href: "/newsletter" },
-      service: { label: "Service Basics", href: "/service" },
+      service: { label: "Service Basics", href: "/service-basics" },
       ypaa: { label: "YPAA", href: "/ypaa" },
       contribute: { label: "Contribute", href: "/contribute" },
     },
@@ -120,7 +120,7 @@ const homeDefaultsEn = {
       events: { title: "Upcoming Events", description: "View assemblies, workshops, and service events.", href: "/events" },
       newsletter: { title: "Newsletter", description: "Read the latest Area 36 newsletter online.", href: "/newsletter" },
       resources: { title: "Resources", description: "Access forms, documents, and materials.", href: "/resources" },
-      involved: { title: "Get Involved", description: "Learn about service and how to participate.", href: "/service" },
+      involved: { title: "Get Involved", description: "Learn about service and how to participate.", href: "/service-basics" },
     },
   },
 } satisfies ContentDoc
@@ -173,7 +173,7 @@ const districtsDefaultsEn = {
       p3:
         "District meetings are held regularly and are open to all A.A. members. These meetings provide opportunities for GSRs to share experience, discuss district business, and plan local service activities.",
       learnMore: "Learn more about service structure",
-      learnMoreHref: "/service",
+      learnMoreHref: "/service-basics",
     },
   },
   directory: districtDirectory,

@@ -4,6 +4,7 @@ import Google from "next-auth/providers/google"
 import { getCloudflareContext } from "@opennextjs/cloudflare"
 import { D1Adapter } from "./d1-adapter"
 import { isGroupMember, type AdminDirectoryCredentials } from "@/lib/google/admin-directory"
+import { createLocalAdminBypassSession, isLocalAdminBypassEnabled } from "./dev-bypass"
 
 const ALLOWED_DOMAIN = "@area36.org"
 const ADMIN_GROUP_EMAIL = "area36-internal@area36.org"
@@ -177,6 +178,10 @@ function toA36Session(session: Session, isAreaAdmin: boolean, districtAdminFor: 
  * Returns null if unauthenticated or not allowlisted.
  */
 export async function getSession(): Promise<A36Session | null> {
+  if (await isLocalAdminBypassEnabled()) {
+    return createLocalAdminBypassSession()
+  }
+
   const session = await nextAuth.auth()
   if (!session?.user?.email) return null
   const { env } = await getCloudflareContext({ async: true })

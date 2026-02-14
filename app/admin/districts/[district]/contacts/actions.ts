@@ -2,9 +2,16 @@
 
 import { requireHostedDistrictAccessSession } from "@/lib/auth/guards"
 import { getDb, schema } from "@/lib/db"
+import { ensureDistrictSiteExists } from "@/lib/district/ensure-site"
+import {
+  parseDistrictContactCategory,
+  parseOptionalEmail,
+  parseOptionalText,
+  parseRequiredText,
+  parseSortOrder,
+} from "@/lib/district/validation"
 import { and, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
-import type { DistrictContactCategory } from "@/lib/db/schema"
 
 function coerceDistrict(value: unknown): number | null {
   const n = Number(value)
@@ -19,17 +26,16 @@ export async function createDistrictContact(formData: FormData) {
   const session = await requireHostedDistrictAccessSession(districtNumber)
   if (!session?.user?.email) throw new Error("Unauthorized")
 
-  const category = String(formData.get("category") ?? "other") as DistrictContactCategory
-  const role = String(formData.get("role") ?? "").trim()
-  const name = String(formData.get("name") ?? "").trim() || null
-  const email = String(formData.get("email") ?? "").trim().toLowerCase() || null
-  const phone = String(formData.get("phone") ?? "").trim() || null
+  const category = parseDistrictContactCategory(formData.get("category") ?? "other")
+  const role = parseRequiredText(formData.get("role"), "Role", 120)
+  const name = parseOptionalText(formData.get("name"), "Name", 120)
+  const email = parseOptionalEmail(formData.get("email"))
+  const phone = parseOptionalText(formData.get("phone"), "Phone", 40)
   const active = formData.get("active") === "on"
-  const sortOrder = Number(formData.get("sortOrder") ?? 0) || 0
-
-  if (!role) throw new Error("Role is required")
+  const sortOrder = parseSortOrder(formData.get("sortOrder"))
 
   const db = await getDb()
+  await ensureDistrictSiteExists(db, districtNumber)
   await db.insert(schema.districtContacts).values({
     id: crypto.randomUUID(),
     districtNumber,
@@ -55,15 +61,13 @@ export async function updateDistrictContact(formData: FormData) {
   const id = String(formData.get("id") ?? "").trim()
   if (!id) throw new Error("Missing id")
 
-  const category = String(formData.get("category") ?? "other") as DistrictContactCategory
-  const role = String(formData.get("role") ?? "").trim()
-  const name = String(formData.get("name") ?? "").trim() || null
-  const email = String(formData.get("email") ?? "").trim().toLowerCase() || null
-  const phone = String(formData.get("phone") ?? "").trim() || null
+  const category = parseDistrictContactCategory(formData.get("category") ?? "other")
+  const role = parseRequiredText(formData.get("role"), "Role", 120)
+  const name = parseOptionalText(formData.get("name"), "Name", 120)
+  const email = parseOptionalEmail(formData.get("email"))
+  const phone = parseOptionalText(formData.get("phone"), "Phone", 40)
   const active = formData.get("active") === "on"
-  const sortOrder = Number(formData.get("sortOrder") ?? 0) || 0
-
-  if (!role) throw new Error("Role is required")
+  const sortOrder = parseSortOrder(formData.get("sortOrder"))
 
   const db = await getDb()
   await db

@@ -1,5 +1,6 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare"
 import { getSession, type A36Session } from "@/lib/auth"
+import { isLocalAdminBypassEnabled } from "@/lib/auth/dev-bypass"
 
 type DistrictSiteMode = "hosted" | "external_redirect"
 
@@ -27,6 +28,7 @@ export async function requireAreaAdminSession(): Promise<A36Session | null> {
 export async function requireHostedDistrictAccessSession(districtNumber: number): Promise<A36Session | null> {
   const session = await getSession()
   if (!session) return null
+  if (await isLocalAdminBypassEnabled()) return session
 
   const { env } = await getCloudflareContext({ async: true })
   const site = await getDistrictSiteMode(env, districtNumber)
@@ -36,4 +38,3 @@ export async function requireHostedDistrictAccessSession(districtNumber: number)
   if (session.user.districtAdminFor.includes(districtNumber)) return session
   return null
 }
-

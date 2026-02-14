@@ -33,29 +33,30 @@ export async function upsertDistrictSite(formData: FormData) {
   }
 
   const db = await getDb()
-  const now = sql`(datetime('now'))`
-
-  await db
-    .insert(schema.districtSites)
-    .values({
-      districtNumber,
-      subdomain: `d${districtNumber}`,
-      displayName,
-      enabled,
-      mode,
-      redirectUrl,
-      updatedAt: now as any,
-    })
-    .onConflictDoUpdate({
-      target: schema.districtSites.districtNumber,
-      set: {
-        displayName,
+  // Use base columns only so local DBs that have not applied the latest district-site
+  // migrations are still manageable from localhost.
+  await (db as any).$client
+    .prepare(
+      `INSERT INTO district_sites (
+        district_number,
+        subdomain,
+        display_name,
         enabled,
         mode,
-        redirectUrl,
-        updatedAt: now as any,
-      },
-    })
+        redirect_url,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+      ON CONFLICT(district_number) DO UPDATE SET
+        subdomain = excluded.subdomain,
+        display_name = excluded.display_name,
+        enabled = excluded.enabled,
+        mode = excluded.mode,
+        redirect_url = excluded.redirect_url,
+        updated_at = datetime('now')`
+    )
+    .bind(districtNumber, `d${districtNumber}`, displayName, enabled ? 1 : 0, mode, redirectUrl)
+    .run()
 
   // If switching to external_redirect, purge any district admins (district is fully outside our system).
   if (mode === "external_redirect") {

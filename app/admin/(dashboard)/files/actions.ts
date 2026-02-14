@@ -104,7 +104,7 @@ function revalidateFilePaths(): void {
   revalidatePath("/resources")
   revalidatePath("/committees")
   revalidatePath("/general-service-conference")
-  revalidatePath("/service")
+  revalidatePath("/service-basics")
 }
 
 function chunk<T>(items: T[], size: number): T[][] {

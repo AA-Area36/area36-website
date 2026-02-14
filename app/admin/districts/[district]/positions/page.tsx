@@ -3,6 +3,11 @@ import { getDb, schema } from "@/lib/db"
 import { asc, eq } from "drizzle-orm"
 import { createDistrictPosition, updateDistrictPosition, deleteDistrictPosition } from "./actions"
 import { districtPositionStatuses } from "@/lib/db/schema"
+import { FormSubmitButton } from "@/components/form-submit-button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 function coerceDistrict(param: string): number | null {
   const n = Number(param)
@@ -11,6 +16,10 @@ function coerceDistrict(param: string): number | null {
 }
 
 export const dynamic = "force-dynamic"
+
+function formatStatusLabel(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1)
+}
 
 export default async function DistrictPositionsAdminPage({
   params,
@@ -41,37 +50,70 @@ export default async function DistrictPositionsAdminPage({
         <form action={createDistrictPosition} className="mt-4 grid gap-3 md:grid-cols-2">
           <input type="hidden" name="districtNumber" value={districtNumber} />
           <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-muted-foreground">Title</label>
-            <input name="title" className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" placeholder="GSR Workshop Coordinator" />
+            <Label htmlFor="new-position-title" className="text-xs font-medium text-muted-foreground">
+              Title
+            </Label>
+            <Input
+              id="new-position-title"
+              name="title"
+              className="mt-1"
+              placeholder="GSR Workshop Coordinator"
+              maxLength={160}
+              required
+            />
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted-foreground">Status</label>
-            <select name="status" defaultValue="open" className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm">
-              {districtPositionStatuses.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
+            <Label htmlFor="new-position-status" className="text-xs font-medium text-muted-foreground">
+              Status
+            </Label>
+            <Select name="status" defaultValue="open">
+              <SelectTrigger id="new-position-status" className="mt-1 w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {districtPositionStatuses.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {formatStatusLabel(s)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted-foreground">Sort order</label>
-            <input name="sortOrder" defaultValue="0" className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+            <Label htmlFor="new-position-sort-order" className="text-xs font-medium text-muted-foreground">
+              Sort order
+            </Label>
+            <Input
+              id="new-position-sort-order"
+              name="sortOrder"
+              type="number"
+              step={1}
+              min={-9999}
+              max={9999}
+              defaultValue="0"
+              className="mt-1"
+            />
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted-foreground">Contact name</label>
-            <input name="contactName" className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+            <Label htmlFor="new-position-contact-name" className="text-xs font-medium text-muted-foreground">
+              Contact name
+            </Label>
+            <Input id="new-position-contact-name" name="contactName" className="mt-1" maxLength={120} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted-foreground">Contact email</label>
-            <input name="contactEmail" className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+            <Label htmlFor="new-position-contact-email" className="text-xs font-medium text-muted-foreground">
+              Contact email
+            </Label>
+            <Input id="new-position-contact-email" name="contactEmail" type="email" className="mt-1" maxLength={254} />
           </div>
           <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-muted-foreground">Notes</label>
-            <textarea name="notes" className="mt-1 min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
+            <Label htmlFor="new-position-notes" className="text-xs font-medium text-muted-foreground">
+              Notes
+            </Label>
+            <Textarea id="new-position-notes" name="notes" className="mt-1 min-h-24" maxLength={4000} />
           </div>
           <div className="md:col-span-2">
-            <button type="submit" className="h-9 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground">
-              Create
-            </button>
+            <FormSubmitButton pendingText="Creating...">Create</FormSubmitButton>
           </div>
         </form>
       </section>
@@ -98,46 +140,91 @@ export default async function DistrictPositionsAdminPage({
                   <input type="hidden" name="districtNumber" value={districtNumber} />
                   <input type="hidden" name="id" value={p.id} />
                   <div className="md:col-span-2">
-                    <label className="block text-xs font-medium text-muted-foreground">Title</label>
-                    <input name="title" defaultValue={p.title} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+                    <Label htmlFor={`position-title-${p.id}`} className="text-xs font-medium text-muted-foreground">
+                      Title
+                    </Label>
+                    <Input id={`position-title-${p.id}`} name="title" defaultValue={p.title} className="mt-1" maxLength={160} required />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground">Status</label>
-                    <select name="status" defaultValue={p.status} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm">
-                      {districtPositionStatuses.map((s) => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
+                    <Label htmlFor={`position-status-${p.id}`} className="text-xs font-medium text-muted-foreground">
+                      Status
+                    </Label>
+                    <Select name="status" defaultValue={p.status}>
+                      <SelectTrigger id={`position-status-${p.id}`} className="mt-1 w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {districtPositionStatuses.map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {formatStatusLabel(s)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground">Sort order</label>
-                    <input name="sortOrder" defaultValue={String(p.sortOrder)} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+                    <Label htmlFor={`position-sort-order-${p.id}`} className="text-xs font-medium text-muted-foreground">
+                      Sort order
+                    </Label>
+                    <Input
+                      id={`position-sort-order-${p.id}`}
+                      name="sortOrder"
+                      type="number"
+                      step={1}
+                      min={-9999}
+                      max={9999}
+                      defaultValue={String(p.sortOrder)}
+                      className="mt-1"
+                    />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground">Contact name</label>
-                    <input name="contactName" defaultValue={p.contactName ?? ""} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+                    <Label htmlFor={`position-contact-name-${p.id}`} className="text-xs font-medium text-muted-foreground">
+                      Contact name
+                    </Label>
+                    <Input
+                      id={`position-contact-name-${p.id}`}
+                      name="contactName"
+                      defaultValue={p.contactName ?? ""}
+                      className="mt-1"
+                      maxLength={120}
+                    />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground">Contact email</label>
-                    <input name="contactEmail" defaultValue={p.contactEmail ?? ""} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm" />
+                    <Label htmlFor={`position-contact-email-${p.id}`} className="text-xs font-medium text-muted-foreground">
+                      Contact email
+                    </Label>
+                    <Input
+                      id={`position-contact-email-${p.id}`}
+                      name="contactEmail"
+                      type="email"
+                      defaultValue={p.contactEmail ?? ""}
+                      className="mt-1"
+                      maxLength={254}
+                    />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-xs font-medium text-muted-foreground">Notes</label>
-                    <textarea name="notes" defaultValue={p.notes ?? ""} className="mt-1 min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
+                    <Label htmlFor={`position-notes-${p.id}`} className="text-xs font-medium text-muted-foreground">
+                      Notes
+                    </Label>
+                    <Textarea
+                      id={`position-notes-${p.id}`}
+                      name="notes"
+                      defaultValue={p.notes ?? ""}
+                      className="mt-1 min-h-24"
+                      maxLength={4000}
+                    />
                   </div>
                   <div className="md:col-span-2 flex items-center gap-3">
-                    <button type="submit" className="h-9 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground">
-                      Save
-                    </button>
+                    <FormSubmitButton pendingText="Saving...">Save</FormSubmitButton>
                   </div>
                 </form>
 
                 <form action={deleteDistrictPosition} className="mt-3">
                   <input type="hidden" name="districtNumber" value={districtNumber} />
                   <input type="hidden" name="id" value={p.id} />
-                  <button type="submit" className="h-9 rounded-md border border-border bg-background px-4 text-sm">
+                  <FormSubmitButton type="submit" variant="outline" pendingText="Deleting...">
                     Delete position
-                  </button>
+                  </FormSubmitButton>
                 </form>
               </details>
             ))}

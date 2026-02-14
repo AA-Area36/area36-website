@@ -2,9 +2,16 @@
 
 import { requireHostedDistrictAccessSession } from "@/lib/auth/guards"
 import { getDb, schema } from "@/lib/db"
+import { ensureDistrictSiteExists } from "@/lib/district/ensure-site"
+import {
+  parseDistrictPositionStatus,
+  parseOptionalEmail,
+  parseOptionalText,
+  parseRequiredText,
+  parseSortOrder,
+} from "@/lib/district/validation"
 import { and, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
-import type { DistrictPositionStatus } from "@/lib/db/schema"
 
 function coerceDistrict(value: unknown): number | null {
   const n = Number(value)
@@ -19,16 +26,15 @@ export async function createDistrictPosition(formData: FormData) {
   const session = await requireHostedDistrictAccessSession(districtNumber)
   if (!session?.user?.email) throw new Error("Unauthorized")
 
-  const title = String(formData.get("title") ?? "").trim()
-  const status = String(formData.get("status") ?? "open") as DistrictPositionStatus
-  const contactName = String(formData.get("contactName") ?? "").trim() || null
-  const contactEmail = String(formData.get("contactEmail") ?? "").trim().toLowerCase() || null
-  const notes = String(formData.get("notes") ?? "").trim() || null
-  const sortOrder = Number(formData.get("sortOrder") ?? 0) || 0
-
-  if (!title) throw new Error("Title is required")
+  const title = parseRequiredText(formData.get("title"), "Title", 160)
+  const status = parseDistrictPositionStatus(formData.get("status") ?? "open")
+  const contactName = parseOptionalText(formData.get("contactName"), "Contact name", 120)
+  const contactEmail = parseOptionalEmail(formData.get("contactEmail"), "Contact email")
+  const notes = parseOptionalText(formData.get("notes"), "Notes", 4000)
+  const sortOrder = parseSortOrder(formData.get("sortOrder"))
 
   const db = await getDb()
+  await ensureDistrictSiteExists(db, districtNumber)
   await db.insert(schema.districtPositions).values({
     id: crypto.randomUUID(),
     districtNumber,
@@ -53,14 +59,12 @@ export async function updateDistrictPosition(formData: FormData) {
   const id = String(formData.get("id") ?? "").trim()
   if (!id) throw new Error("Missing id")
 
-  const title = String(formData.get("title") ?? "").trim()
-  const status = String(formData.get("status") ?? "open") as DistrictPositionStatus
-  const contactName = String(formData.get("contactName") ?? "").trim() || null
-  const contactEmail = String(formData.get("contactEmail") ?? "").trim().toLowerCase() || null
-  const notes = String(formData.get("notes") ?? "").trim() || null
-  const sortOrder = Number(formData.get("sortOrder") ?? 0) || 0
-
-  if (!title) throw new Error("Title is required")
+  const title = parseRequiredText(formData.get("title"), "Title", 160)
+  const status = parseDistrictPositionStatus(formData.get("status") ?? "open")
+  const contactName = parseOptionalText(formData.get("contactName"), "Contact name", 120)
+  const contactEmail = parseOptionalEmail(formData.get("contactEmail"), "Contact email")
+  const notes = parseOptionalText(formData.get("notes"), "Notes", 4000)
+  const sortOrder = parseSortOrder(formData.get("sortOrder"))
 
   const db = await getDb()
   await db

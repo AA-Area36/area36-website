@@ -17,7 +17,16 @@ export type DistrictSiteRow = {
 export async function getDistrictSiteByNumber(districtNumber: number): Promise<DistrictSiteRow | null> {
   const db = await getDb()
   const row = await db
-    .select()
+    .select({
+      districtNumber: schema.districtSites.districtNumber,
+      subdomain: schema.districtSites.subdomain,
+      displayName: schema.districtSites.displayName,
+      enabled: schema.districtSites.enabled,
+      mode: schema.districtSites.mode,
+      redirectUrl: schema.districtSites.redirectUrl,
+      createdAt: schema.districtSites.createdAt,
+      updatedAt: schema.districtSites.updatedAt,
+    })
     .from(schema.districtSites)
     .where(eq(schema.districtSites.districtNumber, districtNumber))
     .get()
@@ -27,7 +36,16 @@ export async function getDistrictSiteByNumber(districtNumber: number): Promise<D
 export async function getDistrictSiteBySubdomain(subdomain: string): Promise<DistrictSiteRow | null> {
   const db = await getDb()
   const row = await db
-    .select()
+    .select({
+      districtNumber: schema.districtSites.districtNumber,
+      subdomain: schema.districtSites.subdomain,
+      displayName: schema.districtSites.displayName,
+      enabled: schema.districtSites.enabled,
+      mode: schema.districtSites.mode,
+      redirectUrl: schema.districtSites.redirectUrl,
+      createdAt: schema.districtSites.createdAt,
+      updatedAt: schema.districtSites.updatedAt,
+    })
     .from(schema.districtSites)
     .where(eq(schema.districtSites.subdomain, subdomain))
     .get()
@@ -36,7 +54,19 @@ export async function getDistrictSiteBySubdomain(subdomain: string): Promise<Dis
 
 export async function listDistrictSites(): Promise<DistrictSiteRow[]> {
   const db = await getDb()
-  const rows = await db.select().from(schema.districtSites).all()
+  const rows = await db
+    .select({
+      districtNumber: schema.districtSites.districtNumber,
+      subdomain: schema.districtSites.subdomain,
+      displayName: schema.districtSites.displayName,
+      enabled: schema.districtSites.enabled,
+      mode: schema.districtSites.mode,
+      redirectUrl: schema.districtSites.redirectUrl,
+      createdAt: schema.districtSites.createdAt,
+      updatedAt: schema.districtSites.updatedAt,
+    })
+    .from(schema.districtSites)
+    .all()
   return rows as any
 }
 
@@ -52,4 +82,3 @@ export function validateRedirectUrl(value: string): { ok: true; url: string } | 
   if (u.protocol !== "https:") return { ok: false, error: "Redirect URL must use https://" }
   return { ok: true, url: u.toString() }
 }
-
