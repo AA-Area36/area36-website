@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { createPortal } from "react-dom"
 import {
   FileText,
   ChevronLeft,
@@ -13,6 +14,7 @@ import {
   X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { downloadFile } from "@/lib/files/download"
 
 interface PDFViewerProps {
   previewUrl: string
@@ -49,10 +51,46 @@ export function PDFViewer({
 }: PDFViewerProps) {
   const [zoom, setZoom] = React.useState(100)
   const [isFullscreen, setIsFullscreen] = React.useState(false)
+  const [resolvedUrl, setResolvedUrl] = React.useState<string | null>(null)
+  const [previewError, setPreviewError] = React.useState<string | null>(null)
 
-  // Reset zoom when content changes
+  // Resolve preview URL - if it's an API route, fetch the actual embeddable URL
   React.useEffect(() => {
     setZoom(100)
+    setPreviewError(null)
+
+    if (previewUrl.startsWith("/api/files/preview/")) {
+      setResolvedUrl(null)
+      
+      const fetchPreview = async (retries = 2): Promise<void> => {
+        try {
+          const res = await fetch(previewUrl)
+          const json = await res.json() as { previewUrl?: string; error?: string; requiresPassword?: boolean }
+          
+          if (!res.ok) {
+            // If password required but we just unlocked, retry after a short delay
+            // to allow the cookie to propagate from the server action
+            if (json.requiresPassword && retries > 0) {
+              await new Promise((resolve) => setTimeout(resolve, 500))
+              return fetchPreview(retries - 1)
+            }
+            throw new Error(json.error || `Preview failed: ${res.status}`)
+          }
+          
+          if (json.previewUrl) {
+            setResolvedUrl(json.previewUrl)
+          } else {
+            setPreviewError("No preview URL returned")
+          }
+        } catch (err) {
+          setPreviewError(err instanceof Error ? err.message : "Failed to load preview")
+        }
+      }
+      
+      fetchPreview()
+    } else {
+      setResolvedUrl(previewUrl)
+    }
   }, [previewUrl])
 
   // Toggle fullscreen
@@ -80,20 +118,29 @@ export function PDFViewer({
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [isFullscreen, canGoPrevious, canGoNext, onPrevious, onNext, onClose])
 
-  return (
-    <>
+  // Lock body scroll while viewer is open
+  React.useEffect(() => {
+    const original = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = original
+    }
+  }, [])
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-50 bg-black/50"
+        className="absolute inset-0 bg-black/50"
         onClick={() => !isFullscreen && onClose()}
       />
 
       {/* Dialog */}
       <div
-        className={`fixed z-50 flex flex-col bg-background border rounded-lg shadow-lg ${
+        className={`relative flex flex-col bg-background border shadow-lg ${
           isFullscreen
-            ? "inset-0 rounded-none"
-            : "top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[95vw] max-w-[1000px] h-[90vh]"
+            ? "fixed inset-0 rounded-none z-[51]"
+            : "w-[95vw] max-w-[1000px] h-[90vh] rounded-lg"
         }`}
       >
         {/* Header */}
@@ -158,17 +205,11 @@ export function PDFViewer({
                 <Button
                   variant="outline"
                   size="sm"
-                  asChild
                   aria-label={`Download ${title}`}
+                  onClick={() => downloadFile(downloadUrl, title)}
                 >
-                  <a
-                    href={downloadUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <Download className="h-4 w-4 sm:mr-2" aria-hidden="true" />
-                    <span className="hidden sm:inline">Download</span>
-                  </a>
+                  <Download className="h-4 w-4 sm:mr-2" aria-hidden="true" />
+                  <span className="hidden sm:inline">Download</span>
                 </Button>
               )}
               <Button
@@ -186,18 +227,28 @@ export function PDFViewer({
 
         {/* PDF Content Area - Google Drive Embed */}
         <div className="flex-1 bg-muted/50 overflow-auto">
-          <iframe
-            src={previewUrl}
-            className="border-0"
-            title={title}
-            allow="autoplay"
-            style={{
-              width: `${zoom}%`,
-              height: `${zoom}%`,
-              minWidth: "100%",
-              minHeight: "100%",
-            }}
-          />
+          {previewError ? (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-sm text-destructive">{previewError}</p>
+            </div>
+          ) : !resolvedUrl ? (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-sm text-muted-foreground animate-pulse">Loading preview...</p>
+            </div>
+          ) : (
+            <iframe
+              src={resolvedUrl}
+              className="border-0"
+              title={title}
+              allow="autoplay"
+              style={{
+                width: `${zoom}%`,
+                height: `${zoom}%`,
+                minWidth: "100%",
+                minHeight: "100%",
+              }}
+            />
+          )}
         </div>
 
         {/* Footer with navigation */}
@@ -229,6 +280,7 @@ export function PDFViewer({
           </div>
         )}
       </div>
-    </>
+    </div>,
+    document.body
   )
 }

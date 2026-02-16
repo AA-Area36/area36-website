@@ -40,13 +40,14 @@ export async function verifyFolderPassword(
 }
 
 /**
- * Verify password for a file and unlock it
- * This function is intentionally isolated from GDrive imports to keep bundle size small
+ * Verify password for a file and unlock it.
+ * On success, returns the direct GDrive preview/download URLs so the client
+ * can use them immediately without a cookie-gated round-trip.
  */
 export async function verifyFilePassword(
   driveId: string,
   password: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; previewUrl?: string; downloadUrl?: string }> {
   try {
     const db = await getDb()
     const results = await db
@@ -65,10 +66,17 @@ export async function verifyFilePassword(
       return { success: false, error: "Incorrect password" }
     }
 
-    // Set cookie to unlock file
+    // Set cookie to unlock file (for subsequent page loads)
     await setUnlockedFile(driveId)
 
-    return { success: true }
+    // Return direct GDrive URLs so client can use them immediately
+    const { getPreviewUrl, getDownloadUrl } = await import("@/lib/gdrive/client")
+
+    return {
+      success: true,
+      previewUrl: getPreviewUrl(driveId),
+      downloadUrl: getDownloadUrl(driveId),
+    }
   } catch (error) {
     console.error("Error verifying file password:", error)
     return { success: false, error: "Verification failed" }

@@ -1,8 +1,6 @@
 import type { Metadata } from "next"
-import Link from "next/link"
-import { ExternalLink, Lock } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { ConferenceMaterialsLoader, FinalReportsLoader } from "./conference-materials-loader"
+import { Lock } from "lucide-react"
+import { ConferenceMaterialsLoader, FinalReportsLoader, BackgroundMaterialsLoader } from "./conference-materials-loader"
 import { PageHeader } from "@/components/page-header"
 
 export const metadata: Metadata = {
@@ -54,18 +52,8 @@ export default function GeneralServiceConferencePage() {
                 </div>
               </div>
 
-              <div>
-                <Button asChild>
-                  <Link
-                    href="https://docs.google.com/forms/d/e/1FAIpQLSdZr8uTcHTJabem6gGVvNghjNe4mdtc2-xtvDKxWIqxp_4XRA/viewform?usp=sharing"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    2025 General Service Conference Agenda Items and Background Material
-                    <ExternalLink className="ml-2 h-4 w-4" aria-label="(opens in new tab)" />
-                  </Link>
-                </Button>
-              </div>
+              {/* Dynamic file loader for background materials */}
+              <BackgroundMaterialsLoader />
             </div>
           </div>
         </section>

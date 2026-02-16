@@ -309,6 +309,16 @@ export function HeaderClient({
                   <ChevronDown className="h-4 w-4" aria-hidden="true" />
                 </button>
               )
+            ) : item.href.startsWith("http") ? (
+              <a
+                key={item.name}
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-2 text-sm font-medium rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
+              >
+                {item.name}
+              </a>
             ) : (
               <Link
                 key={item.name}
@@ -426,19 +436,31 @@ export function HeaderClient({
                 {itemIndex > 0 && navigation[itemIndex - 1]?.children && (
                   <div className="border-t border-border/50 my-2" />
                 )}
-                <Link
-                  href={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={cn(
-                    "block px-4 py-3 text-base font-medium rounded-md transition-colors",
-                    pathname === item.href
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted",
-                  )}
-                  aria-current={pathname === item.href ? "page" : undefined}
-                >
-                  {item.name}
-                </Link>
+                {item.href.startsWith("http") ? (
+                  <a
+                    href={item.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block px-4 py-3 text-base font-medium rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
+                  >
+                    {item.name}
+                  </a>
+                ) : (
+                  <Link
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={cn(
+                      "block px-4 py-3 text-base font-medium rounded-md transition-colors",
+                      pathname === item.href
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted",
+                    )}
+                    aria-current={pathname === item.href ? "page" : undefined}
+                  >
+                    {item.name}
+                  </Link>
+                )}
               </div>
             ),
           )}

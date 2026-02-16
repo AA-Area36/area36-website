@@ -135,10 +135,19 @@ export function ResourceViewerWithPassword(props: ResourceViewerWithPasswordProp
     }
   }, [open, resource, unlockedFiles])
 
-  const handlePasswordSuccess = () => {
+  const handlePasswordSuccess = (result: { previewUrl?: string; downloadUrl?: string }) => {
     if (pendingResource) {
       setUnlockedFiles((prev) => new Set(prev).add(pendingResource.id))
-      onResourceChange(pendingResource)
+      // Use direct GDrive URLs from server action if available
+      if (result.previewUrl || result.downloadUrl) {
+        onResourceChange({
+          ...pendingResource,
+          previewUrl: result.previewUrl || pendingResource.previewUrl,
+          downloadUrl: result.downloadUrl || pendingResource.downloadUrl,
+        })
+      } else {
+        onResourceChange(pendingResource)
+      }
       setViewerOpen(true)
       setPendingResource(null)
     }

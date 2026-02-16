@@ -3,45 +3,27 @@
 import * as React from "react"
 import { FileText, Lock, FolderOpen, Download, Eye } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { PDFViewer } from "@/components/pdf-viewer"
-import type { Resource } from "@/lib/gdrive/types"
+import { FilePasswordDialog } from "@/components/file-password-dialog"
+import { verifyFilePassword } from "@/lib/actions/verify-password"
+import { downloadFile } from "@/lib/files/download"
+import type { BackgroundFile } from "@/lib/hooks/use-gdrive-files"
 
 interface ConferenceMaterialsContentProps {
-  materials: Resource[]
+  materials: BackgroundFile[]
 }
 
 export function ConferenceMaterialsContent({ materials }: ConferenceMaterialsContentProps) {
-  const [viewerOpen, setViewerOpen] = React.useState(false)
-  const [selectedResource, setSelectedResource] = React.useState<Resource | null>(null)
-
-  const handleView = (resource: Resource) => {
-    setSelectedResource(resource)
-    setViewerOpen(true)
-  }
-
-  const handleResourceChange = (resource: Resource) => {
-    setSelectedResource(resource)
-  }
+  const [viewingFile, setViewingFile] = React.useState<BackgroundFile | null>(null)
+  const [passwordFile, setPasswordFile] = React.useState<BackgroundFile | null>(null)
+  const [pendingAction, setPendingAction] = React.useState<"view" | "download" | null>(null)
 
   // Navigation for viewer
-  const currentIndex = selectedResource
-    ? materials.findIndex((r) => r.id === selectedResource.id)
+  const currentIndex = viewingFile
+    ? materials.findIndex((r) => r.id === viewingFile.id)
     : -1
   const canGoPrevious = currentIndex > 0
   const canGoNext = currentIndex < materials.length - 1 && currentIndex !== -1
-
-  const goPrevious = () => {
-    if (canGoPrevious) {
-      handleResourceChange(materials[currentIndex - 1])
-    }
-  }
-
-  const goNext = () => {
-    if (canGoNext) {
-      handleResourceChange(materials[currentIndex + 1])
-    }
-  }
 
   if (materials.length === 0) {
     return (
@@ -54,14 +36,42 @@ export function ConferenceMaterialsContent({ materials }: ConferenceMaterialsCon
     )
   }
 
-  // Build subtitle for viewer
-  const getSubtitle = (resource: Resource | null) => {
-    if (!resource) return ""
-    const parts: string[] = []
-    if (resource.date) parts.push(resource.date)
-    if (resource.size) parts.push(resource.size)
-    if (resource.isProtected) parts.push("Protected")
-    return parts.join(" · ")
+  const handleView = (file: BackgroundFile) => {
+    if (file.isProtected) {
+      setPasswordFile(file)
+      setPendingAction("view")
+    } else {
+      setViewingFile(file)
+    }
+  }
+
+  const handleDownload = (file: BackgroundFile) => {
+    if (file.isProtected) {
+      setPasswordFile(file)
+      setPendingAction("download")
+    } else {
+      downloadFile(file.downloadUrl, file.displayName)
+    }
+  }
+
+  const handlePasswordSuccess = (result: { previewUrl?: string; downloadUrl?: string }) => {
+    if (!passwordFile) return
+
+    // Use the direct GDrive URLs returned from the server action
+    const unlockedFile = {
+      ...passwordFile,
+      previewUrl: result.previewUrl || passwordFile.previewUrl,
+      downloadUrl: result.downloadUrl || passwordFile.downloadUrl,
+    }
+
+    if (pendingAction === "view") {
+      setViewingFile(unlockedFile)
+    } else if (pendingAction === "download") {
+      downloadFile(unlockedFile.downloadUrl, unlockedFile.displayName)
+    }
+
+    setPasswordFile(null)
+    setPendingAction(null)
   }
 
   return (
@@ -80,72 +90,73 @@ export function ConferenceMaterialsContent({ materials }: ConferenceMaterialsCon
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
-                  {doc.title}
-                </h3>
-                {doc.isProtected && (
-                  <Badge variant="secondary" className="text-xs">
-                    Protected
-                  </Badge>
-                )}
-              </div>
-              <p className="text-sm text-muted-foreground">
-                {doc.date && doc.size && `${doc.date} · ${doc.size}`}
-                {doc.date && !doc.size && doc.date}
-                {!doc.date && doc.size && doc.size}
-                {doc.description && !doc.date && !doc.size && doc.description}
-              </p>
+              <h3 className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
+                {doc.displayName}
+              </h3>
+              {doc.size && (
+                <p className="text-sm text-muted-foreground">{doc.size}</p>
+              )}
             </div>
             <div className="flex items-center gap-1">
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => handleView(doc)}
-                aria-label={`View ${doc.title}`}
+                aria-label={`View ${doc.displayName}`}
               >
                 <Eye className="h-4 w-4" aria-hidden="true" />
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
-                asChild
-                aria-label={`Download ${doc.title}`}
+                onClick={() => handleDownload(doc)}
+                aria-label={`Download ${doc.displayName}`}
               >
-                <a
-                  href={doc.downloadUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Download className="h-4 w-4" aria-hidden="true" />
-                </a>
+                <Download className="h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Resource Viewer Dialog */}
-      {viewerOpen && selectedResource && (
+      {/* PDF Viewer Modal */}
+      {viewingFile && (
         <PDFViewer
-          previewUrl={selectedResource.previewUrl}
-          title={selectedResource.title}
-          subtitle={getSubtitle(selectedResource)}
-          downloadUrl={selectedResource.downloadUrl}
-          onClose={() => setViewerOpen(false)}
-          onPrevious={goPrevious}
-          onNext={goNext}
+          previewUrl={viewingFile.previewUrl}
+          title={viewingFile.displayName}
+          subtitle={viewingFile.size}
+          downloadUrl={viewingFile.downloadUrl}
+          onClose={() => setViewingFile(null)}
+          onPrevious={canGoPrevious ? () => setViewingFile(materials[currentIndex - 1]) : undefined}
+          onNext={canGoNext ? () => setViewingFile(materials[currentIndex + 1]) : undefined}
           canGoPrevious={canGoPrevious}
           canGoNext={canGoNext}
           currentIndex={currentIndex !== -1 ? currentIndex : undefined}
           totalCount={materials.length}
           icon={
-            selectedResource.isProtected ? (
+            viewingFile.isProtected ? (
               <Lock className="h-5 w-5" aria-hidden="true" />
             ) : (
               <FileText className="h-5 w-5" aria-hidden="true" />
             )
           }
+        />
+      )}
+
+      {/* Password Dialog */}
+      {passwordFile && (
+        <FilePasswordDialog
+          fileId={passwordFile.id}
+          fileName={passwordFile.displayName}
+          open={!!passwordFile}
+          onOpenChange={(open: boolean) => {
+            if (!open) {
+              setPasswordFile(null)
+              setPendingAction(null)
+            }
+          }}
+          onVerify={verifyFilePassword}
+          onSuccess={handlePasswordSuccess}
         />
       )}
     </>

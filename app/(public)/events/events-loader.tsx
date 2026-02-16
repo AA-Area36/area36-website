@@ -2,24 +2,34 @@
 
 import * as React from "react"
 import { EventsClient } from "./events-client"
+import { getAnnualCalendarFiles, type CalendarFile } from "./calendar-file-actions"
 import type { DisplayEvent } from "@/lib/types/recurrence"
 
 export function EventsLoader() {
   const [events, setEvents] = React.useState<DisplayEvent[] | null>(null)
+  const [calendarFiles, setCalendarFiles] = React.useState<CalendarFile[]>([])
   const [error, setError] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     let active = true
 
-    const loadEvents = async () => {
+    const loadData = async () => {
       try {
-        const response = await fetch("/api/events")
-        if (!response.ok) {
-          throw new Error(`Events API error: ${response.status}`)
+        // Load events and calendar files in parallel
+        const [eventsResponse, calendarFilesData] = await Promise.all([
+          fetch("/api/events"),
+          getAnnualCalendarFiles(),
+        ])
+        
+        if (!eventsResponse.ok) {
+          throw new Error(`Events API error: ${eventsResponse.status}`)
         }
-        const data = (await response.json()) as DisplayEvent[]
+        
+        const eventsData = (await eventsResponse.json()) as DisplayEvent[]
+        
         if (active) {
-          setEvents(data)
+          setEvents(eventsData)
+          setCalendarFiles(calendarFilesData)
         }
       } catch (err) {
         if (!active) return
@@ -29,7 +39,7 @@ export function EventsLoader() {
       }
     }
 
-    loadEvents()
+    loadData()
     return () => {
       active = false
     }
@@ -43,7 +53,7 @@ export function EventsLoader() {
     console.error("Failed to load events:", error)
   }
 
-  return <EventsClient events={events} />
+  return <EventsClient events={events} calendarFiles={calendarFiles} />
 }
 
 function EventsLoading() {

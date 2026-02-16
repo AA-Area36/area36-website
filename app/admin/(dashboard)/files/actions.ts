@@ -23,6 +23,7 @@ const USER_GDRIVE_API_CACHE_KEYS = [
   "api:committees",
   "api:service-resources",
   "api:conference-materials",
+  "api:background-materials",
 ] as const
 
 const ROOT_FOLDER_ENV_KEYS = [
@@ -105,6 +106,7 @@ function revalidateFilePaths(): void {
   revalidatePath("/committees")
   revalidatePath("/general-service-conference")
   revalidatePath("/service-basics")
+  revalidatePath("/events")
 }
 
 function chunk<T>(items: T[], size: number): T[][] {

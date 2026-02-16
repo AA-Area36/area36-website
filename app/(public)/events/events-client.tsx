@@ -28,6 +28,8 @@ import { DateRange } from "react-day-picker"
 import type { RecurrenceConfig } from "@/lib/types/recurrence"
 import { submitEvent } from "./actions"
 import { uploadEventFlyer } from "./flyer-actions"
+import { AnnualCalendarSection } from "./annual-calendar-section"
+import type { CalendarFile } from "./calendar-file-actions"
 import type { Event, LocationType, EventType, EventFlyer } from "@/lib/db/schema"
 import type { DisplayEvent } from "@/lib/types/recurrence"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
@@ -336,9 +338,10 @@ function SectionPagination({
 
 interface EventsClientProps {
   events: DisplayEvent[]
+  calendarFiles: CalendarFile[]
 }
 
-export function EventsClient({ events }: EventsClientProps) {
+export function EventsClient({ events, calendarFiles }: EventsClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { executeRecaptcha } = useGoogleReCaptcha()
@@ -2427,6 +2430,9 @@ export function EventsClient({ events }: EventsClientProps) {
                 </div>
               )}
             </div>
+
+            {/* Annual Calendar Download */}
+            <AnnualCalendarSection files={calendarFiles} />
 
             {/* Calendar Subscription */}
             <div id="calendar-subscribe" className="mt-12 rounded-xl border border-border bg-muted/30 p-6 scroll-mt-24">

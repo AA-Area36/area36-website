@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { CategoryCombobox } from "@/components/category-combobox"
 import { upsertFileMetadata, deleteFileMetadata, getFileMetadataById } from "./actions"
 import type { FileNode } from "./actions"
 
@@ -143,15 +144,13 @@ export function FileMetadataDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="category">Category (Optional)</Label>
-            <Input
-              id="category"
+            <Label>Category (Optional)</Label>
+            <CategoryCombobox
               value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              placeholder="e.g., History Form, Pink Can Plan"
+              onChange={setCategory}
             />
             <p className="text-xs text-muted-foreground">
-              Used to group files under a custom header in committees
+              Select a preset category or type a custom one. Used to tag files for display in specific page sections.
             </p>
           </div>
 

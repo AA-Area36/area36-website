@@ -92,3 +92,30 @@ export async function enrichCommitteeFilesWithMetadata(
     }
   })
 }
+
+/**
+ * Get all file metadata records with a specific category
+ */
+export async function getFilesByCategory(
+  category: string
+): Promise<FileMetadataRecord[]> {
+  try {
+    const db = await getDb()
+    const results = await db.select().from(fileMetadata)
+    
+    // Filter to only files with matching category (case-insensitive)
+    const filtered = results.filter(
+      (r) => r.category?.toLowerCase() === category.toLowerCase()
+    )
+    
+    return filtered.map((r) => ({
+      driveId: r.driveId,
+      displayName: r.displayName,
+      password: r.password,
+      category: r.category,
+    }))
+  } catch (error) {
+    console.error("Error fetching files by category:", error)
+    return []
+  }
+}

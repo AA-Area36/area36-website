@@ -1,23 +1,24 @@
 "use client"
 
 import * as React from "react"
-import { FileText, Download, Eye, Lock } from "lucide-react"
+import { Calendar, Download, Eye, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PDFViewer } from "@/components/pdf-viewer"
 import { FilePasswordDialog } from "@/components/file-password-dialog"
-import type { CommitteeFile } from "@/lib/gdrive/committees"
 import { verifyFilePassword } from "@/lib/actions/verify-password"
+import { downloadFile } from "@/lib/files/download"
+import type { CalendarFile } from "./calendar-file-actions"
 
-interface CommitteeFilesSectionProps {
-  title: string
-  files: CommitteeFile[]
+interface AnnualCalendarSectionProps {
+  files: CalendarFile[]
 }
 
-export function CommitteeFilesSection({ title, files }: CommitteeFilesSectionProps) {
-  const [viewingFile, setViewingFile] = React.useState<CommitteeFile | null>(null)
-  const [passwordFile, setPasswordFile] = React.useState<CommitteeFile | null>(null)
+export function AnnualCalendarSection({ files }: AnnualCalendarSectionProps) {
+  const [viewingFile, setViewingFile] = React.useState<CalendarFile | null>(null)
+  const [passwordFile, setPasswordFile] = React.useState<CalendarFile | null>(null)
   const [pendingAction, setPendingAction] = React.useState<"view" | "download" | null>(null)
 
+  // Don't render if no files
   if (!files || files.length === 0) {
     return null
   }
@@ -26,7 +27,7 @@ export function CommitteeFilesSection({ title, files }: CommitteeFilesSectionPro
   const canGoPrevious = currentIndex > 0
   const canGoNext = currentIndex < files.length - 1 && currentIndex !== -1
 
-  const handleView = (file: CommitteeFile) => {
+  const handleView = (file: CalendarFile) => {
     if (file.isProtected) {
       setPasswordFile(file)
       setPendingAction("view")
@@ -35,18 +36,19 @@ export function CommitteeFilesSection({ title, files }: CommitteeFilesSectionPro
     }
   }
 
-  const handleDownload = (file: CommitteeFile) => {
+  const handleDownload = (file: CalendarFile) => {
     if (file.isProtected) {
       setPasswordFile(file)
       setPendingAction("download")
     } else {
-      window.open(file.downloadUrl, "_blank")
+      downloadFile(file.downloadUrl, file.displayName)
     }
   }
 
   const handlePasswordSuccess = (result: { previewUrl?: string; downloadUrl?: string }) => {
     if (!passwordFile) return
 
+    // Use the direct GDrive URLs returned from the server action
     const unlockedFile = {
       ...passwordFile,
       previewUrl: result.previewUrl || passwordFile.previewUrl,
@@ -56,7 +58,7 @@ export function CommitteeFilesSection({ title, files }: CommitteeFilesSectionPro
     if (pendingAction === "view") {
       setViewingFile(unlockedFile)
     } else if (pendingAction === "download") {
-      window.open(unlockedFile.downloadUrl, "_blank")
+      downloadFile(unlockedFile.downloadUrl, unlockedFile.displayName)
     }
 
     setPasswordFile(null)
@@ -64,8 +66,12 @@ export function CommitteeFilesSection({ title, files }: CommitteeFilesSectionPro
   }
 
   return (
-    <div className="mt-6">
-      <h4 className="text-sm font-semibold text-foreground mb-3">{title}</h4>
+    <section className="border-t border-border pt-8 mt-8">
+      <h3 className="text-lg font-semibold text-foreground mb-4">Annual Calendar</h3>
+      <p className="text-sm text-muted-foreground mb-4">
+        Download the yearly calendar for upcoming Area 36 events.
+      </p>
+      
       <div className="space-y-2">
         {files.map((file) => (
           <div
@@ -76,12 +82,12 @@ export function CommitteeFilesSection({ title, files }: CommitteeFilesSectionPro
               {file.isProtected ? (
                 <Lock className="h-5 w-5" aria-hidden="true" />
               ) : (
-                <FileText className="h-5 w-5" aria-hidden="true" />
+                <Calendar className="h-5 w-5" aria-hidden="true" />
               )}
             </div>
             <div className="flex-1 min-w-0">
               <h5 className="text-sm font-medium text-foreground truncate group-hover:text-primary transition-colors">
-                {file.name}
+                {file.displayName}
               </h5>
               {file.size && (
                 <p className="text-xs text-muted-foreground">{file.size}</p>
@@ -93,7 +99,7 @@ export function CommitteeFilesSection({ title, files }: CommitteeFilesSectionPro
                 size="icon"
                 className="h-8 w-8"
                 onClick={() => handleView(file)}
-                aria-label={`View ${file.name}`}
+                aria-label={`View ${file.displayName}`}
               >
                 <Eye className="h-4 w-4" aria-hidden="true" />
               </Button>
@@ -102,7 +108,7 @@ export function CommitteeFilesSection({ title, files }: CommitteeFilesSectionPro
                 size="icon"
                 className="h-8 w-8"
                 onClick={() => handleDownload(file)}
-                aria-label={`Download ${file.name}`}
+                aria-label={`Download ${file.displayName}`}
               >
                 <Download className="h-4 w-4" aria-hidden="true" />
               </Button>
@@ -115,7 +121,7 @@ export function CommitteeFilesSection({ title, files }: CommitteeFilesSectionPro
       {viewingFile && (
         <PDFViewer
           previewUrl={viewingFile.previewUrl}
-          title={viewingFile.name}
+          title={viewingFile.displayName}
           subtitle={viewingFile.size}
           downloadUrl={viewingFile.downloadUrl}
           onClose={() => setViewingFile(null)}
@@ -133,7 +139,7 @@ export function CommitteeFilesSection({ title, files }: CommitteeFilesSectionPro
       {passwordFile && (
         <FilePasswordDialog
           fileId={passwordFile.id}
-          fileName={passwordFile.name}
+          fileName={passwordFile.displayName}
           open={!!passwordFile}
           onOpenChange={(open: boolean) => {
             if (!open) {
@@ -145,6 +151,6 @@ export function CommitteeFilesSection({ title, files }: CommitteeFilesSectionPro
           onSuccess={handlePasswordSuccess}
         />
       )}
-    </div>
+    </section>
   )
 }

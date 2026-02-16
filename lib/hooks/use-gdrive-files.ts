@@ -9,6 +9,7 @@ type GDriveType =
   | "committees" 
   | "service-resources" 
   | "conference-materials"
+  | "background-materials"
 
 interface UseGdriveFilesOptions {
   enabled?: boolean
@@ -119,4 +120,26 @@ export function useServiceResources(options?: UseGdriveFilesOptions) {
 
 export function useConferenceMaterials(options?: UseGdriveFilesOptions) {
   return useGdriveFiles<ConferenceMaterialsData>("conference-materials", options)
+}
+
+export interface BackgroundFile {
+  id: string
+  name: string
+  displayName: string
+  previewUrl: string
+  downloadUrl: string
+  size?: string
+  mimeType: string
+  isProtected: boolean
+}
+
+export interface BackgroundMaterialsData {
+  agendaItems: BackgroundFile[]
+  backgroundMaterials: BackgroundFile[]
+  advisoryActions: BackgroundFile[]
+  miscFiles: BackgroundFile[]
+}
+
+export function useBackgroundMaterials(options?: UseGdriveFilesOptions) {
+  return useGdriveFiles<BackgroundMaterialsData>("background-materials", options)
 }

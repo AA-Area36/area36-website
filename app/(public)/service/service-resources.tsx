@@ -97,13 +97,19 @@ export function ServiceResources({ resources }: ServiceResourcesProps) {
     }
   }
 
-  const handlePasswordSuccess = () => {
+  const handlePasswordSuccess = (result: { previewUrl?: string; downloadUrl?: string }) => {
     if (!passwordFile) return
 
+    const unlockedFile = {
+      ...passwordFile,
+      previewUrl: result.previewUrl || passwordFile.previewUrl,
+      downloadUrl: result.downloadUrl || passwordFile.downloadUrl,
+    }
+
     if (pendingAction === "view") {
-      setViewingFile(passwordFile)
+      setViewingFile(unlockedFile)
     } else if (pendingAction === "download") {
-      window.open(`/api/files/download/${passwordFile.id}`, "_blank")
+      window.open(unlockedFile.downloadUrl, "_blank")
     }
 
     setPasswordFile(null)
@@ -144,10 +150,10 @@ export function ServiceResources({ resources }: ServiceResourcesProps) {
       {/* PDF Viewer Modal */}
       {viewingFile && (
         <PDFViewer
-          previewUrl={viewingFile.isProtected ? `/api/files/preview/${viewingFile.id}` : viewingFile.previewUrl}
+          previewUrl={viewingFile.previewUrl}
           title={viewingFile.name}
           subtitle={viewingFile.size}
-          downloadUrl={viewingFile.isProtected ? `/api/files/download/${viewingFile.id}` : viewingFile.downloadUrl}
+          downloadUrl={viewingFile.downloadUrl}
           onClose={() => setViewingFile(null)}
           onPrevious={canGoPrevious ? () => setViewingFile(allFiles[currentIndex - 1]) : undefined}
           onNext={canGoNext ? () => setViewingFile(allFiles[currentIndex + 1]) : undefined}

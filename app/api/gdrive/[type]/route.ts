@@ -12,6 +12,7 @@ type GDriveType =
   | "committees" 
   | "service-resources" 
   | "conference-materials"
+  | "background-materials"
 
 // Cache TTLs in seconds
 const CACHE_TTL = {
@@ -21,6 +22,7 @@ const CACHE_TTL = {
   committees: 60 * 30, // 30 minutes
   "service-resources": 60 * 30, // 30 minutes
   "conference-materials": 60 * 60, // 1 hour
+  "background-materials": 60 * 60, // 1 hour
 } as const
 
 // Generate a short request ID for tracing
@@ -362,6 +364,130 @@ async function fetchConferenceMaterialsData(requestId: string) {
   )
 }
 
+// Fetch background materials (GSC pre-conference files) with caching
+async function fetchBackgroundMaterialsData(requestId: string) {
+  const { withCache } = await import("@/lib/gdrive/cache")
+  
+  return withCache(
+    "api:background-materials",
+    async () => {
+      const env = await getEnv()
+      
+      if (!env.GDRIVE_SERVICE_ACCOUNT_EMAIL || !env.GDRIVE_RESOURCES_FOLDER_ID) {
+        log("warn", "GDrive not configured for background materials", { requestId })
+        return { agendaItems: [], backgroundMaterials: [], advisoryActions: [], miscFiles: [] }
+      }
+
+      const { getGDriveCredentials, getFileMetadata, getPreviewUrl, getDownloadUrl } = await import("@/lib/gdrive/client")
+      const { getResourcesByCategory } = await import("@/lib/gdrive/resources")
+      const { getFilesByCategory } = await import("@/lib/files/metadata")
+
+      const credentials = getGDriveCredentials(env)
+      const folderId = env.GDRIVE_RESOURCES_FOLDER_ID
+
+      log("info", "Fetching background materials (cache miss)", { requestId, folderId })
+
+      const driveTimer = timer()
+      
+      // Fetch tagged files and conference materials in parallel
+      const [agendaRecords, bgRecords, advisoryRecords, allConferenceMaterials] = await Promise.all([
+        getFilesByCategory("GSC Agenda Items"),
+        getFilesByCategory("GSC Background Materials"),
+        getFilesByCategory("GSC Advisory Actions"),
+        getResourcesByCategory(credentials, folderId, "conference-materials"),
+      ])
+      
+      // Helper to format file size
+      const formatFileSize = (bytes?: string): string | undefined => {
+        if (!bytes) return undefined
+        const size = parseInt(bytes, 10)
+        if (isNaN(size)) return undefined
+        if (size < 1024) return `${size} B`
+        if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`
+        return `${(size / (1024 * 1024)).toFixed(1)} MB`
+      }
+      
+      // Helper to fetch file details and convert to BackgroundFile
+      // Protected files use secure API routes instead of direct GDrive URLs
+      const fetchFileDetails = async (records: { driveId: string; displayName: string; password: string | null }[]) => {
+        const files = []
+        for (const record of records) {
+          try {
+            const driveFile = await getFileMetadata(credentials, record.driveId)
+            const fileIsProtected = !!record.password
+            files.push({
+              id: driveFile.id,
+              name: driveFile.name,
+              displayName: record.displayName,
+              previewUrl: fileIsProtected ? `/api/files/preview/${driveFile.id}` : getPreviewUrl(driveFile.id),
+              downloadUrl: fileIsProtected ? `/api/files/download/${driveFile.id}` : getDownloadUrl(driveFile.id),
+              size: formatFileSize(driveFile.size),
+              mimeType: driveFile.mimeType,
+              isProtected: fileIsProtected,
+            })
+          } catch (error) {
+            console.warn(`Failed to fetch file ${record.driveId}:`, error)
+          }
+        }
+        return files
+      }
+      
+      // Fetch details for tagged files
+      const [agendaItems, backgroundMaterials, advisoryActions] = await Promise.all([
+        fetchFileDetails(agendaRecords),
+        fetchFileDetails(bgRecords),
+        fetchFileDetails(advisoryRecords),
+      ])
+      
+      // Get IDs of tagged files to exclude from misc
+      const taggedIds = new Set([
+        ...agendaRecords.map(r => r.driveId),
+        ...bgRecords.map(r => r.driveId),
+        ...advisoryRecords.map(r => r.driveId),
+      ])
+      
+      // Get metadata for all conference materials to check categories
+      const allDriveIds = allConferenceMaterials.map(r => r.driveId)
+      const metadataMap = await getFileMetadataByDriveIds(allDriveIds)
+      
+      // Filter to misc files (not tagged with special categories)
+      const miscFiles = allConferenceMaterials
+        .filter(r => !taggedIds.has(r.driveId))
+        .filter(r => {
+          const meta = metadataMap.get(r.driveId)
+          const cat = meta?.category?.toLowerCase() || ""
+          return !cat.includes("gsc agenda") && !cat.includes("gsc background") && !cat.includes("gsc advisory")
+        })
+        .map(r => {
+          const meta = metadataMap.get(r.driveId)
+          const fileIsProtected = r.isProtected || !!meta?.password
+          return {
+            id: r.driveId,
+            name: r.title,
+            displayName: meta?.displayName || r.title,
+            previewUrl: fileIsProtected ? `/api/files/preview/${r.driveId}` : r.previewUrl,
+            downloadUrl: fileIsProtected ? `/api/files/download/${r.driveId}` : (r.downloadUrl || getDownloadUrl(r.driveId)),
+            size: r.size,
+            mimeType: "application/pdf", // Resources are typically PDFs
+            isProtected: fileIsProtected,
+          }
+        })
+      
+      log("info", "Background materials fetched", { 
+        requestId, 
+        durationMs: driveTimer.elapsed(),
+        agendaItemsCount: agendaItems.length,
+        backgroundMaterialsCount: backgroundMaterials.length,
+        advisoryActionsCount: advisoryActions.length,
+        miscFilesCount: miscFiles.length,
+      })
+
+      return { agendaItems, backgroundMaterials, advisoryActions, miscFiles }
+    },
+    { ttl: CACHE_TTL["background-materials"] }
+  )
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ type: string }> }
@@ -383,7 +509,8 @@ export async function GET(
     "resources", 
     "committees", 
     "service-resources", 
-    "conference-materials"
+    "conference-materials",
+    "background-materials"
   ]
   
   if (!validTypes.includes(type as GDriveType)) {
@@ -415,6 +542,9 @@ export async function GET(
         break
       case "conference-materials":
         data = await fetchConferenceMaterialsData(requestId)
+        break
+      case "background-materials":
+        data = await fetchBackgroundMaterialsData(requestId)
         break
     }
 

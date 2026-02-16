@@ -7,13 +7,20 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Lock, Loader2 } from "lucide-react"
 
+export interface PasswordVerifyResult {
+  success: boolean
+  error?: string
+  previewUrl?: string
+  downloadUrl?: string
+}
+
 interface FilePasswordDialogProps {
   fileId: string
   fileName: string
   open: boolean
   onOpenChange: (open: boolean) => void
-  onVerify: (fileId: string, password: string) => Promise<{ success: boolean; error?: string }>
-  onSuccess: () => void
+  onVerify: (fileId: string, password: string) => Promise<PasswordVerifyResult>
+  onSuccess: (result: PasswordVerifyResult) => void
 }
 
 export function FilePasswordDialog({
@@ -38,7 +45,7 @@ export function FilePasswordDialog({
     setIsVerifying(false)
 
     if (result.success) {
-      onSuccess()
+      onSuccess(result)
       onOpenChange(false)
       setPassword("")
     } else {
