@@ -97,6 +97,18 @@ function cookieDomainForProd(): string | undefined {
   return process.env.NODE_ENV === "production" ? ".area36.org" : undefined
 }
 
+function authCookieOverrides() {
+  const domain = cookieDomainForProd()
+  if (!domain) return undefined
+
+  // Keep session shared across Area 36 subdomains, but leave OAuth transient
+  // cookies at host scope so browser security prefixes (__Host-*) remain valid.
+  return {
+    sessionToken: { options: { domain } },
+    callbackUrl: { options: { domain } },
+  }
+}
+
 function isAllowedRedirectHost(hostname: string): boolean {
   const h = hostname.toLowerCase()
   if (h === "area36.org" || h === "www.area36.org") return true
@@ -108,6 +120,7 @@ function isAllowedRedirectHost(hostname: string): boolean {
 
 const nextAuth = NextAuth(async () => {
   const { env } = await getCloudflareContext({ async: true })
+  const cookieOverrides = authCookieOverrides()
 
   return {
     adapter: D1Adapter(env.DB),
@@ -145,14 +158,7 @@ const nextAuth = NextAuth(async () => {
         }
       },
     },
-    cookies: {
-      sessionToken: { options: { domain: cookieDomainForProd() } },
-      callbackUrl: { options: { domain: cookieDomainForProd() } },
-      csrfToken: { options: { domain: cookieDomainForProd() } },
-      pkceCodeVerifier: { options: { domain: cookieDomainForProd() } },
-      state: { options: { domain: cookieDomainForProd() } },
-      nonce: { options: { domain: cookieDomainForProd() } },
-    },
+    ...(cookieOverrides ? { cookies: cookieOverrides } : {}),
     trustHost: true,
   }
 })

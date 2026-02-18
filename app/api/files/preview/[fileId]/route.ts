@@ -33,7 +33,6 @@ export async function GET(
     // Extract unlock token from query string (used for immediate post-
     // password-entry requests before the cookie has propagated).
     const unlockToken = request.nextUrl.searchParams.get("unlock")
-    console.log("[preview-route] fileId:", fileId, "| unlockToken present:", !!unlockToken, "| full URL:", request.nextUrl.toString())
 
     // Validate access
     const { valid, requiresPassword } = await validateFileAccess(
@@ -41,7 +40,6 @@ export async function GET(
       credentials,
       unlockToken
     )
-    console.log("[preview-route] validateFileAccess result:", { valid, requiresPassword })
 
     if (!valid) {
       if (requiresPassword) {

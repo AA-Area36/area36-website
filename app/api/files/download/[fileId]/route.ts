@@ -8,6 +8,30 @@ import {
 // Use nodejs runtime for compatibility with Cloudflare Workers via OpenNext
 export const runtime = "nodejs"
 
+function hasFileExtension(name: string): boolean {
+  return /\.[a-z0-9]{1,10}$/i.test(name.trim())
+}
+
+function extFromContentType(contentType: string | null): string | null {
+  const mime = contentType?.split(";")[0]?.trim().toLowerCase()
+  switch (mime) {
+    case "application/pdf":
+      return "pdf"
+    case "application/zip":
+      return "zip"
+    case "image/jpeg":
+      return "jpg"
+    case "image/png":
+      return "png"
+    case "text/plain":
+      return "txt"
+    case "text/csv":
+      return "csv"
+    default:
+      return null
+  }
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ fileId: string }> }
@@ -89,9 +113,17 @@ export async function GET(
     }
 
     // Set Content-Disposition for download with original filename
-    const safeFilename = (filename || "file")
+    let safeFilename = (filename || "file")
       .replace(/[^\w\s.-]/g, "_")
       .replace(/\s+/g, "_")
+      .replace(/^_+|_+$/g, "")
+    if (!safeFilename) safeFilename = "file"
+
+    if (!hasFileExtension(safeFilename)) {
+      const ext = extFromContentType(contentType)
+      if (ext) safeFilename = `${safeFilename}.${ext}`
+    }
+
     responseHeaders.set(
       "Content-Disposition",
       `attachment; filename="${safeFilename}"`

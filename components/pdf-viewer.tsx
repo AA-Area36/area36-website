@@ -64,28 +64,22 @@ export function PDFViewer({
 
     if (previewUrl.startsWith("/api/files/preview/")) {
       setResolvedUrl(null)
-      console.log("[pdf-viewer] fetching preview from proxy URL:", previewUrl)
 
       const fetchPreview = async (retries = 2): Promise<void> => {
         try {
-          console.log("[pdf-viewer] fetch attempt (retries left:", retries, ") URL:", previewUrl)
           const res = await fetch(previewUrl)
 
           if (!res.ok) {
-            // Try to parse JSON error (password required, etc.)
-            try {
+            const contentType = res.headers.get("content-type") || ""
+            if (contentType.includes("application/json")) {
               const json = await res.json() as { requiresPassword?: boolean; error?: string }
               if (json.requiresPassword && retries > 0) {
                 await new Promise((resolve) => setTimeout(resolve, 500))
                 return fetchPreview(retries - 1)
               }
               throw new Error(json.error || `Preview failed: ${res.status}`)
-            } catch (parseErr) {
-              if (parseErr instanceof Error && parseErr.message !== `Preview failed: ${res.status}`) {
-                throw parseErr
-              }
-              throw new Error(`Preview failed: ${res.status}`)
             }
+            throw new Error(`Preview failed: ${res.status}`)
           }
 
           const blob = await res.blob()
