@@ -48,7 +48,14 @@ export async function verifyFolderPassword(
 export async function verifyFilePassword(
   driveId: string,
   password: string
-): Promise<{ success: boolean; error?: string; previewUrl?: string; downloadUrl?: string; unlockToken?: string }> {
+): Promise<{
+  success: boolean
+  error?: string
+  previewUrl?: string
+  downloadUrl?: string
+  unlockToken?: string
+  unlockExpiresAt?: number
+}> {
   try {
     const db = await getDb()
     const results = await db
@@ -72,7 +79,7 @@ export async function verifyFilePassword(
 
     // Also generate a short-lived token for immediate use (avoids cookie
     // propagation race between server action and subsequent fetch).
-    const { signFileUnlockToken } = await import("@/lib/security/unlock-cookie")
+    const { signFileUnlockToken, FILE_UNLOCK_TOKEN_MAX_AGE_MS } = await import("@/lib/security/unlock-cookie")
     const unlockToken = await signFileUnlockToken(driveId, meta.password)
     const qs = unlockToken ? `?unlock=${encodeURIComponent(unlockToken)}` : ""
     const previewUrl = `/api/files/preview/${driveId}${qs}`
@@ -83,6 +90,7 @@ export async function verifyFilePassword(
       previewUrl,
       downloadUrl,
       unlockToken: unlockToken ?? undefined,
+      unlockExpiresAt: unlockToken ? Date.now() + FILE_UNLOCK_TOKEN_MAX_AGE_MS : undefined,
     }
   } catch (error) {
     console.error("Error verifying file password:", error)

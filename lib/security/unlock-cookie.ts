@@ -87,13 +87,13 @@ export async function signUnlockCookie(ids: string[]): Promise<string | null> {
 // Used as a query parameter (`?unlock=<token>`) to grant immediate access
 // to a file right after the password is verified. This avoids the race
 // between the server action setting a cookie and the next fetch including
-// it. Tokens expire after 5 minutes.
+// it. Tokens are intentionally longer-lived to reduce re-prompts.
 //
 // v2: signed with global unlock/auth secret
 // v3: fallback signed with file-specific secret (stored password hash)
 type UnlockTokenPayload = { v: 2 | 3; id: string; iat: number }
 
-const UNLOCK_TOKEN_MAX_AGE_MS = 5 * 60 * 1000 // 5 minutes
+export const FILE_UNLOCK_TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
 /**
  * Create a signed, short-lived token granting access to a single file.
@@ -153,7 +153,7 @@ export async function verifyFileUnlockToken(
 
   const expectedSignature = await hmacSign(payloadB64, secret)
   if (!timingSafeEqual(signature, expectedSignature)) return null
-  if (Date.now() - payload.iat > UNLOCK_TOKEN_MAX_AGE_MS) return null
+  if (Date.now() - payload.iat > FILE_UNLOCK_TOKEN_MAX_AGE_MS) return null
 
   return payload.id
 }

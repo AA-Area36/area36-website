@@ -10,6 +10,7 @@
 interface UnlockedUrls {
   previewUrl: string
   downloadUrl: string
+  unlockExpiresAt?: number
 }
 
 const store = new Map<string, UnlockedUrls>()
@@ -19,12 +20,33 @@ export function markFileUnlocked(fileId: string, urls: UnlockedUrls): void {
   store.set(fileId, urls)
 }
 
+function isExpired(entry: UnlockedUrls): boolean {
+  return typeof entry.unlockExpiresAt === "number" && Date.now() > entry.unlockExpiresAt
+}
+
 /** Check whether a file has already been unlocked this session */
 export function isFileUnlockedClient(fileId: string): boolean {
-  return store.has(fileId)
+  const entry = store.get(fileId)
+  if (!entry) return false
+  if (isExpired(entry)) {
+    store.delete(fileId)
+    return false
+  }
+  return true
 }
 
 /** Get the direct URLs for a previously-unlocked file */
 export function getUnlockedUrls(fileId: string): UnlockedUrls | undefined {
-  return store.get(fileId)
+  const entry = store.get(fileId)
+  if (!entry) return undefined
+  if (isExpired(entry)) {
+    store.delete(fileId)
+    return undefined
+  }
+  return entry
+}
+
+/** Remove a file from the unlocked store */
+export function clearFileUnlocked(fileId: string): void {
+  store.delete(fileId)
 }

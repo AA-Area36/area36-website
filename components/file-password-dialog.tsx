@@ -12,6 +12,7 @@ export interface PasswordVerifyResult {
   error?: string
   previewUrl?: string
   downloadUrl?: string
+  unlockExpiresAt?: number
 }
 
 interface FilePasswordDialogProps {

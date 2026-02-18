@@ -6,7 +6,13 @@ import { Button } from "@/components/ui/button"
 import { PDFViewer } from "@/components/pdf-viewer"
 import { FilePasswordDialog } from "@/components/file-password-dialog"
 import { verifyFilePassword } from "@/lib/actions/verify-password"
-import { isFileUnlockedClient, getUnlockedUrls, markFileUnlocked } from "@/lib/files/unlocked-store"
+import { downloadFile } from "@/lib/files/download"
+import {
+  clearFileUnlocked,
+  isFileUnlockedClient,
+  getUnlockedUrls,
+  markFileUnlocked,
+} from "@/lib/files/unlocked-store"
 import type { ServiceResource } from "@/lib/gdrive/service-resources"
 
 interface ServiceResourcesProps {
@@ -97,23 +103,29 @@ export function ServiceResources({ resources }: ServiceResourcesProps) {
     }
   }
 
-  const handleDownload = (file: ServiceResource) => {
+  const handleDownload = async (file: ServiceResource) => {
     if (file.isProtected && !isFileUnlockedClient(file.id)) {
       setPasswordFile(file)
       setPendingAction("download")
     } else {
       const resolved = resolveFile(file)
-      window.open(resolved.downloadUrl, "_blank")
+      const result = await downloadFile(resolved.downloadUrl, resolved.name)
+      if (result.requiresPassword) {
+        clearFileUnlocked(file.id)
+        setPasswordFile(file)
+        setPendingAction("download")
+      }
     }
   }
 
-  const handlePasswordSuccess = (result: { previewUrl?: string; downloadUrl?: string }) => {
+  const handlePasswordSuccess = (result: { previewUrl?: string; downloadUrl?: string; unlockExpiresAt?: number }) => {
     if (!passwordFile) return
 
     if (result.previewUrl && result.downloadUrl) {
       markFileUnlocked(passwordFile.id, {
         previewUrl: result.previewUrl,
         downloadUrl: result.downloadUrl,
+        unlockExpiresAt: result.unlockExpiresAt,
       })
     }
 
@@ -126,7 +138,7 @@ export function ServiceResources({ resources }: ServiceResourcesProps) {
     if (pendingAction === "view") {
       setViewingFile(unlockedFile)
     } else if (pendingAction === "download") {
-      window.open(unlockedFile.downloadUrl, "_blank")
+      void downloadFile(unlockedFile.downloadUrl, unlockedFile.name)
     }
 
     setPasswordFile(null)
@@ -171,6 +183,12 @@ export function ServiceResources({ resources }: ServiceResourcesProps) {
           title={viewingFile.name}
           subtitle={viewingFile.size}
           downloadUrl={viewingFile.downloadUrl}
+          onAuthRequired={() => {
+            clearFileUnlocked(viewingFile.id)
+            setViewingFile(null)
+            setPasswordFile(viewingFile)
+            setPendingAction("view")
+          }}
           onClose={() => setViewingFile(null)}
           onPrevious={canGoPrevious ? () => setViewingFile(allFiles[currentIndex - 1]) : undefined}
           onNext={canGoNext ? () => setViewingFile(allFiles[currentIndex + 1]) : undefined}

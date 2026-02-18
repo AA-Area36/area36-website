@@ -7,7 +7,12 @@ import { PDFViewer } from "@/components/pdf-viewer"
 import { FilePasswordDialog } from "@/components/file-password-dialog"
 import { verifyFilePassword } from "@/lib/actions/verify-password"
 import { downloadFile } from "@/lib/files/download"
-import { isFileUnlockedClient, getUnlockedUrls, markFileUnlocked } from "@/lib/files/unlocked-store"
+import {
+  clearFileUnlocked,
+  isFileUnlockedClient,
+  getUnlockedUrls,
+  markFileUnlocked,
+} from "@/lib/files/unlocked-store"
 import type { BackgroundFile } from "@/lib/hooks/use-gdrive-files"
 
 interface ConferenceMaterialsContentProps {
@@ -54,24 +59,29 @@ export function ConferenceMaterialsContent({ materials }: ConferenceMaterialsCon
     }
   }
 
-  const handleDownload = (file: BackgroundFile) => {
+  const handleDownload = async (file: BackgroundFile) => {
     if (file.isProtected && !isFileUnlockedClient(file.id)) {
       setPasswordFile(file)
       setPendingAction("download")
     } else {
       const resolved = resolveFile(file)
-      downloadFile(resolved.downloadUrl, resolved.displayName)
+      const result = await downloadFile(resolved.downloadUrl, resolved.displayName)
+      if (result.requiresPassword) {
+        clearFileUnlocked(file.id)
+        setPasswordFile(file)
+        setPendingAction("download")
+      }
     }
   }
 
-  const handlePasswordSuccess = (result: { previewUrl?: string; downloadUrl?: string }) => {
-    console.log("[conference-materials] handlePasswordSuccess called with:", result)
+  const handlePasswordSuccess = (result: { previewUrl?: string; downloadUrl?: string; unlockExpiresAt?: number }) => {
     if (!passwordFile) return
 
     if (result.previewUrl && result.downloadUrl) {
       markFileUnlocked(passwordFile.id, {
         previewUrl: result.previewUrl,
         downloadUrl: result.downloadUrl,
+        unlockExpiresAt: result.unlockExpiresAt,
       })
     }
 
@@ -80,14 +90,10 @@ export function ConferenceMaterialsContent({ materials }: ConferenceMaterialsCon
       previewUrl: result.previewUrl || passwordFile.previewUrl,
       downloadUrl: result.downloadUrl || passwordFile.downloadUrl,
     }
-    console.log("[conference-materials] unlockedFile previewUrl:", unlockedFile.previewUrl)
-    console.log("[conference-materials] unlockedFile downloadUrl:", unlockedFile.downloadUrl)
-    console.log("[conference-materials] pendingAction:", pendingAction)
-
     if (pendingAction === "view") {
       setViewingFile(unlockedFile)
     } else if (pendingAction === "download") {
-      downloadFile(unlockedFile.downloadUrl, unlockedFile.displayName)
+      void downloadFile(unlockedFile.downloadUrl, unlockedFile.displayName)
     }
 
     setPasswordFile(null)
@@ -146,6 +152,12 @@ export function ConferenceMaterialsContent({ materials }: ConferenceMaterialsCon
           title={viewingFile.displayName}
           subtitle={viewingFile.size}
           downloadUrl={viewingFile.downloadUrl}
+          onAuthRequired={() => {
+            clearFileUnlocked(viewingFile.id)
+            setViewingFile(null)
+            setPasswordFile(viewingFile)
+            setPendingAction("view")
+          }}
           onClose={() => setViewingFile(null)}
           onPrevious={canGoPrevious ? () => setViewingFile(materials[currentIndex - 1]) : undefined}
           onNext={canGoNext ? () => setViewingFile(materials[currentIndex + 1]) : undefined}

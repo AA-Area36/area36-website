@@ -8,7 +8,12 @@ import { PDFViewer } from "@/components/pdf-viewer"
 import { FilePasswordDialog } from "@/components/file-password-dialog"
 import { verifyFilePassword } from "@/lib/actions/verify-password"
 import { downloadFile } from "@/lib/files/download"
-import { isFileUnlockedClient, getUnlockedUrls, markFileUnlocked } from "@/lib/files/unlocked-store"
+import {
+  clearFileUnlocked,
+  isFileUnlockedClient,
+  getUnlockedUrls,
+  markFileUnlocked,
+} from "@/lib/files/unlocked-store"
 import type { Resource } from "@/lib/gdrive/types"
 
 interface ResourceViewerProps {
@@ -93,6 +98,12 @@ export function ResourceViewer({
       title={resource.title}
       subtitle={subtitle}
       downloadUrl={resource.downloadUrl}
+      onAuthRequired={() => {
+        clearFileUnlocked(resource.id)
+        setPendingResource(resource)
+        setPasswordDialogOpen(true)
+        onOpenChange(false)
+      }}
       onClose={() => onOpenChange(false)}
       onPrevious={goPrevious}
       onNext={goNext}
@@ -145,7 +156,7 @@ export function ResourceViewerWithPassword(props: ResourceViewerWithPasswordProp
     }
   }, [open, resource, unlockedFiles])
 
-  const handlePasswordSuccess = (result: { previewUrl?: string; downloadUrl?: string }) => {
+  const handlePasswordSuccess = (result: { previewUrl?: string; downloadUrl?: string; unlockExpiresAt?: number }) => {
     if (pendingResource) {
       setUnlockedFiles((prev) => new Set(prev).add(pendingResource.id))
 
@@ -153,6 +164,7 @@ export function ResourceViewerWithPassword(props: ResourceViewerWithPasswordProp
         markFileUnlocked(pendingResource.id, {
           previewUrl: result.previewUrl,
           downloadUrl: result.downloadUrl,
+          unlockExpiresAt: result.unlockExpiresAt,
         })
       }
 
@@ -224,6 +236,17 @@ export function ResourceViewerWithPassword(props: ResourceViewerWithPasswordProp
           title={currentResource.title}
           subtitle={subtitle}
           downloadUrl={currentResource.downloadUrl}
+          onAuthRequired={() => {
+            clearFileUnlocked(currentResource.id)
+            setUnlockedFiles((prev) => {
+              const next = new Set(prev)
+              next.delete(currentResource.id)
+              return next
+            })
+            setPendingResource(currentResource)
+            setPasswordDialogOpen(true)
+            setViewerOpen(false)
+          }}
           onClose={handleViewerClose}
           onPrevious={goPrevious}
           onNext={goNext}

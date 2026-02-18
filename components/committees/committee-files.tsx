@@ -8,7 +8,12 @@ import { FilePasswordDialog } from "@/components/file-password-dialog"
 import { downloadFile } from "@/lib/files/download"
 import type { CommitteeFile } from "@/lib/gdrive/committees"
 import { verifyFilePassword } from "@/lib/actions/verify-password"
-import { isFileUnlockedClient, getUnlockedUrls, markFileUnlocked } from "@/lib/files/unlocked-store"
+import {
+  clearFileUnlocked,
+  isFileUnlockedClient,
+  getUnlockedUrls,
+  markFileUnlocked,
+} from "@/lib/files/unlocked-store"
 
 interface CommitteeFilesSectionProps {
   title: string
@@ -45,23 +50,29 @@ export function CommitteeFilesSection({ title, files }: CommitteeFilesSectionPro
     }
   }
 
-  const handleDownload = (file: CommitteeFile) => {
+  const handleDownload = async (file: CommitteeFile) => {
     if (file.isProtected && !isFileUnlockedClient(file.id)) {
       setPasswordFile(file)
       setPendingAction("download")
     } else {
       const resolved = resolveFile(file)
-      downloadFile(resolved.downloadUrl, resolved.name)
+      const result = await downloadFile(resolved.downloadUrl, resolved.name)
+      if (result.requiresPassword) {
+        clearFileUnlocked(file.id)
+        setPasswordFile(file)
+        setPendingAction("download")
+      }
     }
   }
 
-  const handlePasswordSuccess = (result: { previewUrl?: string; downloadUrl?: string }) => {
+  const handlePasswordSuccess = (result: { previewUrl?: string; downloadUrl?: string; unlockExpiresAt?: number }) => {
     if (!passwordFile) return
 
     if (result.previewUrl && result.downloadUrl) {
       markFileUnlocked(passwordFile.id, {
         previewUrl: result.previewUrl,
         downloadUrl: result.downloadUrl,
+        unlockExpiresAt: result.unlockExpiresAt,
       })
     }
 
@@ -74,7 +85,7 @@ export function CommitteeFilesSection({ title, files }: CommitteeFilesSectionPro
     if (pendingAction === "view") {
       setViewingFile(unlockedFile)
     } else if (pendingAction === "download") {
-      downloadFile(unlockedFile.downloadUrl, unlockedFile.name)
+      void downloadFile(unlockedFile.downloadUrl, unlockedFile.name)
     }
 
     setPasswordFile(null)
@@ -136,6 +147,12 @@ export function CommitteeFilesSection({ title, files }: CommitteeFilesSectionPro
           title={viewingFile.name}
           subtitle={viewingFile.size}
           downloadUrl={viewingFile.downloadUrl}
+          onAuthRequired={() => {
+            clearFileUnlocked(viewingFile.id)
+            setViewingFile(null)
+            setPasswordFile(viewingFile)
+            setPendingAction("view")
+          }}
           onClose={() => setViewingFile(null)}
           onPrevious={canGoPrevious ? () => setViewingFile(files[currentIndex - 1]) : undefined}
           onNext={canGoNext ? () => setViewingFile(files[currentIndex + 1]) : undefined}

@@ -41,7 +41,7 @@ export async function setUnlockedFile(fileId: string): Promise<void> {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: 60 * 60 * 24, // 24 hours
+    maxAge: 60 * 60 * 24 * 7, // 7 days
   })
 }
 

@@ -7,7 +7,12 @@ import { PDFViewer } from "@/components/pdf-viewer"
 import { FilePasswordDialog } from "@/components/file-password-dialog"
 import { verifyFilePassword } from "@/lib/actions/verify-password"
 import { downloadFile } from "@/lib/files/download"
-import { isFileUnlockedClient, getUnlockedUrls, markFileUnlocked } from "@/lib/files/unlocked-store"
+import {
+  clearFileUnlocked,
+  isFileUnlockedClient,
+  getUnlockedUrls,
+  markFileUnlocked,
+} from "@/lib/files/unlocked-store"
 import type { CalendarFile } from "./calendar-file-actions"
 
 interface AnnualCalendarSectionProps {
@@ -45,23 +50,29 @@ export function AnnualCalendarSection({ files }: AnnualCalendarSectionProps) {
     }
   }
 
-  const handleDownload = (file: CalendarFile) => {
+  const handleDownload = async (file: CalendarFile) => {
     if (file.isProtected && !isFileUnlockedClient(file.id)) {
       setPasswordFile(file)
       setPendingAction("download")
     } else {
       const resolved = resolveFile(file)
-      downloadFile(resolved.downloadUrl, resolved.displayName)
+      const result = await downloadFile(resolved.downloadUrl, resolved.displayName)
+      if (result.requiresPassword) {
+        clearFileUnlocked(file.id)
+        setPasswordFile(file)
+        setPendingAction("download")
+      }
     }
   }
 
-  const handlePasswordSuccess = (result: { previewUrl?: string; downloadUrl?: string }) => {
+  const handlePasswordSuccess = (result: { previewUrl?: string; downloadUrl?: string; unlockExpiresAt?: number }) => {
     if (!passwordFile) return
 
     if (result.previewUrl && result.downloadUrl) {
       markFileUnlocked(passwordFile.id, {
         previewUrl: result.previewUrl,
         downloadUrl: result.downloadUrl,
+        unlockExpiresAt: result.unlockExpiresAt,
       })
     }
 
@@ -74,7 +85,7 @@ export function AnnualCalendarSection({ files }: AnnualCalendarSectionProps) {
     if (pendingAction === "view") {
       setViewingFile(unlockedFile)
     } else if (pendingAction === "download") {
-      downloadFile(unlockedFile.downloadUrl, unlockedFile.displayName)
+      void downloadFile(unlockedFile.downloadUrl, unlockedFile.displayName)
     }
 
     setPasswordFile(null)
@@ -140,6 +151,12 @@ export function AnnualCalendarSection({ files }: AnnualCalendarSectionProps) {
           title={viewingFile.displayName}
           subtitle={viewingFile.size}
           downloadUrl={viewingFile.downloadUrl}
+          onAuthRequired={() => {
+            clearFileUnlocked(viewingFile.id)
+            setViewingFile(null)
+            setPasswordFile(viewingFile)
+            setPendingAction("view")
+          }}
           onClose={() => setViewingFile(null)}
           onPrevious={canGoPrevious ? () => setViewingFile(files[currentIndex - 1]) : undefined}
           onNext={canGoNext ? () => setViewingFile(files[currentIndex + 1]) : undefined}

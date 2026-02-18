@@ -31,6 +31,7 @@ interface PDFViewerProps {
   previousLabel?: string
   nextLabel?: string
   icon?: React.ReactNode
+  onAuthRequired?: () => void
 }
 
 export function PDFViewer({
@@ -48,6 +49,7 @@ export function PDFViewer({
   previousLabel = "Previous",
   nextLabel = "Next",
   icon,
+  onAuthRequired,
 }: PDFViewerProps) {
   const [zoom, setZoom] = React.useState(100)
   const [isFullscreen, setIsFullscreen] = React.useState(false)
@@ -77,6 +79,10 @@ export function PDFViewer({
                 await new Promise((resolve) => setTimeout(resolve, 500))
                 return fetchPreview(retries - 1)
               }
+              if (json.requiresPassword) {
+                onAuthRequired?.()
+                return
+              }
               throw new Error(json.error || `Preview failed: ${res.status}`)
             }
             throw new Error(`Preview failed: ${res.status}`)
@@ -100,12 +106,20 @@ export function PDFViewer({
         URL.revokeObjectURL(blobUrl)
       }
     }
-  }, [previewUrl])
+  }, [previewUrl, onAuthRequired])
 
   // Toggle fullscreen
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen)
   }
+
+  const handleDownload = React.useCallback(async () => {
+    if (!downloadUrl) return
+    const result = await downloadFile(downloadUrl, title)
+    if (result.requiresPassword) {
+      onAuthRequired?.()
+    }
+  }, [downloadUrl, title, onAuthRequired])
 
   // Handle keyboard navigation
   React.useEffect(() => {
@@ -215,7 +229,7 @@ export function PDFViewer({
                   variant="outline"
                   size="sm"
                   aria-label={`Download ${title}`}
-                  onClick={() => downloadFile(downloadUrl, title)}
+                  onClick={handleDownload}
                 >
                   <Download className="h-4 w-4 sm:mr-2" aria-hidden="true" />
                   <span className="hidden sm:inline">Download</span>
