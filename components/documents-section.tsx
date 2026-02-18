@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { FileText, Download, ArrowRight, FolderOpen, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { downloadFile } from "@/lib/files/download"
 
 interface Resource {
   id: string
@@ -89,15 +90,13 @@ export function DocumentsSection() {
                     PDF{doc.size ? ` · ${doc.size}` : ""}
                   </p>
                 </div>
-                <Button variant="ghost" size="icon" asChild>
-                  <a
-                    href={doc.downloadUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`Download ${doc.title}`}
-                  >
-                    <Download className="h-4 w-4" aria-hidden="true" />
-                  </a>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Download ${doc.title}`}
+                  onClick={() => downloadFile(doc.downloadUrl, doc.title)}
+                >
+                  <Download className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </div>
             ))}

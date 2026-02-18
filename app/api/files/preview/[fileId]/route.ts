@@ -30,11 +30,18 @@ export async function GET(
 
     const credentials = await getGDriveCredentials(env)
 
+    // Extract unlock token from query string (used for immediate post-
+    // password-entry requests before the cookie has propagated).
+    const unlockToken = request.nextUrl.searchParams.get("unlock")
+    console.log("[preview-route] fileId:", fileId, "| unlockToken present:", !!unlockToken, "| full URL:", request.nextUrl.toString())
+
     // Validate access
     const { valid, requiresPassword } = await validateFileAccess(
       fileId,
-      credentials
+      credentials,
+      unlockToken
     )
+    console.log("[preview-route] validateFileAccess result:", { valid, requiresPassword })
 
     if (!valid) {
       if (requiresPassword) {
@@ -46,14 +53,53 @@ export async function GET(
       return NextResponse.json({ error: "Access denied" }, { status: 403 })
     }
 
-    // Return the Google Drive preview URL for embedding - dynamic import to reduce bundle size
-    // The client will use this URL in an iframe
-    const { getPreviewUrl } = await import("@/lib/gdrive/client")
-    const previewUrl = getPreviewUrl(fileId)
+    // Stream the actual file content through the server so the browser never
+    // contacts drive.google.com directly (which would 403 for restricted files).
+    const { getAccessToken } = await import("@/lib/gdrive/auth")
+    const accessToken = await getAccessToken(credentials)
 
-    return NextResponse.json({ previewUrl })
+    const driveUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
+    const driveResponse = await fetch(driveUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+
+    if (!driveResponse.ok) {
+      console.error(
+        "Drive API preview error:",
+        driveResponse.status,
+        await driveResponse.text()
+      )
+      return NextResponse.json(
+        { error: "Failed to fetch file" },
+        { status: driveResponse.status }
+      )
+    }
+
+    const responseHeaders = new Headers()
+
+    const contentType = driveResponse.headers.get("content-type")
+    responseHeaders.set("Content-Type", contentType || "application/pdf")
+
+    const contentLength = driveResponse.headers.get("content-length")
+    if (contentLength) {
+      responseHeaders.set("Content-Length", contentLength)
+    }
+
+    // Inline disposition so the browser renders it (for iframe embedding)
+    responseHeaders.set("Content-Disposition", "inline")
+
+    // Allow caching for preview content
+    responseHeaders.set(
+      "Cache-Control",
+      "private, max-age=300, stale-while-revalidate=600"
+    )
+
+    return new NextResponse(driveResponse.body, {
+      status: 200,
+      headers: responseHeaders,
+    })
   } catch (error) {
-    console.error("Error getting preview URL:", error)
+    console.error("Error getting preview:", error)
     return NextResponse.json({ error: "Preview failed" }, { status: 500 })
   }
 }

@@ -1,6 +1,6 @@
 // Committee files fetching from Google Drive
 
-import { listFolders, listAllFiles, getPreviewUrl, getDownloadUrl, getGDriveCredentials } from "./client"
+import { listFolders, listAllFiles, getGDriveCredentials } from "./client"
 import { getFromCache, setInCache } from "./cache"
 import type { DriveFile, GDriveCredentials } from "./types"
 import { filterArchivedFolders } from "./archive"
@@ -46,8 +46,8 @@ function mapDriveFileToCommitteeFile(file: DriveFile): CommitteeFile {
     id: file.id,
     name: file.name.replace(/\.(pdf|doc|docx|xls|xlsx)$/i, ""), // Remove file extension from display name
     description: file.description,
-    previewUrl: getPreviewUrl(file.id),
-    downloadUrl: getDownloadUrl(file.id),
+    previewUrl: `/api/files/preview/${file.id}`,
+    downloadUrl: `/api/files/download/${file.id}`,
     size: formatFileSize(file.size),
     mimeType: file.mimeType,
   }

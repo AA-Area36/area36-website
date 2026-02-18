@@ -54,42 +54,57 @@ export function PDFViewer({
   const [resolvedUrl, setResolvedUrl] = React.useState<string | null>(null)
   const [previewError, setPreviewError] = React.useState<string | null>(null)
 
-  // Resolve preview URL - if it's an API route, fetch the actual embeddable URL
+  // Resolve preview URL.
+  // For proxy routes (/api/files/preview/…) we fetch the PDF bytes and create
+  // a blob URL so the iframe never contacts drive.google.com directly.
   React.useEffect(() => {
     setZoom(100)
     setPreviewError(null)
+    let blobUrl: string | null = null
 
     if (previewUrl.startsWith("/api/files/preview/")) {
       setResolvedUrl(null)
-      
+      console.log("[pdf-viewer] fetching preview from proxy URL:", previewUrl)
+
       const fetchPreview = async (retries = 2): Promise<void> => {
         try {
+          console.log("[pdf-viewer] fetch attempt (retries left:", retries, ") URL:", previewUrl)
           const res = await fetch(previewUrl)
-          const json = await res.json() as { previewUrl?: string; error?: string; requiresPassword?: boolean }
-          
+
           if (!res.ok) {
-            // If password required but we just unlocked, retry after a short delay
-            // to allow the cookie to propagate from the server action
-            if (json.requiresPassword && retries > 0) {
-              await new Promise((resolve) => setTimeout(resolve, 500))
-              return fetchPreview(retries - 1)
+            // Try to parse JSON error (password required, etc.)
+            try {
+              const json = await res.json() as { requiresPassword?: boolean; error?: string }
+              if (json.requiresPassword && retries > 0) {
+                await new Promise((resolve) => setTimeout(resolve, 500))
+                return fetchPreview(retries - 1)
+              }
+              throw new Error(json.error || `Preview failed: ${res.status}`)
+            } catch (parseErr) {
+              if (parseErr instanceof Error && parseErr.message !== `Preview failed: ${res.status}`) {
+                throw parseErr
+              }
+              throw new Error(`Preview failed: ${res.status}`)
             }
-            throw new Error(json.error || `Preview failed: ${res.status}`)
           }
-          
-          if (json.previewUrl) {
-            setResolvedUrl(json.previewUrl)
-          } else {
-            setPreviewError("No preview URL returned")
-          }
+
+          const blob = await res.blob()
+          blobUrl = URL.createObjectURL(blob)
+          setResolvedUrl(blobUrl)
         } catch (err) {
           setPreviewError(err instanceof Error ? err.message : "Failed to load preview")
         }
       }
-      
+
       fetchPreview()
     } else {
       setResolvedUrl(previewUrl)
+    }
+
+    return () => {
+      if (blobUrl) {
+        URL.revokeObjectURL(blobUrl)
+      }
     }
   }, [previewUrl])
 

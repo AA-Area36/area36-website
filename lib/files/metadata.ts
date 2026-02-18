@@ -49,9 +49,8 @@ export async function getFileMetadataByDriveIds(
 /**
  * Enrich resources with metadata from database.
  *
- * When a file gains password protection via metadata AND/OR the resource is
- * already marked as restricted (folder not publicly shared), we swap its
- * URLs to the server-side proxy routes.
+ * URLs are always proxied (set by driveFileToResource), so enrichment only
+ * needs to override the display name and protection flag.
  */
 export async function enrichResourcesWithMetadata(
   resources: Resource[]
@@ -65,23 +64,10 @@ export async function enrichResourcesWithMetadata(
     const meta = metadataMap.get(resource.driveId)
     if (!meta) return resource
 
-    const isProtected = !!meta.password
-    // If the file is now protected via metadata and the URLs are still
-    // direct GDrive links, swap them to proxied routes.
-    const needsProxy = isProtected || resource.isRestricted
-    const previewUrl = needsProxy
-      ? `/api/files/preview/${resource.driveId}`
-      : resource.previewUrl
-    const downloadUrl = needsProxy
-      ? `/api/files/download/${resource.driveId}`
-      : resource.downloadUrl
-
     return {
       ...resource,
       title: meta.displayName,
-      isProtected,
-      previewUrl,
-      downloadUrl,
+      isProtected: !!meta.password,
     }
   })
 }

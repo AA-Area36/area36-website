@@ -46,14 +46,13 @@ export async function getFileMetadataByDriveIds(driveIds: string[]) {
  * Access is granted when ANY of the following are true:
  * 1. The file has no password set in our database.
  * 2. The file has a password but the user's session cookie marks it as unlocked.
- *
- * Files in restricted (non-public) Google Drive folders are served through
- * these proxy routes regardless of password status — the proxy simply needs
- * to confirm the file exists and the password gate (if any) is satisfied.
+ * 3. A valid short-lived unlock token is provided (issued after password
+ *    verification, avoids cookie-propagation race).
  */
 export async function validateFileAccess(
   fileId: string,
-  credentials: Awaited<ReturnType<typeof getGDriveCredentials>>
+  credentials: Awaited<ReturnType<typeof getGDriveCredentials>>,
+  unlockToken?: string | null
 ): Promise<FileAccessResult> {
   try {
     // Dynamic import to avoid bundling at build time
@@ -70,8 +69,6 @@ export async function validateFileAccess(
     const metadata = await getFileMetadataByDriveId(fileId)
 
     // If no password set, access is always granted.
-    // This covers both public files AND restricted-folder files that have no
-    // individual password protection.
     if (!metadata || !metadata.password) {
       return {
         valid: true,
@@ -80,7 +77,21 @@ export async function validateFileAccess(
       }
     }
 
-    // File has password - check if unlocked
+    // File has password — check unlock token first (avoids cookie race)
+    if (unlockToken) {
+      const { verifyFileUnlockToken } = await import("@/lib/security/unlock-cookie")
+      const tokenFileId = await verifyFileUnlockToken(unlockToken, metadata.password)
+      if (tokenFileId === fileId) {
+        return {
+          valid: true,
+          filename: file.name,
+          requiresPassword: true,
+          isUnlocked: true,
+        }
+      }
+    }
+
+    // Fall back to cookie-based check
     const unlocked = await isFileUnlocked(fileId)
     return {
       valid: unlocked,

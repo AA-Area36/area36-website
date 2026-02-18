@@ -65,6 +65,7 @@ export function ConferenceMaterialsContent({ materials }: ConferenceMaterialsCon
   }
 
   const handlePasswordSuccess = (result: { previewUrl?: string; downloadUrl?: string }) => {
+    console.log("[conference-materials] handlePasswordSuccess called with:", result)
     if (!passwordFile) return
 
     if (result.previewUrl && result.downloadUrl) {
@@ -79,6 +80,9 @@ export function ConferenceMaterialsContent({ materials }: ConferenceMaterialsCon
       previewUrl: result.previewUrl || passwordFile.previewUrl,
       downloadUrl: result.downloadUrl || passwordFile.downloadUrl,
     }
+    console.log("[conference-materials] unlockedFile previewUrl:", unlockedFile.previewUrl)
+    console.log("[conference-materials] unlockedFile downloadUrl:", unlockedFile.downloadUrl)
+    console.log("[conference-materials] pendingAction:", pendingAction)
 
     if (pendingAction === "view") {
       setViewingFile(unlockedFile)

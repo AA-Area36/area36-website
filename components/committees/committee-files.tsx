@@ -5,6 +5,7 @@ import { FileText, Download, Eye, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PDFViewer } from "@/components/pdf-viewer"
 import { FilePasswordDialog } from "@/components/file-password-dialog"
+import { downloadFile } from "@/lib/files/download"
 import type { CommitteeFile } from "@/lib/gdrive/committees"
 import { verifyFilePassword } from "@/lib/actions/verify-password"
 import { isFileUnlockedClient, getUnlockedUrls, markFileUnlocked } from "@/lib/files/unlocked-store"
@@ -50,7 +51,7 @@ export function CommitteeFilesSection({ title, files }: CommitteeFilesSectionPro
       setPendingAction("download")
     } else {
       const resolved = resolveFile(file)
-      window.open(resolved.downloadUrl, "_blank")
+      downloadFile(resolved.downloadUrl, resolved.name)
     }
   }
 
@@ -73,7 +74,7 @@ export function CommitteeFilesSection({ title, files }: CommitteeFilesSectionPro
     if (pendingAction === "view") {
       setViewingFile(unlockedFile)
     } else if (pendingAction === "download") {
-      window.open(unlockedFile.downloadUrl, "_blank")
+      downloadFile(unlockedFile.downloadUrl, unlockedFile.name)
     }
 
     setPasswordFile(null)

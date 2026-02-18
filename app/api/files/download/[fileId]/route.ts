@@ -30,10 +30,15 @@ export async function GET(
 
     const credentials = await getGDriveCredentials(env)
 
+    // Extract unlock token from query string (used for immediate post-
+    // password-entry requests before the cookie has propagated).
+    const unlockToken = request.nextUrl.searchParams.get("unlock")
+
     // Validate access
     const { valid, filename, requiresPassword } = await validateFileAccess(
       fileId,
-      credentials
+      credentials,
+      unlockToken
     )
 
     if (!valid) {

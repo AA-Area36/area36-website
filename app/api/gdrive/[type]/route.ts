@@ -346,9 +346,15 @@ async function fetchConferenceMaterialsData(requestId: string) {
       log("info", "Fetching conference materials from GDrive (cache miss)", { requestId, folderId })
 
       const driveTimer = timer()
-      const [materials, oldReports] = await Promise.all([
+      const [rawMaterials, rawOldReports] = await Promise.all([
         getResourcesByCategory(credentials, folderId, "conference-materials"),
         getOldConferenceReports(credentials, folderId),
+      ])
+
+      // Enrich with DB metadata (display names, password flags)
+      const [materials, oldReports] = await Promise.all([
+        enrichResourcesWithMetadata(rawMaterials),
+        enrichResourcesWithMetadata(rawOldReports),
       ])
       
       log("info", "GDrive conference materials fetched", { 
@@ -378,11 +384,9 @@ async function fetchBackgroundMaterialsData(requestId: string) {
         return { agendaItems: [], backgroundMaterials: [], advisoryActions: [], miscFiles: [] }
       }
 
-      const { getGDriveCredentials, getFileMetadata, getPreviewUrl, getDownloadUrl, listFolders } = await import("@/lib/gdrive/client")
+      const { getGDriveCredentials, getFileMetadata } = await import("@/lib/gdrive/client")
       const { getResourcesByCategory } = await import("@/lib/gdrive/resources")
       const { getFilesByCategory } = await import("@/lib/files/metadata")
-      const { isFolderRestricted } = await import("@/lib/gdrive/restricted")
-      const { filterArchivedFolders } = await import("@/lib/gdrive/archive")
 
       const credentials = getGDriveCredentials(env)
       const folderId = env.GDRIVE_RESOURCES_FOLDER_ID
@@ -390,15 +394,6 @@ async function fetchBackgroundMaterialsData(requestId: string) {
       log("info", "Fetching background materials (cache miss)", { requestId, folderId })
 
       const driveTimer = timer()
-      
-      // Find the Conference Materials folder and check if it's restricted
-      const categoryFolders = filterArchivedFolders(await listFolders(credentials, folderId))
-      const conferenceMaterialsFolder = categoryFolders.find(
-        (f: { name: string }) => f.name.toLowerCase().includes("conference")
-      )
-      const folderIsRestricted = conferenceMaterialsFolder
-        ? await isFolderRestricted(credentials, conferenceMaterialsFolder.id)
-        : false
 
       // Fetch tagged files and conference materials in parallel
       const [agendaRecords, bgRecords, advisoryRecords, allConferenceMaterials] = await Promise.all([
@@ -419,25 +414,22 @@ async function fetchBackgroundMaterialsData(requestId: string) {
       }
       
       // Helper to fetch file details and convert to BackgroundFile.
-      // Files use proxied API routes when the folder is restricted (not
-      // publicly shared) OR the individual file is password-protected.
+      // All files are served through the server proxy so the browser never
+      // contacts drive.google.com directly.
       const fetchFileDetails = async (records: { driveId: string; displayName: string; password: string | null }[]) => {
         const files = []
         for (const record of records) {
           try {
             const driveFile = await getFileMetadata(credentials, record.driveId)
-            const fileIsProtected = !!record.password
-            const needsProxy = fileIsProtected || folderIsRestricted
             files.push({
               id: driveFile.id,
               name: driveFile.name,
               displayName: record.displayName,
-              previewUrl: needsProxy ? `/api/files/preview/${driveFile.id}` : getPreviewUrl(driveFile.id),
-              downloadUrl: needsProxy ? `/api/files/download/${driveFile.id}` : getDownloadUrl(driveFile.id),
+              previewUrl: `/api/files/preview/${driveFile.id}`,
+              downloadUrl: `/api/files/download/${driveFile.id}`,
               size: formatFileSize(driveFile.size),
               mimeType: driveFile.mimeType,
-              isProtected: fileIsProtected,
-              isRestricted: folderIsRestricted,
+              isProtected: !!record.password,
             })
           } catch (error) {
             console.warn(`Failed to fetch file ${record.driveId}:`, error)
@@ -464,7 +456,8 @@ async function fetchBackgroundMaterialsData(requestId: string) {
       const allDriveIds = allConferenceMaterials.map(r => r.driveId)
       const metadataMap = await getFileMetadataByDriveIds(allDriveIds)
       
-      // Filter to misc files (not tagged with special categories)
+      // Filter to misc files (not tagged with special categories).
+      // All files use proxied URLs (set by driveFileToResource).
       const miscFiles = allConferenceMaterials
         .filter(r => !taggedIds.has(r.driveId))
         .filter(r => {
@@ -474,21 +467,15 @@ async function fetchBackgroundMaterialsData(requestId: string) {
         })
         .map(r => {
           const meta = metadataMap.get(r.driveId)
-          const fileIsProtected = r.isProtected || !!meta?.password
-          // Resource already has proxied URLs if folder was restricted (set
-          // by getResources/driveFileToResource), but we still need to
-          // account for the password-protection override.
-          const needsProxy = fileIsProtected || folderIsRestricted
           return {
             id: r.driveId,
             name: r.title,
             displayName: meta?.displayName || r.title,
-            previewUrl: needsProxy ? `/api/files/preview/${r.driveId}` : r.previewUrl,
-            downloadUrl: needsProxy ? `/api/files/download/${r.driveId}` : (r.downloadUrl || getDownloadUrl(r.driveId)),
+            previewUrl: `/api/files/preview/${r.driveId}`,
+            downloadUrl: `/api/files/download/${r.driveId}`,
             size: r.size,
             mimeType: "application/pdf", // Resources are typically PDFs
-            isProtected: fileIsProtected,
-            isRestricted: folderIsRestricted,
+            isProtected: r.isProtected || !!meta?.password,
           }
         })
       

@@ -3,8 +3,6 @@
 import {
   listFolders,
   listAllFiles,
-  getDownloadUrl,
-  getPreviewUrl,
 } from "./client"
 import { withCache, CACHE_KEYS } from "./cache"
 import { filterArchivedFolders } from "./archive"
@@ -97,16 +95,15 @@ function cleanDescription(description: string | undefined): string | undefined {
 /**
  * Convert a Drive file to a Resource object.
  *
- * When `restricted` is true the folder is not publicly shared, so direct
- * Google Drive URLs would 403 in the user's browser.  In that case we use
- * the server-side proxy routes instead.
+ * All files are served through the server-side proxy routes so that the
+ * browser never contacts drive.google.com directly.  This ensures files
+ * work regardless of whether their Drive folder is publicly shared.
  */
 function driveFileToResource(
   file: DriveFile,
   category: ResourceCategory,
   restricted = false
 ): Resource {
-  const useProxy = restricted || isProtected(file.description)
   return {
     id: file.id,
     title: file.name.replace(/\.[^.]+$/, ""), // Remove file extension
@@ -114,8 +111,8 @@ function driveFileToResource(
     category,
     date: extractDate(file),
     size: formatFileSize(file.size),
-    downloadUrl: useProxy ? `/api/files/download/${file.id}` : getDownloadUrl(file.id),
-    previewUrl: useProxy ? `/api/files/preview/${file.id}` : getPreviewUrl(file.id),
+    downloadUrl: `/api/files/download/${file.id}`,
+    previewUrl: `/api/files/preview/${file.id}`,
     isProtected: isProtected(file.description),
     isRestricted: restricted,
     driveId: file.id,

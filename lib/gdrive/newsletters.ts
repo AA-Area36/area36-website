@@ -4,8 +4,6 @@ import {
   listFolders,
   listAllFiles,
   getGDriveCredentials,
-  getPreviewUrl,
-  getDownloadUrl,
 } from "./client"
 import { withCache, CACHE_KEYS } from "./cache"
 import type { Newsletter, DriveFile, GDriveCredentials } from "./types"
@@ -169,8 +167,8 @@ function driveFileToNewsletter(file: DriveFile, folderYear?: number): Newsletter
     description: file.description || `${monthName} ${year} issue of The Pigeon newsletter.`,
     highlights: parseHighlights(file.description),
     driveId: file.id,
-    previewUrl: getPreviewUrl(file.id),
-    downloadUrl: getDownloadUrl(file.id),
+    previewUrl: `/api/files/preview/${file.id}`,
+    downloadUrl: `/api/files/download/${file.id}`,
   }
 }
 

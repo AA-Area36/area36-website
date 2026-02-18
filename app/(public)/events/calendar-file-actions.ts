@@ -1,7 +1,7 @@
 "use server"
 
 import { getFilesByCategory } from "@/lib/files/metadata"
-import { getGDriveCredentials, getFileMetadata, getPreviewUrl, getDownloadUrl } from "@/lib/gdrive/client"
+import { getGDriveCredentials, getFileMetadata } from "@/lib/gdrive/client"
 
 export interface CalendarFile {
   id: string
@@ -85,8 +85,8 @@ export async function getAnnualCalendarFiles(): Promise<CalendarFile[]> {
           id: driveFile.id,
           name: driveFile.name,
           displayName: record.displayName,
-          previewUrl: fileIsProtected ? `/api/files/preview/${driveFile.id}` : getPreviewUrl(driveFile.id),
-          downloadUrl: fileIsProtected ? `/api/files/download/${driveFile.id}` : getDownloadUrl(driveFile.id),
+          previewUrl: `/api/files/preview/${driveFile.id}`,
+          downloadUrl: `/api/files/download/${driveFile.id}`,
           size: formatFileSize(driveFile.size),
           mimeType: driveFile.mimeType,
           isProtected: fileIsProtected,

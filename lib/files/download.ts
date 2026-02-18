@@ -1,22 +1,22 @@
-/**
- * Download a file by fetching it and triggering a browser download.
- *
- * For files served through the server proxy (`/api/files/download/…`) — either
- * because they are password-protected or because their Google Drive folder is
- * restricted (not publicly shared) — this fetches via the same-origin API and
- * triggers a blob download.
- *
- * For non-protected files with direct GDrive URLs, falls back to window.open.
- */
-export async function downloadFile(url: string, filename?: string): Promise<void> {
-  // Direct GDrive URLs can be opened normally
-  if (!url.startsWith("/api/files/download/")) {
-    window.open(url, "_blank")
-    return
-  }
+export interface DownloadResult {
+  ok: boolean
+  requiresPassword?: boolean
+  error?: string
+}
 
+/**
+ * Download a file by fetching it from the server proxy and triggering a
+ * browser download.  All files are served through `/api/files/download/…`.
+ *
+ * For password-protected files the proxy may return 403 with
+ * `{ requiresPassword: true }`.  In that case a short retry loop gives the
+ * httpOnly unlock cookie time to propagate after a server action.
+ *
+ * Returns a result object so the caller can decide whether to show a
+ * password dialog.
+ */
+export async function downloadFile(url: string, filename?: string): Promise<DownloadResult> {
   const maxRetries = 2
-  let lastError: string | undefined
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (attempt > 0) {
@@ -36,7 +36,7 @@ export async function downloadFile(url: string, filename?: string): Promise<void
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(blobUrl)
-      return
+      return { ok: true }
     }
 
     // Check if it's a password-required retry scenario
@@ -45,15 +45,14 @@ export async function downloadFile(url: string, filename?: string): Promise<void
       if (json.requiresPassword && attempt < maxRetries) {
         continue // retry
       }
-      lastError = json.error || `Download failed: ${res.status}`
+      if (json.requiresPassword) {
+        return { ok: false, requiresPassword: true }
+      }
+      return { ok: false, error: json.error || `Download failed: ${res.status}` }
     } catch {
-      lastError = `Download failed: ${res.status}`
+      return { ok: false, error: `Download failed: ${res.status}` }
     }
-    break
   }
 
-  // If all retries failed, fall back to opening in a new tab
-  // (user will see the error but at least something happens)
-  console.error("Protected file download failed:", lastError)
-  window.open(url, "_blank")
+  return { ok: false, error: "Download failed after retries" }
 }

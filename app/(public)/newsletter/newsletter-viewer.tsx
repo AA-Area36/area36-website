@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { PDFViewer } from "@/components/pdf-viewer"
+import { downloadFile } from "@/lib/files/download"
 import type { Newsletter } from "@/lib/gdrive/types"
 
 interface NewsletterViewerProps {
@@ -272,16 +273,10 @@ export function NewsletterViewer({ newsletters, years }: NewsletterViewerProps) 
                       <Button
                         variant="ghost"
                         size="icon"
-                        asChild
                         aria-label={`Download ${newsletter.issue}`}
+                        onClick={() => downloadFile(newsletter.downloadUrl!, newsletter.issue)}
                       >
-                        <a
-                          href={newsletter.downloadUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <Download className="h-4 w-4" aria-hidden="true" />
-                        </a>
+                        <Download className="h-4 w-4" aria-hidden="true" />
                       </Button>
                     )}
                   </div>
