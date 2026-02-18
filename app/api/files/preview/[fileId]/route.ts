@@ -8,6 +8,89 @@ import {
 // Use nodejs runtime for compatibility with Cloudflare Workers via OpenNext
 export const runtime = "nodejs"
 
+async function resolveAccess(
+  request: NextRequest,
+  fileId: string
+): Promise<{
+  credentials: Awaited<ReturnType<typeof getGDriveCredentials>>
+} | {
+  errorResponse: NextResponse
+}> {
+  const env = await getGDriveEnv()
+
+  if (!env.GDRIVE_SERVICE_ACCOUNT_EMAIL) {
+    return {
+      errorResponse: NextResponse.json(
+        { error: "Drive not configured" },
+        { status: 500 }
+      ),
+    }
+  }
+
+  const credentials = await getGDriveCredentials(env)
+
+  // Extract unlock token from query string (used for immediate post-
+  // password-entry requests before the cookie has propagated).
+  const unlockToken = request.nextUrl.searchParams.get("unlock")
+
+  // Validate access
+  const { valid, requiresPassword } = await validateFileAccess(
+    fileId,
+    credentials,
+    unlockToken
+  )
+
+  if (!valid) {
+    if (requiresPassword) {
+      return {
+        errorResponse: NextResponse.json(
+          { error: "Password required", requiresPassword: true },
+          {
+            status: 403,
+            headers: { "x-requires-password": "1" },
+          }
+        ),
+      }
+    }
+    return {
+      errorResponse: NextResponse.json({ error: "Access denied" }, { status: 403 }),
+    }
+  }
+
+  return { credentials }
+}
+
+export async function HEAD(
+  request: NextRequest,
+  { params }: { params: Promise<{ fileId: string }> }
+) {
+  const { fileId } = await params
+
+  if (!fileId) {
+    return new NextResponse(null, { status: 400 })
+  }
+
+  try {
+    const access = await resolveAccess(request, fileId)
+    if ("errorResponse" in access) {
+      return new NextResponse(null, {
+        status: access.errorResponse.status,
+        headers: access.errorResponse.headers,
+      })
+    }
+
+    return new NextResponse(null, {
+      status: 200,
+      headers: {
+        "Cache-Control": "private, max-age=60",
+      },
+    })
+  } catch (error) {
+    console.error("Error checking preview access:", error)
+    return new NextResponse(null, { status: 500 })
+  }
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ fileId: string }> }
@@ -19,42 +102,15 @@ export async function GET(
   }
 
   try {
-    const env = await getGDriveEnv()
-
-    if (!env.GDRIVE_SERVICE_ACCOUNT_EMAIL) {
-      return NextResponse.json(
-        { error: "Drive not configured" },
-        { status: 500 }
-      )
-    }
-
-    const credentials = await getGDriveCredentials(env)
-
-    // Extract unlock token from query string (used for immediate post-
-    // password-entry requests before the cookie has propagated).
-    const unlockToken = request.nextUrl.searchParams.get("unlock")
-
-    // Validate access
-    const { valid, requiresPassword } = await validateFileAccess(
-      fileId,
-      credentials,
-      unlockToken
-    )
-
-    if (!valid) {
-      if (requiresPassword) {
-        return NextResponse.json(
-          { error: "Password required", requiresPassword: true },
-          { status: 403 }
-        )
-      }
-      return NextResponse.json({ error: "Access denied" }, { status: 403 })
+    const access = await resolveAccess(request, fileId)
+    if ("errorResponse" in access) {
+      return access.errorResponse
     }
 
     // Stream the actual file content through the server so the browser never
     // contacts drive.google.com directly (which would 403 for restricted files).
     const { getAccessToken } = await import("@/lib/gdrive/auth")
-    const accessToken = await getAccessToken(credentials)
+    const accessToken = await getAccessToken(access.credentials)
 
     const driveUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
     const driveResponse = await fetch(driveUrl, {

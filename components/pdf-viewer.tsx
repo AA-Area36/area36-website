@@ -57,54 +57,56 @@ export function PDFViewer({
   const [previewError, setPreviewError] = React.useState<string | null>(null)
 
   // Resolve preview URL.
-  // For proxy routes (/api/files/preview/…) we fetch the PDF bytes and create
-  // a blob URL so the iframe never contacts drive.google.com directly.
+  // For proxy routes (/api/files/preview/…), keep iframe pointed at the route
+  // (mobile browsers handle direct URLs better than blob-backed PDF iframes).
   React.useEffect(() => {
     setZoom(100)
     setPreviewError(null)
-    let blobUrl: string | null = null
 
-    if (previewUrl.startsWith("/api/files/preview/")) {
-      setResolvedUrl(null)
-
-      const fetchPreview = async (retries = 2): Promise<void> => {
-        try {
-          const res = await fetch(previewUrl)
-
-          if (!res.ok) {
-            const contentType = res.headers.get("content-type") || ""
-            if (contentType.includes("application/json")) {
-              const json = await res.json() as { requiresPassword?: boolean; error?: string }
-              if (json.requiresPassword && retries > 0) {
-                await new Promise((resolve) => setTimeout(resolve, 500))
-                return fetchPreview(retries - 1)
-              }
-              if (json.requiresPassword) {
-                onAuthRequired?.()
-                return
-              }
-              throw new Error(json.error || `Preview failed: ${res.status}`)
-            }
-            throw new Error(`Preview failed: ${res.status}`)
-          }
-
-          const blob = await res.blob()
-          blobUrl = URL.createObjectURL(blob)
-          setResolvedUrl(blobUrl)
-        } catch (err) {
-          setPreviewError(err instanceof Error ? err.message : "Failed to load preview")
-        }
-      }
-
-      fetchPreview()
-    } else {
+    if (!previewUrl.startsWith("/api/files/preview/")) {
       setResolvedUrl(previewUrl)
+      return
     }
 
-    return () => {
-      if (blobUrl) {
-        URL.revokeObjectURL(blobUrl)
+    let cancelled = false
+    setResolvedUrl(null)
+
+    const verifyPreviewAccess = async (retries = 2): Promise<void> => {
+      try {
+        const res = await fetch(previewUrl, {
+          method: "HEAD",
+          cache: "no-store",
+        })
+
+        if (cancelled) return
+
+        if (res.ok) {
+          setResolvedUrl(previewUrl)
+          return
+        }
+
+        const requiresPassword = res.headers.get("x-requires-password") === "1"
+        if (requiresPassword && retries > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 500))
+          return verifyPreviewAccess(retries - 1)
+        }
+
+        if (requiresPassword) {
+          onAuthRequired?.()
+          return
+        }
+
+        throw new Error(`Preview failed: ${res.status}`)
+      } catch (err) {
+        if (cancelled) return
+        setPreviewError(err instanceof Error ? err.message : "Failed to load preview")
       }
+    }
+
+    void verifyPreviewAccess()
+
+    return () => {
+      cancelled = true
     }
   }, [previewUrl, onAuthRequired])
 
@@ -261,7 +263,7 @@ export function PDFViewer({
           ) : (
             <iframe
               src={resolvedUrl}
-              className="border-0"
+              className="block border-0"
               title={title}
               allow="autoplay"
               style={{
