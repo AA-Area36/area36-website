@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { PDFViewer } from "@/components/pdf-viewer"
 import { FilePasswordDialog } from "@/components/file-password-dialog"
 import { verifyFilePassword } from "@/lib/actions/verify-password"
+import { downloadFile } from "@/lib/files/download"
+import { isFileUnlockedClient, getUnlockedUrls, markFileUnlocked } from "@/lib/files/unlocked-store"
 import type { Resource } from "@/lib/gdrive/types"
 
 interface ResourceViewerProps {
@@ -122,12 +124,20 @@ export function ResourceViewerWithPassword(props: ResourceViewerWithPasswordProp
   // Handle opening the viewer
   React.useEffect(() => {
     if (open && resource) {
-      if (resource.isProtected && !unlockedFiles.has(resource.id)) {
+      if (resource.isProtected && !unlockedFiles.has(resource.id) && !isFileUnlockedClient(resource.id)) {
         // Need to unlock first
         setPendingResource(resource)
         setPasswordDialogOpen(true)
       } else {
-        // Can view directly
+        // Can view directly — resolve URLs from shared store if needed
+        const cached = getUnlockedUrls(resource.id)
+        if (cached) {
+          onResourceChange({
+            ...resource,
+            previewUrl: cached.previewUrl,
+            downloadUrl: cached.downloadUrl,
+          })
+        }
         setViewerOpen(true)
       }
     } else {
@@ -138,6 +148,14 @@ export function ResourceViewerWithPassword(props: ResourceViewerWithPasswordProp
   const handlePasswordSuccess = (result: { previewUrl?: string; downloadUrl?: string }) => {
     if (pendingResource) {
       setUnlockedFiles((prev) => new Set(prev).add(pendingResource.id))
+
+      if (result.previewUrl && result.downloadUrl) {
+        markFileUnlocked(pendingResource.id, {
+          previewUrl: result.previewUrl,
+          downloadUrl: result.downloadUrl,
+        })
+      }
+
       // Use direct GDrive URLs from server action if available
       if (result.previewUrl || result.downloadUrl) {
         onResourceChange({
@@ -159,12 +177,17 @@ export function ResourceViewerWithPassword(props: ResourceViewerWithPasswordProp
   }
 
   const handleNavigation = (newResource: Resource) => {
-    if (newResource.isProtected && !unlockedFiles.has(newResource.id)) {
+    if (newResource.isProtected && !unlockedFiles.has(newResource.id) && !isFileUnlockedClient(newResource.id)) {
       setPendingResource(newResource)
       setPasswordDialogOpen(true)
       setViewerOpen(false)
     } else {
-      onResourceChange(newResource)
+      const cached = getUnlockedUrls(newResource.id)
+      if (cached) {
+        onResourceChange({ ...newResource, previewUrl: cached.previewUrl, downloadUrl: cached.downloadUrl })
+      } else {
+        onResourceChange(newResource)
+      }
     }
   }
 
@@ -288,16 +311,10 @@ export function ResourceItemWithViewer({
         <Button
           variant="ghost"
           size="icon"
-          asChild
           aria-label={`Download ${resource.title}`}
+          onClick={() => downloadFile(resource.downloadUrl || "", resource.title)}
         >
-          <a
-            href={resource.downloadUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Download className="h-4 w-4" aria-hidden="true" />
-          </a>
+          <Download className="h-4 w-4" aria-hidden="true" />
         </Button>
       </div>
     </div>

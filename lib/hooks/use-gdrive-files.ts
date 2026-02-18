@@ -131,6 +131,8 @@ export interface BackgroundFile {
   size?: string
   mimeType: string
   isProtected: boolean
+  /** True when the file's Drive folder is not publicly shared. */
+  isRestricted?: boolean
 }
 
 export interface BackgroundMaterialsData {

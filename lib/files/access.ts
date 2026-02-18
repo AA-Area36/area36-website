@@ -41,9 +41,15 @@ export async function getFileMetadataByDriveIds(driveIds: string[]) {
 }
 
 /**
- * Validate access to a file
- * Returns whether the file can be accessed and whether it requires a password
- * Uses dynamic imports to avoid bundling GDrive modules
+ * Validate access to a file.
+ *
+ * Access is granted when ANY of the following are true:
+ * 1. The file has no password set in our database.
+ * 2. The file has a password but the user's session cookie marks it as unlocked.
+ *
+ * Files in restricted (non-public) Google Drive folders are served through
+ * these proxy routes regardless of password status — the proxy simply needs
+ * to confirm the file exists and the password gate (if any) is satisfied.
  */
 export async function validateFileAccess(
   fileId: string,
@@ -53,7 +59,8 @@ export async function validateFileAccess(
     // Dynamic import to avoid bundling at build time
     const { getFileMetadata: getDriveFileMetadata } = await import("@/lib/gdrive/client")
     
-    // Get file metadata from Google Drive
+    // Get file metadata from Google Drive — also proves the file exists and
+    // the service account can read it.
     const file = await getDriveFileMetadata(credentials, fileId)
     if (!file) {
       return { valid: false, requiresPassword: false }
@@ -62,7 +69,9 @@ export async function validateFileAccess(
     // Check if file has metadata in our database
     const metadata = await getFileMetadataByDriveId(fileId)
 
-    // If no metadata or no password, file is accessible
+    // If no password set, access is always granted.
+    // This covers both public files AND restricted-folder files that have no
+    // individual password protection.
     if (!metadata || !metadata.password) {
       return {
         valid: true,

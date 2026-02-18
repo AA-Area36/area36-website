@@ -7,6 +7,7 @@ import { PDFViewer } from "@/components/pdf-viewer"
 import { FilePasswordDialog } from "@/components/file-password-dialog"
 import { verifyFilePassword } from "@/lib/actions/verify-password"
 import { downloadFile } from "@/lib/files/download"
+import { isFileUnlockedClient, getUnlockedUrls, markFileUnlocked } from "@/lib/files/unlocked-store"
 import type { BackgroundFile } from "@/lib/hooks/use-gdrive-files"
 
 interface ConferenceMaterialsContentProps {
@@ -36,28 +37,43 @@ export function ConferenceMaterialsContent({ materials }: ConferenceMaterialsCon
     )
   }
 
+  const resolveFile = (file: BackgroundFile): BackgroundFile => {
+    const cached = getUnlockedUrls(file.id)
+    if (cached) {
+      return { ...file, previewUrl: cached.previewUrl, downloadUrl: cached.downloadUrl }
+    }
+    return file
+  }
+
   const handleView = (file: BackgroundFile) => {
-    if (file.isProtected) {
+    if (file.isProtected && !isFileUnlockedClient(file.id)) {
       setPasswordFile(file)
       setPendingAction("view")
     } else {
-      setViewingFile(file)
+      setViewingFile(resolveFile(file))
     }
   }
 
   const handleDownload = (file: BackgroundFile) => {
-    if (file.isProtected) {
+    if (file.isProtected && !isFileUnlockedClient(file.id)) {
       setPasswordFile(file)
       setPendingAction("download")
     } else {
-      downloadFile(file.downloadUrl, file.displayName)
+      const resolved = resolveFile(file)
+      downloadFile(resolved.downloadUrl, resolved.displayName)
     }
   }
 
   const handlePasswordSuccess = (result: { previewUrl?: string; downloadUrl?: string }) => {
     if (!passwordFile) return
 
-    // Use the direct GDrive URLs returned from the server action
+    if (result.previewUrl && result.downloadUrl) {
+      markFileUnlocked(passwordFile.id, {
+        previewUrl: result.previewUrl,
+        downloadUrl: result.downloadUrl,
+      })
+    }
+
     const unlockedFile = {
       ...passwordFile,
       previewUrl: result.previewUrl || passwordFile.previewUrl,

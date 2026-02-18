@@ -9,6 +9,7 @@ interface FolderNode {
   id: string
   name: string
   type: "folder"
+  isRestricted?: boolean
   children: (FolderNode | FileNode)[]
 }
 
@@ -21,6 +22,7 @@ interface FileNode {
   parentId: string
   hasMetadata?: boolean
   isProtected?: boolean
+  isRestricted?: boolean
   displayName?: string
   category?: string | null
 }
@@ -86,24 +88,28 @@ async function buildSingleFolderTree(
       }
 
       const { getGDriveCredentials, listFolders, listAllFiles } = await import("@/lib/gdrive/client")
+      const { isFolderRestricted } = await import("@/lib/gdrive/restricted")
       const credentials = getGDriveCredentials(env)
 
       async function buildTree(
         currentFolderId: string,
-        folderName: string
+        folderName: string,
+        parentRestricted = false
       ): Promise<FolderNode> {
-        // Get subfolders and files in parallel
-        const [subfolders, files] = await Promise.all([
+        // Get subfolders, files, and restriction status in parallel
+        const [subfolders, files, selfRestricted] = await Promise.all([
           listFolders(credentials, currentFolderId),
           listAllFiles(credentials, currentFolderId, { orderBy: "name" }),
+          isFolderRestricted(credentials, currentFolderId),
         ])
+        const restricted = selfRestricted || parentRestricted
         const visibleSubfolders = filterArchivedFolders(subfolders)
 
         const children: (FolderNode | FileNode)[] = []
 
-        // Add subfolders recursively
+        // Add subfolders recursively (inherit restriction from parent)
         for (const subfolder of visibleSubfolders) {
-          const childFolder = await buildTree(subfolder.id, subfolder.name)
+          const childFolder = await buildTree(subfolder.id, subfolder.name, restricted)
           children.push(childFolder)
         }
 
@@ -122,6 +128,7 @@ async function buildSingleFolderTree(
             parentId: currentFolderId,
             hasMetadata: !!meta,
             isProtected: !!meta?.password,
+            isRestricted: restricted,
             displayName: meta?.displayName,
             category: meta?.category,
           })
@@ -131,6 +138,7 @@ async function buildSingleFolderTree(
           id: currentFolderId,
           name: folderName,
           type: "folder",
+          isRestricted: restricted,
           children,
         }
       }

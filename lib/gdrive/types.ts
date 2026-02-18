@@ -60,6 +60,8 @@ export interface Resource {
   downloadUrl?: string
   previewUrl: string
   isProtected?: boolean
+  /** True when the file's Drive folder is not publicly shared (service-account only). */
+  isRestricted?: boolean
   driveId: string
 }
 

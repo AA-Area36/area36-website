@@ -296,3 +296,41 @@ export function getStreamUrl(fileId: string): string {
   // For audio streaming, we use webContentLink which allows direct access
   return `https://drive.google.com/uc?export=download&id=${fileId}`
 }
+
+/**
+ * Permission entry returned by the Drive API v3 permissions.list endpoint.
+ */
+export interface DrivePermission {
+  id: string
+  type: "user" | "group" | "domain" | "anyone"
+  role: "owner" | "organizer" | "fileOrganizer" | "writer" | "commenter" | "reader"
+  emailAddress?: string
+}
+
+/**
+ * Check whether a Google Drive file/folder is publicly accessible.
+ *
+ * A file is considered "public" if it has a permission with `type: "anyone"`.
+ * If no such permission exists, the file can only be accessed by specific
+ * users/groups — meaning direct `drive.google.com` URLs will 403 for
+ * unauthenticated visitors.
+ */
+export async function isFolderPublic(
+  credentials: GDriveCredentials,
+  folderId: string,
+  tracker?: PerformanceTracker
+): Promise<boolean> {
+  try {
+    const data = await driveRequest<{ permissions: DrivePermission[] }>(
+      credentials,
+      `/files/${folderId}/permissions?fields=permissions(id,type,role)`,
+      true,
+      tracker
+    )
+    return data.permissions.some((p) => p.type === "anyone")
+  } catch {
+    // If we can't check permissions (e.g., insufficient scope), assume restricted
+    // to avoid accidentally exposing direct URLs for private files.
+    return false
+  }
+}

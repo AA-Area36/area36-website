@@ -236,6 +236,8 @@ export interface FolderNode {
   id: string
   name: string
   type: "folder"
+  /** True when the Drive folder is not publicly shared (service-account only). */
+  isRestricted?: boolean
   children: (FolderNode | FileNode)[]
 }
 
@@ -248,6 +250,8 @@ export interface FileNode {
   parentId: string
   hasMetadata?: boolean
   isProtected?: boolean
+  /** True when the parent folder is not publicly shared (service-account only). */
+  isRestricted?: boolean
   displayName?: string
   category?: string | null
 }

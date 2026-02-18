@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { PDFViewer } from "@/components/pdf-viewer"
 import { FilePasswordDialog } from "@/components/file-password-dialog"
 import { verifyFilePassword } from "@/lib/actions/verify-password"
+import { isFileUnlockedClient, getUnlockedUrls, markFileUnlocked } from "@/lib/files/unlocked-store"
 import type { ServiceResource } from "@/lib/gdrive/service-resources"
 
 interface ServiceResourcesProps {
@@ -79,26 +80,42 @@ export function ServiceResources({ resources }: ServiceResourcesProps) {
   const canGoPrevious = currentIndex > 0
   const canGoNext = currentIndex < allFiles.length - 1 && currentIndex !== -1
 
+  const resolveFile = (file: ServiceResource): ServiceResource => {
+    const cached = getUnlockedUrls(file.id)
+    if (cached) {
+      return { ...file, previewUrl: cached.previewUrl, downloadUrl: cached.downloadUrl }
+    }
+    return file
+  }
+
   const handleView = (file: ServiceResource) => {
-    if (file.isProtected) {
+    if (file.isProtected && !isFileUnlockedClient(file.id)) {
       setPasswordFile(file)
       setPendingAction("view")
     } else {
-      setViewingFile(file)
+      setViewingFile(resolveFile(file))
     }
   }
 
   const handleDownload = (file: ServiceResource) => {
-    if (file.isProtected) {
+    if (file.isProtected && !isFileUnlockedClient(file.id)) {
       setPasswordFile(file)
       setPendingAction("download")
     } else {
-      window.open(file.downloadUrl, "_blank")
+      const resolved = resolveFile(file)
+      window.open(resolved.downloadUrl, "_blank")
     }
   }
 
   const handlePasswordSuccess = (result: { previewUrl?: string; downloadUrl?: string }) => {
     if (!passwordFile) return
+
+    if (result.previewUrl && result.downloadUrl) {
+      markFileUnlocked(passwordFile.id, {
+        previewUrl: result.previewUrl,
+        downloadUrl: result.downloadUrl,
+      })
+    }
 
     const unlockedFile = {
       ...passwordFile,

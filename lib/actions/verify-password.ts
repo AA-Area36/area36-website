@@ -41,8 +41,12 @@ export async function verifyFolderPassword(
 
 /**
  * Verify password for a file and unlock it.
- * On success, returns the direct GDrive preview/download URLs so the client
- * can use them immediately without a cookie-gated round-trip.
+ * On success, returns the appropriate preview/download URLs so the client
+ * can use them immediately.
+ *
+ * If the file lives in a restricted (non-public) Google Drive folder, proxied
+ * API routes are returned instead of direct GDrive URLs, since the browser
+ * cannot access those files directly.
  */
 export async function verifyFilePassword(
   driveId: string,
@@ -69,7 +73,24 @@ export async function verifyFilePassword(
     // Set cookie to unlock file (for subsequent page loads)
     await setUnlockedFile(driveId)
 
-    // Return direct GDrive URLs so client can use them immediately
+    // Check whether the file's folder is restricted (not publicly shared).
+    // If so, direct GDrive URLs would 403 in the browser — use proxied routes.
+    const { isFileInRestrictedFolder } = await import("@/lib/gdrive/restricted")
+    const { getGDriveEnv, getGDriveCredentials } = await import("@/lib/files/access")
+
+    const env = await getGDriveEnv()
+    const credentials = await getGDriveCredentials(env)
+    const restricted = await isFileInRestrictedFolder(driveId, credentials)
+
+    if (restricted) {
+      return {
+        success: true,
+        previewUrl: `/api/files/preview/${driveId}`,
+        downloadUrl: `/api/files/download/${driveId}`,
+      }
+    }
+
+    // File is publicly accessible — return direct GDrive URLs
     const { getPreviewUrl, getDownloadUrl } = await import("@/lib/gdrive/client")
 
     return {

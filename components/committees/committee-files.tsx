@@ -7,6 +7,7 @@ import { PDFViewer } from "@/components/pdf-viewer"
 import { FilePasswordDialog } from "@/components/file-password-dialog"
 import type { CommitteeFile } from "@/lib/gdrive/committees"
 import { verifyFilePassword } from "@/lib/actions/verify-password"
+import { isFileUnlockedClient, getUnlockedUrls, markFileUnlocked } from "@/lib/files/unlocked-store"
 
 interface CommitteeFilesSectionProps {
   title: string
@@ -26,26 +27,42 @@ export function CommitteeFilesSection({ title, files }: CommitteeFilesSectionPro
   const canGoPrevious = currentIndex > 0
   const canGoNext = currentIndex < files.length - 1 && currentIndex !== -1
 
+  const resolveFile = (file: CommitteeFile): CommitteeFile => {
+    const cached = getUnlockedUrls(file.id)
+    if (cached) {
+      return { ...file, previewUrl: cached.previewUrl, downloadUrl: cached.downloadUrl }
+    }
+    return file
+  }
+
   const handleView = (file: CommitteeFile) => {
-    if (file.isProtected) {
+    if (file.isProtected && !isFileUnlockedClient(file.id)) {
       setPasswordFile(file)
       setPendingAction("view")
     } else {
-      setViewingFile(file)
+      setViewingFile(resolveFile(file))
     }
   }
 
   const handleDownload = (file: CommitteeFile) => {
-    if (file.isProtected) {
+    if (file.isProtected && !isFileUnlockedClient(file.id)) {
       setPasswordFile(file)
       setPendingAction("download")
     } else {
-      window.open(file.downloadUrl, "_blank")
+      const resolved = resolveFile(file)
+      window.open(resolved.downloadUrl, "_blank")
     }
   }
 
   const handlePasswordSuccess = (result: { previewUrl?: string; downloadUrl?: string }) => {
     if (!passwordFile) return
+
+    if (result.previewUrl && result.downloadUrl) {
+      markFileUnlocked(passwordFile.id, {
+        previewUrl: result.previewUrl,
+        downloadUrl: result.downloadUrl,
+      })
+    }
 
     const unlockedFile = {
       ...passwordFile,

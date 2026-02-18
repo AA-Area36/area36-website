@@ -1,7 +1,10 @@
 /**
  * Download a file by fetching it and triggering a browser download.
- * This works for password-protected files where the unlock cookie is httpOnly
- * and must be sent via fetch (same-origin) rather than window.open (new tab).
+ *
+ * For files served through the server proxy (`/api/files/download/…`) — either
+ * because they are password-protected or because their Google Drive folder is
+ * restricted (not publicly shared) — this fetches via the same-origin API and
+ * triggers a blob download.
  *
  * For non-protected files with direct GDrive URLs, falls back to window.open.
  */

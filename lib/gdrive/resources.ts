@@ -8,6 +8,7 @@ import {
 } from "./client"
 import { withCache, CACHE_KEYS } from "./cache"
 import { filterArchivedFolders } from "./archive"
+import { isFolderRestricted } from "./restricted"
 import type {
   Resource,
   ResourceCategory,
@@ -94,12 +95,18 @@ function cleanDescription(description: string | undefined): string | undefined {
 }
 
 /**
- * Convert a Drive file to a Resource object
+ * Convert a Drive file to a Resource object.
+ *
+ * When `restricted` is true the folder is not publicly shared, so direct
+ * Google Drive URLs would 403 in the user's browser.  In that case we use
+ * the server-side proxy routes instead.
  */
 function driveFileToResource(
   file: DriveFile,
-  category: ResourceCategory
+  category: ResourceCategory,
+  restricted = false
 ): Resource {
+  const useProxy = restricted || isProtected(file.description)
   return {
     id: file.id,
     title: file.name.replace(/\.[^.]+$/, ""), // Remove file extension
@@ -107,9 +114,10 @@ function driveFileToResource(
     category,
     date: extractDate(file),
     size: formatFileSize(file.size),
-    downloadUrl: getDownloadUrl(file.id),
-    previewUrl: getPreviewUrl(file.id),
+    downloadUrl: useProxy ? `/api/files/download/${file.id}` : getDownloadUrl(file.id),
+    previewUrl: useProxy ? `/api/files/preview/${file.id}` : getPreviewUrl(file.id),
     isProtected: isProtected(file.description),
+    isRestricted: restricted,
     driveId: file.id,
   }
 }
@@ -152,7 +160,8 @@ export async function getResources(
       ])
       const visibleCategoryFolders = filterArchivedFolders(categoryFolders)
 
-      // Process all category folders in parallel
+      // Check which category folders are restricted (not publicly shared)
+      // and fetch files in parallel
       const categoryResults = await Promise.all(
         visibleCategoryFolders.map(async (folder) => {
           const category = getCategoryFromFolderName(folder.name)
@@ -161,16 +170,19 @@ export async function getResources(
             return null
           }
 
-          const files = await listAllFiles(credentials, folder.id, {
-            orderBy: "modifiedTime desc",
-          })
+          const [files, restricted] = await Promise.all([
+            listAllFiles(credentials, folder.id, {
+              orderBy: "modifiedTime desc",
+            }),
+            isFolderRestricted(credentials, folder.id),
+          ])
 
           // Filter to only include actual files (not folders)
           const resourceFiles = files.filter(
             (f) => f.mimeType !== "application/vnd.google-apps.folder"
           )
 
-          return { category, files: resourceFiles }
+          return { category, files: resourceFiles, restricted }
         })
       )
 
@@ -178,9 +190,9 @@ export async function getResources(
       for (const categoryResult of categoryResults) {
         if (!categoryResult) continue
 
-        const { category, files } = categoryResult
+        const { category, files, restricted } = categoryResult
         for (const file of files) {
-          const resource = driveFileToResource(file, category)
+          const resource = driveFileToResource(file, category, restricted)
 
           switch (category) {
             case "delegate-reports":
@@ -282,15 +294,18 @@ export async function getOldConferenceReports(
           return []
         }
         
-        // Get files from old reports folder
-        const files = await listAllFiles(credentials, oldReportsFolder.id, {
-          orderBy: "name desc",
-        })
+        // Get files and check if the parent Conference Materials folder is restricted
+        const [files, restricted] = await Promise.all([
+          listAllFiles(credentials, oldReportsFolder.id, {
+            orderBy: "name desc",
+          }),
+          isFolderRestricted(credentials, conferenceMaterialsFolder.id),
+        ])
         
         // Filter to PDF files and convert to resources
         return files
           .filter((f) => f.mimeType === "application/pdf")
-          .map((f) => driveFileToResource(f, "conference-materials"))
+          .map((f) => driveFileToResource(f, "conference-materials", restricted))
       } catch (error) {
         console.error("Error fetching old conference reports:", error)
         return []
