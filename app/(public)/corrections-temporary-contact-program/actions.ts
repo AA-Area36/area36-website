@@ -1,6 +1,9 @@
 "use server"
 
+import { eq } from "drizzle-orm"
 import { getCloudflareContext } from "@opennextjs/cloudflare"
+import { getDb } from "@/lib/db"
+import { correctionsContacts } from "@/lib/db/schema"
 import { sendEmail, getGmailCredentials } from "@/lib/gmail/client"
 import {
   correctionsContactFormSchema,
@@ -18,6 +21,10 @@ interface ReCaptchaResponse {
 }
 
 const RECAPTCHA_SCORE_THRESHOLD = 0.5
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase()
+}
 
 async function getRecaptchaSecretKey(): Promise<string | undefined> {
   try {
@@ -96,27 +103,100 @@ export async function submitCorrectionsContactForm(data: CorrectionsContactFormD
     return { success: false, error: recaptchaResult.error }
   }
 
+  const normalizedEmail = normalizeEmail(result.data.email)
+
   try {
+    const db = await getDb()
+    const now = new Date().toISOString()
+
+    const existing = await db
+      .select({ id: correctionsContacts.id })
+      .from(correctionsContacts)
+      .where(eq(correctionsContacts.emailNormalized, normalizedEmail))
+      .get()
+
+    if (existing) {
+      await db
+        .update(correctionsContacts)
+        .set({
+          firstName: result.data.firstName.trim(),
+          lastName: result.data.lastName.trim(),
+          gender: result.data.gender.trim(),
+          streetAddress: result.data.streetAddress?.trim() || null,
+          city: result.data.city.trim(),
+          county: result.data.county?.trim() || null,
+          state: result.data.state?.trim() || null,
+          zipCode: result.data.zipCode?.trim() || null,
+          email: result.data.email.trim(),
+          emailNormalized: normalizedEmail,
+          sobrietyDate: result.data.sobrietyDate,
+          phonePrimary: result.data.phonePrimary?.trim() || null,
+          phoneSecondary: result.data.phoneSecondary?.trim() || null,
+          birthYear: Number(result.data.birthYear),
+          isSpanishSpeaking: result.data.isSpanishSpeaking,
+          otherLanguages: result.data.otherLanguages?.trim() || null,
+          homeGroup: result.data.homeGroup.trim(),
+          notes: result.data.notes?.trim() || null,
+          active: true,
+          updatedAt: now,
+        })
+        .where(eq(correctionsContacts.id, existing.id))
+    } else {
+      await db.insert(correctionsContacts).values({
+        id: crypto.randomUUID(),
+        firstName: result.data.firstName.trim(),
+        lastName: result.data.lastName.trim(),
+        gender: result.data.gender.trim(),
+        streetAddress: result.data.streetAddress?.trim() || null,
+        city: result.data.city.trim(),
+        county: result.data.county?.trim() || null,
+        state: result.data.state?.trim() || null,
+        zipCode: result.data.zipCode?.trim() || null,
+        email: result.data.email.trim(),
+        emailNormalized: normalizedEmail,
+        sobrietyDate: result.data.sobrietyDate,
+        phonePrimary: result.data.phonePrimary?.trim() || null,
+        phoneSecondary: result.data.phoneSecondary?.trim() || null,
+        birthYear: Number(result.data.birthYear),
+        isSpanishSpeaking: result.data.isSpanishSpeaking,
+        otherLanguages: result.data.otherLanguages?.trim() || null,
+        homeGroup: result.data.homeGroup.trim(),
+        notes: result.data.notes?.trim() || null,
+        active: true,
+      })
+    }
+
     const { env } = await getCloudflareContext({ async: true })
     const credentials = getGmailCredentials(env)
 
-    const body = `New Corrections TCP Contact Request
+    const body = `New Corrections TCP Volunteer Sign Up
 
-Contact Information:
+Volunteer Information:
 Name: ${result.data.firstName} ${result.data.lastName}
+Gender: ${result.data.gender}
+Address: ${result.data.streetAddress || ""}
+City: ${result.data.city}
+County: ${result.data.county || ""}
+State: ${result.data.state || ""}
+Zip: ${result.data.zipCode || ""}
 Email: ${result.data.email}
+Sobriety Date: ${result.data.sobrietyDate}
+Phone 1: ${result.data.phonePrimary || ""}
+Phone 2: ${result.data.phoneSecondary || ""}
+Birth Year: ${result.data.birthYear}
+Spanish Speaking: ${result.data.isSpanishSpeaking ? "Yes" : "No"}
+Other Languages: ${result.data.otherLanguages || ""}
+Home Group: ${result.data.homeGroup}
+Notes: ${result.data.notes || ""}
 
 ---
-This form was submitted via the Area 36 website Corrections Temporary Contact Program page.
-Please follow up with this person regarding the Corrections TCP.`
+This form was submitted via the Area 36 Corrections Temporary Contact Program page.`
 
-    // Send to both ctcp@area36.org and corrections@area36.org
     const recipients = ["ctcp@area36.org", "corrections@area36.org"]
-
     for (const recipient of recipients) {
       const emailResult = await sendEmail(credentials, {
         to: recipient,
-        subject: "[Corrections TCP] New Contact Request",
+        subject: "[Corrections TCP] New Volunteer Sign Up",
         body,
         replyTo: result.data.email,
       })
@@ -126,9 +206,15 @@ Please follow up with this person regarding the Corrections TCP.`
       }
     }
 
-    return { success: true, message: "Your request has been submitted. The Corrections TCP Coordinator will contact you shortly." }
+    return {
+      success: true,
+      message: "Your volunteer sign up has been submitted. The Corrections TCP Coordinator will contact you shortly.",
+    }
   } catch (error) {
     console.error("Corrections contact form submission error:", error)
-    return { success: false, error: "An error occurred. Please try again or contact ctcp@area36.org directly." }
+    return {
+      success: false,
+      error: "An error occurred. Please try again or contact ctcp@area36.org directly.",
+    }
   }
 }

@@ -127,6 +127,7 @@ export function ConferenceMaterialsContent({ materials }: ConferenceMaterialsCon
               <Button
                 variant="ghost"
                 size="icon"
+                className="hidden sm:inline-flex"
                 onClick={() => handleView(doc)}
                 aria-label={`View ${doc.displayName}`}
               >

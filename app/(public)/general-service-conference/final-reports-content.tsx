@@ -90,6 +90,7 @@ function DriveReportItem({
         <Button
           variant="ghost"
           size="icon"
+          className="hidden sm:inline-flex"
           onClick={() => onView(report)}
           aria-label={`View ${displayTitle}`}
         >

@@ -264,6 +264,7 @@ export function NewsletterViewer({ newsletters, years }: NewsletterViewerProps) 
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="hidden sm:inline-flex"
                       onClick={() => setSelectedNewsletter(newsletter)}
                       aria-label={`View ${newsletter.issue}`}
                     >

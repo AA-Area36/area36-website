@@ -8,7 +8,6 @@ import {
   ChevronRight,
   ChevronDown,
   Lock,
-  ShieldAlert,
   Pencil,
   Search,
 } from "lucide-react"
@@ -81,12 +80,6 @@ function FileItem({
           {file.isProtected && (
             <Lock className="h-3 w-3 text-amber-500" />
           )}
-          {file.isRestricted && (
-            <Badge variant="outline" className="text-xs px-1.5 py-0 text-orange-600 border-orange-300" title="Folder is not publicly shared — files are served through the server proxy">
-              <ShieldAlert className="h-3 w-3 mr-1" />
-              Restricted
-            </Badge>
-          )}
         </div>
         {file.displayName && file.displayName !== file.name && (
           <p className="text-xs text-muted-foreground truncate">{file.name}</p>
@@ -145,12 +138,6 @@ function FolderItem({
           <Folder className="h-4 w-4 text-primary" />
         )}
         <span className="text-sm flex-1">{folder.name}</span>
-        {folder.isRestricted && (
-          <Badge variant="outline" className="text-xs px-1.5 py-0 text-orange-600 border-orange-300" title="Folder is not publicly shared — files are served through the server proxy">
-            <ShieldAlert className="h-3 w-3 mr-1" />
-            Restricted
-          </Badge>
-        )}
         <span className="text-xs text-muted-foreground">
           {foldersCount > 0 && `${foldersCount} folders`}
           {foldersCount > 0 && filesCount > 0 && ", "}

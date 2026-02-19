@@ -120,7 +120,7 @@ export function CommitteeFilesSection({ title, files }: CommitteeFilesSectionPro
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="hidden h-8 w-8 sm:inline-flex"
                 onClick={() => handleView(file)}
                 aria-label={`View ${file.name}`}
               >

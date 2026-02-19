@@ -10,6 +10,7 @@ import {
   FileText,
   Languages,
   Map,
+  Building2,
   MoreHorizontal,
   Menu,
   LogOut,
@@ -42,6 +43,7 @@ const secondaryLinks = [
   { href: "/admin/reports", label: "Reports", icon: FileText },
   { href: "/admin/content", label: "Content", icon: Languages },
   { href: "/admin/district-sites", label: "District Sites", icon: Map },
+  { href: "/admin/corrections", label: "Corrections", icon: Building2 },
 ] as const
 
 const allLinks = [...primaryLinks, ...secondaryLinks]

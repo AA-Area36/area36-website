@@ -326,6 +326,7 @@ export function ResourceItemWithViewer({
         <Button
           variant="ghost"
           size="icon"
+          className="hidden sm:inline-flex"
           onClick={() => onView(resource)}
           aria-label={`View ${resource.title}`}
         >

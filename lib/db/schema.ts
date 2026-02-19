@@ -465,3 +465,146 @@ export const contentDocuments = sqliteTable(
 
 export type ContentDocument = typeof contentDocuments.$inferSelect
 export type NewContentDocument = typeof contentDocuments.$inferInsert
+
+/* -------------------------------------------------------------------------- */
+/*                         App Roles & Corrections TCP                        */
+/* -------------------------------------------------------------------------- */
+
+export const appRoleKeys = ["admin", "officer", "chair"] as const
+export type AppRoleKey = (typeof appRoleKeys)[number]
+
+export const appRoles = sqliteTable("app_roles", {
+  roleKey: text("role_key").primaryKey().$type<AppRoleKey>(),
+  displayName: text("display_name").notNull(),
+  defaultPermissionsJson: text("default_permissions_json").notNull(),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+})
+
+export type AppRole = typeof appRoles.$inferSelect
+export type NewAppRole = typeof appRoles.$inferInsert
+
+export const appUserAccess = sqliteTable("app_user_access", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  roleKey: text("role_key")
+    .notNull()
+    .default("chair")
+    .$type<AppRoleKey>()
+    .references(() => appRoles.roleKey, { onDelete: "restrict" }),
+  additionalPermissionsJson: text("additional_permissions_json")
+    .notNull()
+    .default("[]"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+})
+
+export type AppUserAccess = typeof appUserAccess.$inferSelect
+export type NewAppUserAccess = typeof appUserAccess.$inferInsert
+
+export const correctionsContacts = sqliteTable("corrections_contacts", {
+  id: text("id").primaryKey(),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  gender: text("gender").notNull(),
+  streetAddress: text("street_address"),
+  city: text("city").notNull(),
+  county: text("county"),
+  state: text("state"),
+  zipCode: text("zip_code"),
+  email: text("email"),
+  emailNormalized: text("email_normalized"),
+  sobrietyDate: text("sobriety_date"),
+  phonePrimary: text("phone_primary"),
+  phoneSecondary: text("phone_secondary"),
+  birthYear: integer("birth_year"),
+  isSpanishSpeaking: integer("is_spanish_speaking", { mode: "boolean" }).notNull().default(false),
+  otherLanguages: text("other_languages"),
+  homeGroup: text("home_group"),
+  notes: text("notes"),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  legacySourcePage: text("legacy_source_page"),
+  legacyInternalId: text("legacy_internal_id"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+})
+
+export type CorrectionsContact = typeof correctionsContacts.$inferSelect
+export type NewCorrectionsContact = typeof correctionsContacts.$inferInsert
+
+export const correctionsRecipientStatuses = ["unmatched", "pending", "completed"] as const
+export type CorrectionsRecipientStatus = (typeof correctionsRecipientStatuses)[number]
+
+export const correctionsRecipients = sqliteTable("corrections_recipients", {
+  id: text("id").primaryKey(),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  idNumber: text("id_number").notNull(),
+  gender: text("gender").notNull(),
+  birthYear: integer("birth_year"),
+  dischargeDate: text("discharge_date"),
+  phone: text("phone"),
+  facilityName: text("facility_name").notNull(),
+  source: text("source").notNull(),
+  contactEmail: text("contact_email"),
+  releaseAddress: text("release_address"),
+  releaseCity: text("release_city"),
+  releaseCounty: text("release_county"),
+  releaseState: text("release_state"),
+  releaseZip: text("release_zip"),
+  notes: text("notes"),
+  status: text("status")
+    .notNull()
+    .default("unmatched")
+    .$type<CorrectionsRecipientStatus>(),
+  legacySourcePage: text("legacy_source_page"),
+  legacyInternalId: text("legacy_internal_id"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+})
+
+export type CorrectionsRecipient = typeof correctionsRecipients.$inferSelect
+export type NewCorrectionsRecipient = typeof correctionsRecipients.$inferInsert
+
+export const correctionsMatches = sqliteTable("corrections_matches", {
+  id: text("id").primaryKey(),
+  recipientId: text("recipient_id")
+    .notNull()
+    .references(() => correctionsRecipients.id, { onDelete: "cascade" }),
+  contactId: text("contact_id")
+    .notNull()
+    .references(() => correctionsContacts.id, { onDelete: "cascade" }),
+  isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  matchedByUserId: text("matched_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  matchedAt: text("matched_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  completedAt: text("completed_at"),
+  notes: text("notes"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+})
+
+export type CorrectionsMatch = typeof correctionsMatches.$inferSelect
+export type NewCorrectionsMatch = typeof correctionsMatches.$inferInsert

@@ -124,7 +124,7 @@ export function AnnualCalendarSection({ files }: AnnualCalendarSectionProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="hidden h-8 w-8 sm:inline-flex"
                 onClick={() => handleView(file)}
                 aria-label={`View ${file.displayName}`}
               >

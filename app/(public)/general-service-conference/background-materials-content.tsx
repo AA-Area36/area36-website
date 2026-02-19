@@ -13,6 +13,7 @@ import {
   getUnlockedUrls,
   markFileUnlocked,
 } from "@/lib/files/unlocked-store"
+import { compareAlphaNumericWithRoman } from "@/lib/utils/alphanumeric-sort"
 import type { BackgroundFile } from "@/lib/hooks/use-gdrive-files"
 
 interface FileSectionProps {
@@ -53,7 +54,7 @@ function FileSection({ title, files, onView, onDownload }: FileSectionProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="hidden h-8 w-8 sm:inline-flex"
                 onClick={() => onView(file)}
                 aria-label={`View ${file.displayName}`}
               >
@@ -91,7 +92,44 @@ export function BackgroundMaterialsContent({
   const [passwordFile, setPasswordFile] = React.useState<BackgroundFile | null>(null)
   const [pendingAction, setPendingAction] = React.useState<"view" | "download" | null>(null)
 
-  const allFiles = [...agendaItems, ...backgroundMaterials, ...miscFiles]
+  const sortedAgendaItems = React.useMemo(
+    () =>
+      [...agendaItems].sort((a, b) =>
+        compareAlphaNumericWithRoman(
+          a.displayName || a.name,
+          b.displayName || b.name
+        )
+      ),
+    [agendaItems]
+  )
+
+  const sortedBackgroundMaterials = React.useMemo(
+    () =>
+      [...backgroundMaterials].sort((a, b) =>
+        compareAlphaNumericWithRoman(
+          a.displayName || a.name,
+          b.displayName || b.name
+        )
+      ),
+    [backgroundMaterials]
+  )
+
+  const sortedMiscFiles = React.useMemo(
+    () =>
+      [...miscFiles].sort((a, b) =>
+        compareAlphaNumericWithRoman(
+          a.displayName || a.name,
+          b.displayName || b.name
+        )
+      ),
+    [miscFiles]
+  )
+
+  const allFiles = [
+    ...sortedAgendaItems,
+    ...sortedBackgroundMaterials,
+    ...sortedMiscFiles,
+  ]
   
   // Find current index for PDF viewer navigation
   const currentIndex = viewingFile ? allFiles.findIndex((f) => f.id === viewingFile.id) : -1
@@ -174,7 +212,7 @@ export function BackgroundMaterialsContent({
       {/* GSC Agenda Items */}
       <FileSection
         title="GSC Agenda Items"
-        files={agendaItems}
+        files={sortedAgendaItems}
         onView={handleView}
         onDownload={handleDownload}
       />
@@ -182,7 +220,7 @@ export function BackgroundMaterialsContent({
       {/* GSC Background Materials */}
       <FileSection
         title="GSC Background Materials"
-        files={backgroundMaterials}
+        files={sortedBackgroundMaterials}
         onView={handleView}
         onDownload={handleDownload}
       />
@@ -190,7 +228,7 @@ export function BackgroundMaterialsContent({
       {/* Additional Materials (misc) */}
       <FileSection
         title="Additional Materials"
-        files={miscFiles}
+        files={sortedMiscFiles}
         onView={handleView}
         onDownload={handleDownload}
       />

@@ -113,8 +113,16 @@ export async function GET(
     const accessToken = await getAccessToken(access.credentials)
 
     const driveUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
+    const requestHeaders = new Headers({
+      Authorization: `Bearer ${accessToken}`,
+    })
+    const range = request.headers.get("range")
+    if (range) {
+      requestHeaders.set("Range", range)
+    }
+
     const driveResponse = await fetch(driveUrl, {
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: requestHeaders,
     })
 
     if (!driveResponse.ok) {
@@ -130,13 +138,22 @@ export async function GET(
     }
 
     const responseHeaders = new Headers()
-
-    const contentType = driveResponse.headers.get("content-type")
-    responseHeaders.set("Content-Type", contentType || "application/pdf")
-
-    const contentLength = driveResponse.headers.get("content-length")
-    if (contentLength) {
-      responseHeaders.set("Content-Length", contentLength)
+    const passthroughHeaders = [
+      "content-type",
+      "content-length",
+      "content-range",
+      "accept-ranges",
+      "etag",
+      "last-modified",
+    ]
+    for (const headerName of passthroughHeaders) {
+      const value = driveResponse.headers.get(headerName)
+      if (value) {
+        responseHeaders.set(headerName, value)
+      }
+    }
+    if (!responseHeaders.has("content-type")) {
+      responseHeaders.set("content-type", "application/pdf")
     }
 
     // Inline disposition so the browser renders it (for iframe embedding)
@@ -149,7 +166,7 @@ export async function GET(
     )
 
     return new NextResponse(driveResponse.body, {
-      status: 200,
+      status: driveResponse.status,
       headers: responseHeaders,
     })
   } catch (error) {

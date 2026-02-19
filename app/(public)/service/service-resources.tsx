@@ -260,7 +260,7 @@ function ResourceSection({ title, files, onView, onDownload }: ResourceSectionPr
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="hidden h-8 w-8 sm:inline-flex"
                 onClick={() => onView(file)}
                 aria-label={`View ${file.name}`}
               >

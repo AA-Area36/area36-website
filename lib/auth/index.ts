@@ -5,11 +5,14 @@ import { getCloudflareContext } from "@opennextjs/cloudflare"
 import { D1Adapter } from "./d1-adapter"
 import { isGroupMember, type AdminDirectoryCredentials } from "@/lib/google/admin-directory"
 import { createLocalAdminBypassSession, isLocalAdminBypassEnabled } from "./dev-bypass"
+import { hasAssignedAccessForEmail, isSeedEmailAllowed } from "./rbac"
 
 const ALLOWED_DOMAIN = "@area36.org"
 const ADMIN_GROUP_EMAIL = "area36-internal@area36.org"
 const ALLOWED_ADMIN_EMAILS = new Set([
   "webmaster@area36.org",
+  "technology@area36.org",
+  "alltechnology@area36.org",
   "alttechnology@area36.org",
 ])
 let adminConfigWarningLogged = false
@@ -90,7 +93,10 @@ async function isAllowedSignInEmail(email: string | null | undefined, env: Cloud
   if (!normalized) return false
   if (await isAreaAdminUser(normalized, env)) return true
   const districts = await getDistrictAdminForEmail(normalized, env)
-  return districts.length > 0
+  if (districts.length > 0) return true
+  if (isSeedEmailAllowed(normalized)) return true
+  if (await hasAssignedAccessForEmail(normalized)) return true
+  return false
 }
 
 function cookieDomainForProd(): string | undefined {
@@ -180,7 +186,7 @@ function toA36Session(session: Session, isAreaAdmin: boolean, districtAdminFor: 
 }
 
 /**
- * Returns the current session for any allowed user (Area admin OR allowlisted district admin).
+ * Returns the current session for any allowed user (Area admin, district admin, or seeded/assigned app access).
  * Returns null if unauthenticated or not allowlisted.
  */
 export async function getSession(): Promise<A36Session | null> {
@@ -193,12 +199,14 @@ export async function getSession(): Promise<A36Session | null> {
   const { env } = await getCloudflareContext({ async: true })
 
   const email = normalizeEmail(session.user.email)
-  const [areaAdmin, districtAdminFor] = await Promise.all([
+  const [areaAdmin, districtAdminFor, hasAppAccess] = await Promise.all([
     isAreaAdminUser(email, env),
     getDistrictAdminForEmail(email, env),
+    hasAssignedAccessForEmail(email),
   ])
+  const seededAccess = isSeedEmailAllowed(email)
 
-  if (!areaAdmin && districtAdminFor.length === 0) return null
+  if (!areaAdmin && districtAdminFor.length === 0 && !hasAppAccess && !seededAccess) return null
   return toA36Session(session, areaAdmin, districtAdminFor)
 }
 
