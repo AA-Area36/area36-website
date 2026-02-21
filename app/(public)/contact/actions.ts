@@ -119,10 +119,10 @@ export async function submitContactForm(data: ContactFormData) {
     }
   }
 
-  // Send email to the selected recipient
+  // Send email to selected recipients
   try {
     const emailResult = await sendContactEmail({
-      recipient: result.data.recipient,
+      recipients: result.data.recipients,
       firstName: result.data.firstName,
       lastName: result.data.lastName,
       email: result.data.email,

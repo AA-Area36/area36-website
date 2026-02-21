@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useCallback, useEffect } from "react"
+import { useState, useTransition, useCallback, useEffect, useMemo } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useGoogleReCaptcha } from "react-google-recaptcha-v3"
@@ -11,8 +11,8 @@ import { PageHeader } from "@/components/page-header"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
+import { MultiSelect } from "@/components/multi-select"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { contactFormSchema, type ContactFormData } from "@/lib/schemas/contact"
 import { submitContactForm } from "./actions"
@@ -74,7 +74,7 @@ function ContactForm() {
   } = useForm<ContactFormData>({
     resolver: zodResolver(contactFormSchema),
     defaultValues: {
-      recipient: "",
+      recipients: [],
       firstName: "",
       lastName: "",
       email: "",
@@ -86,7 +86,11 @@ function ContactForm() {
     },
   })
 
-  const selectedRecipient = watch("recipient")
+  const selectedRecipients = watch("recipients") ?? []
+  const selectedRecipientDetails = useMemo(
+    () => recipients.filter((recipient) => selectedRecipients.includes(recipient.value)),
+    [selectedRecipients]
+  )
 
   useEffect(() => {
     if (executeRecaptcha) {
@@ -151,9 +155,10 @@ function ContactForm() {
                     </div>
                     <h3 className="mt-4 text-lg font-semibold text-foreground">Message Sent!</h3>
                     <p className="mt-2 text-muted-foreground">
-                      Thank you for your message. The{" "}
-                      {recipients.find((r) => r.value === selectedRecipient)?.label || "recipient"} will get back to you
-                      soon.
+                      Thank you for your message.{" "}
+                      {selectedRecipientDetails.length > 0
+                        ? `${selectedRecipientDetails.map((recipient) => recipient.label).join(", ")} will get back to you soon.`
+                        : "Your selected recipients will get back to you soon."}
                     </p>
                     <Button variant="outline" className="mt-6 bg-transparent" onClick={handleSendAnother}>
                       Send Another Message
@@ -168,31 +173,34 @@ function ContactForm() {
                     )}
 
                     <div className="space-y-2">
-                      <Label htmlFor="recipient">
+                      <Label>
                         Who would you like to contact? <span className="text-destructive">*</span>
                       </Label>
-                      <Select
-                        value={selectedRecipient}
-                        onValueChange={(value) => setValue("recipient", value, { shouldValidate: true })}
-                      >
-                        <SelectTrigger id="recipient">
-                          <SelectValue placeholder="Select a recipient" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {recipients.map((recipient) => (
-                            <SelectItem key={recipient.value} value={recipient.value}>
-                              {recipient.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {errors.recipient && (
-                        <p className="text-sm text-destructive">{errors.recipient.message}</p>
+                      <MultiSelect
+                        options={recipients.map((recipient) => ({
+                          label: recipient.label,
+                          value: recipient.value,
+                        }))}
+                        value={selectedRecipients}
+                        onChange={(value) => setValue("recipients", value, { shouldValidate: true })}
+                        placeholder="Select recipients"
+                        className="w-full"
+                      />
+                      {errors.recipients && (
+                        <p className="text-sm text-destructive">{errors.recipients.message}</p>
                       )}
-                      {selectedRecipient && (
-                        <p className="text-sm text-muted-foreground">
-                          Your message will be sent to: {recipients.find((r) => r.value === selectedRecipient)?.email}
-                        </p>
+                      {selectedRecipientDetails.length > 0 && (
+                        <div className="rounded-md border border-border bg-muted/20 p-3">
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">Selected recipients</p>
+                          <ul className="mt-2 space-y-1">
+                            {selectedRecipientDetails.map((recipient) => (
+                              <li key={recipient.value} className="text-sm text-muted-foreground">
+                                <span className="font-medium text-foreground">{recipient.label}</span>{" "}
+                                <span>({recipient.email})</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       )}
                     </div>
 

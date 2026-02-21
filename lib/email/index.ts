@@ -9,6 +9,7 @@ const RECIPIENT_EMAILS: Record<string, string> = {
   delegate: "delegate@area36.org",
   treasurer: "treasurer@area36.org",
   secretary: "secretary@area36.org",
+  technology: "technology@area36.org",
   webmaster: "webmaster@area36.org",
   accessibility: "accessibility@area36.org",
   archives: "archives@area36.org",
@@ -27,6 +28,7 @@ const RECIPIENT_NAMES: Record<string, string> = {
   delegate: "Delegate",
   treasurer: "Treasurer",
   secretary: "Secretary",
+  technology: "Technology Chair",
   webmaster: "Website / Technical",
   accessibility: "Accessibility Committee",
   archives: "Archives Committee",
@@ -39,7 +41,7 @@ const RECIPIENT_NAMES: Record<string, string> = {
 }
 
 export interface ContactEmailParams {
-  recipient: string // key from RECIPIENT_EMAILS
+  recipients: string[] // keys from RECIPIENT_EMAILS
   firstName: string
   lastName: string
   email: string
@@ -65,13 +67,18 @@ interface DenialEmailToChairParams {
  * Send a contact form submission email
  */
 export async function sendContactEmail(params: ContactEmailParams): Promise<{ success: boolean; error?: string }> {
-  const recipientEmail = RECIPIENT_EMAILS[params.recipient]
-  const recipientName = RECIPIENT_NAMES[params.recipient] || params.recipient
-
-  if (!recipientEmail) {
-    console.error("Invalid recipient:", params.recipient)
-    return { success: false, error: "Invalid recipient" }
+  const recipientKeys = Array.from(new Set(params.recipients))
+  if (recipientKeys.length === 0) {
+    return { success: false, error: "No recipients selected" }
   }
+  const invalidRecipients = recipientKeys.filter((key) => !RECIPIENT_EMAILS[key])
+  if (invalidRecipients.length > 0) {
+    console.error("Invalid recipients:", invalidRecipients)
+    return { success: false, error: "Invalid recipient selection" }
+  }
+
+  const recipientEmails = Array.from(new Set(recipientKeys.map((key) => RECIPIENT_EMAILS[key])))
+  const recipientNames = recipientKeys.map((key) => RECIPIENT_NAMES[key] || key)
 
   try {
     const { env } = await getCloudflareContext({ async: true })
@@ -83,7 +90,7 @@ export async function sendContactEmail(params: ContactEmailParams): Promise<{ su
 
 From: ${params.firstName} ${params.lastName}
 Email: ${params.email}${phoneInfo}
-To: ${recipientName}
+To: ${recipientNames.join(", ")}
 
 Subject: ${params.subject}
 
@@ -95,7 +102,7 @@ This message was sent via the Area 36 website contact form.
 To reply, use the Reply-To address or email ${params.email} directly.`
 
     const result = await sendEmail(credentials, {
-      to: recipientEmail,
+      to: recipientEmails.join(", "),
       subject: `[Area 36 Contact] ${params.subject}`,
       body,
       replyTo: params.email,

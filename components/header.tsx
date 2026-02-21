@@ -34,7 +34,7 @@ export async function Header() {
         { name: t("header.nav.resources.grapevine", "Grapevine & La Viña"), href: "/grapevine" },
       ],
     },
-    { name: t("header.nav.ypaa", "YPAA"), href: "/ypaa" },
+    { name: t("header.nav.resources.newsletter", "Newsletter"), href: "/newsletter" },
     { name: t("header.nav.contribute", "Contribute"), href: "/contribute" },
     { name: t("header.nav.contact", "Contact"), href: "/contact" },
     { name: t("header.nav.oldSite", "Old Site"), href: "https://old.area36.org" },

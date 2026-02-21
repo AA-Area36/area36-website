@@ -111,14 +111,14 @@ export default async function DistrictHomePage({
     (directoryEntry?.meetingLocation?.toLowerCase().includes("zoom") ? "online" : "in-person")
   const monthlyContactForDetails = siteConfig?.meetingContactForDetails ?? false
   const monthlyExtraNote =
-    directoryEntry?.meetingNote && !directoryEntry.meetingNote.match(/contact dcm for location/i)
+    directoryEntry?.meetingNote && !directoryEntry.meetingNote.match(/contact dcm/i)
       ? directoryEntry.meetingNote
       : null
   const isInPersonMeeting = monthlyLocationType === "in-person"
   const isOnlineMeeting = monthlyLocationType === "online"
   const isHybridMeeting = monthlyLocationType === "hybrid"
-  const showLocationDetails = !monthlyContactForDetails && (isInPersonMeeting || isHybridMeeting)
-  const showOnlineDetails = !monthlyContactForDetails && (isOnlineMeeting || isHybridMeeting)
+  const showLocationDetails = isInPersonMeeting || isHybridMeeting
+  const showOnlineDetails = isOnlineMeeting || isHybridMeeting
 
   return (
     <div className="space-y-6 lg:space-y-8">
@@ -177,8 +177,27 @@ export default async function DistrictHomePage({
                 {LOCATION_TYPE_LABELS[monthlyLocationType as keyof typeof LOCATION_TYPE_LABELS] ?? "In person"}
               </p>
 
-              {monthlyContactForDetails ? (
+              {showLocationDetails && (
                 <div>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Location</p>
+                  <p className="mt-2 font-medium">{monthlyLocationName ?? "Location not posted"}</p>
+                  {monthlyAddress && <p className="mt-1 text-sm text-muted-foreground">{monthlyAddress}</p>}
+                  {monthlyMeetingMapLink && (
+                    <a
+                      href={monthlyMeetingMapLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 inline-flex items-center gap-2 text-sm text-primary hover:underline"
+                    >
+                      <MapPin className="h-4 w-4" />
+                      Get Directions
+                    </a>
+                  )}
+                </div>
+              )}
+
+              {monthlyContactForDetails && (
+                <div className={showLocationDetails ? "mt-3 border-t border-border pt-3" : ""}>
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">Meeting Details</p>
                   <Link
                     href={href("/contacts")}
@@ -187,61 +206,40 @@ export default async function DistrictHomePage({
                     Contact DCM
                   </Link>
                 </div>
-              ) : (
-                <>
-                  {showLocationDetails && (
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Location</p>
-                      <p className="mt-2 font-medium">{monthlyLocationName ?? "Location not posted"}</p>
-                      {monthlyAddress && <p className="mt-1 text-sm text-muted-foreground">{monthlyAddress}</p>}
-                      {monthlyMeetingMapLink && (
-                        <a
-                          href={monthlyMeetingMapLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="mt-2 inline-flex items-center gap-2 text-sm text-primary hover:underline"
-                        >
-                          <MapPin className="h-4 w-4" />
-                          Get Directions
-                        </a>
-                      )}
+              )}
+
+              {!monthlyContactForDetails && showOnlineDetails && (
+                <div className={showLocationDetails ? "mt-3 border-t border-border pt-3" : ""}>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Online Access</p>
+                  {monthlyMeetingOnlineLink && (
+                    <a
+                      href={monthlyMeetingOnlineLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+                    >
+                      Join Online Meeting
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  )}
+
+                  {(monthlyMeetingId || monthlyMeetingPasscode) && (
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <div className="rounded-md border border-border bg-card px-3 py-2">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Meeting ID</p>
+                        <p className="mt-1 text-sm font-medium">{monthlyMeetingId ?? "Not posted"}</p>
+                      </div>
+                      <div className="rounded-md border border-border bg-card px-3 py-2">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Passcode</p>
+                        <p className="mt-1 text-sm font-medium">{monthlyMeetingPasscode ?? "Not posted"}</p>
+                      </div>
                     </div>
                   )}
 
-                  {showOnlineDetails && (
-                    <div className={showLocationDetails ? "mt-3 border-t border-border pt-3" : ""}>
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Online Access</p>
-                      {monthlyMeetingOnlineLink && (
-                        <a
-                          href={monthlyMeetingOnlineLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="mt-2 inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
-                        >
-                          Join Online Meeting
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </a>
-                      )}
-
-                      {(monthlyMeetingId || monthlyMeetingPasscode) && (
-                        <div className="mt-2 grid grid-cols-2 gap-2">
-                          <div className="rounded-md border border-border bg-card px-3 py-2">
-                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Meeting ID</p>
-                            <p className="mt-1 text-sm font-medium">{monthlyMeetingId ?? "Not posted"}</p>
-                          </div>
-                          <div className="rounded-md border border-border bg-card px-3 py-2">
-                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Passcode</p>
-                            <p className="mt-1 text-sm font-medium">{monthlyMeetingPasscode ?? "Not posted"}</p>
-                          </div>
-                        </div>
-                      )}
-
-                      {!monthlyMeetingOnlineLink && !monthlyMeetingId && !monthlyMeetingPasscode && (
-                        <p className="mt-2 text-sm text-muted-foreground">Contact DCM for current online access details.</p>
-                      )}
-                    </div>
+                  {!monthlyMeetingOnlineLink && !monthlyMeetingId && !monthlyMeetingPasscode && (
+                    <p className="mt-2 text-sm text-muted-foreground">Online access details are not posted yet.</p>
                   )}
-                </>
+                </div>
               )}
             </div>
 
