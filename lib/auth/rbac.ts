@@ -172,5 +172,5 @@ export async function hasPermission(session: SessionLike, permission: AppPermiss
 export async function requireCorrectionsWrite(session: SessionLike): Promise<boolean> {
   if (!session?.user?.email) return false
   if (session.user.isAreaAdmin) return true
-  return normalizeEmail(session.user.email) === "ctcp@area36.org"
+  return hasPermission(session, "corrections:edit")
 }
