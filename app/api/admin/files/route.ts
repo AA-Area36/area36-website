@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { getDb } from "@/lib/db"
-import { fileMetadata } from "@/lib/db/schema"
+import { fileCacheBustPending, fileMetadata } from "@/lib/db/schema"
+import { sql } from "drizzle-orm"
 import { filterArchivedFolders } from "@/lib/gdrive/archive"
 
 // Types for folder structure
@@ -41,6 +42,11 @@ const FOLDER_CONFIG: Record<FolderType, { envKey: string; name: string }> = {
 // Cache TTL for admin files (shorter since admins need fresh data)
 const CACHE_TTL = 60 * 5 // 5 minutes
 const NO_STORE_HEADERS = { "Cache-Control": "no-store" } as const
+
+function isMissingPendingTableError(err: unknown): boolean {
+  const msg = String((err as any)?.cause?.message ?? (err as any)?.message ?? err).toLowerCase()
+  return msg.includes("no such table: file_cache_bust_pending")
+}
 
 // Get environment variables from Cloudflare context
 async function getEnv() {
@@ -162,7 +168,20 @@ export async function GET(request: NextRequest) {
 
     // Get all file metadata (needed for both modes)
     const db = await getDb()
-    const allMetadata = await db.select().from(fileMetadata)
+    const [allMetadata, pendingCacheBustCount] = await Promise.all([
+      db.select().from(fileMetadata),
+      (async () => {
+        try {
+          const [row] = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(fileCacheBustPending)
+          return row?.count ?? 0
+        } catch (err) {
+          if (isMissingPendingTableError(err)) return 0
+          throw err
+        }
+      })(),
+    ])
     const metadataMap = new Map(
       allMetadata.map((m) => [m.driveId, { displayName: m.displayName, password: m.password, category: m.category }])
     )
@@ -182,6 +201,7 @@ export async function GET(request: NextRequest) {
         {
           folder,
           metadata: allMetadata,
+          pendingCacheBustCount,
         },
         { headers: NO_STORE_HEADERS }
       )
@@ -204,6 +224,7 @@ export async function GET(request: NextRequest) {
       {
         availableFolders,
         metadata: allMetadata,
+        pendingCacheBustCount,
       },
       { headers: NO_STORE_HEADERS }
     )

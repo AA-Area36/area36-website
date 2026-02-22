@@ -30,7 +30,7 @@ const CommandInput = React.forwardRef<
   <div
     className={cn(
       "flex items-center border-b px-3 transition-[background-color,border-color,box-shadow]",
-      "has-[:focus-visible]:rounded-t-md has-[:focus-visible]:border-ring/70 has-[:focus-visible]:bg-accent/15 has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/35",
+      "focus-within:bg-accent/20",
       wrapperClassName
     )}
     cmdk-input-wrapper=""
@@ -39,7 +39,7 @@ const CommandInput = React.forwardRef<
     <CommandPrimitive.Input
       ref={ref}
       className={cn(
-        "flex h-10 w-full rounded-none bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50",
+        "flex h-10 w-full border-0 rounded-none bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50",
         className
       )}
       {...props}

@@ -396,6 +396,17 @@ export const fileMetadata = sqliteTable("file_metadata", {
 export type FileMetadata = typeof fileMetadata.$inferSelect
 export type NewFileMetadata = typeof fileMetadata.$inferInsert
 
+// Files that have metadata changes pending a manual cache bust
+export const fileCacheBustPending = sqliteTable("file_cache_bust_pending", {
+  driveId: text("drive_id").primaryKey(),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+})
+
+export type FileCacheBustPending = typeof fileCacheBustPending.$inferSelect
+export type NewFileCacheBustPending = typeof fileCacheBustPending.$inferInsert
+
 // Monitoring tables
 export const uptimeDaily = sqliteTable(
   "uptime_daily",

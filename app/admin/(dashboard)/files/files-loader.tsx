@@ -6,7 +6,8 @@ import { FolderExplorer } from "./folder-explorer"
 import { Loader2, AlertCircle, RefreshCw, CheckCircle2, FolderOpen, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { bustFileCaches, cleanupStaleFileMetadata } from "./actions"
-import type { FolderNode } from "./actions"
+import { Badge } from "@/components/ui/badge"
+import type { FileMetadataMutationResult, FolderNode, TreeNode } from "./actions"
 
 interface FileMetadata {
   id: string
@@ -27,6 +28,7 @@ interface AvailableFolder {
 interface InitialData {
   availableFolders: AvailableFolder[]
   metadata: FileMetadata[]
+  pendingCacheBustCount?: number
 }
 
 interface FolderLoadState {
@@ -35,12 +37,44 @@ interface FolderLoadState {
   data: FolderNode | null
 }
 
+function updateNodeMetadata(node: TreeNode, change: FileMetadataMutationResult): TreeNode {
+  if (node.type === "file") {
+    if (change.type === "upsert" && node.id === change.file.driveId) {
+      return {
+        ...node,
+        hasMetadata: true,
+        isProtected: change.file.isProtected,
+        displayName: change.file.displayName,
+        category: change.file.category,
+      }
+    }
+
+    if (change.type === "delete" && node.id === change.driveId) {
+      return {
+        ...node,
+        hasMetadata: false,
+        isProtected: false,
+        displayName: undefined,
+        category: null,
+      }
+    }
+
+    return node
+  }
+
+  return {
+    ...node,
+    children: node.children.map((child) => updateNodeMetadata(child, change)),
+  }
+}
+
 /**
  * Client-side loader for admin files page
  * Fetches folders individually to spread CPU usage across requests
  */
 export function AdminFilesLoader() {
   const [initialData, setInitialData] = useState<InitialData | null>(null)
+  const [pendingCacheBustCount, setPendingCacheBustCount] = useState(0)
   const [folderStates, setFolderStates] = useState<Record<string, FolderLoadState>>({})
   const [isInitialLoading, setIsInitialLoading] = useState(true)
   const [initialError, setInitialError] = useState<string | null>(null)
@@ -67,6 +101,7 @@ export function AdminFilesLoader() {
 
       const result = await response.json() as InitialData
       setInitialData(result)
+      setPendingCacheBustCount(result.pendingCacheBustCount ?? 0)
 
       // Initialize folder states
       const states: Record<string, FolderLoadState> = {}
@@ -124,9 +159,64 @@ export function AdminFilesLoader() {
     }
   }, [initialData, fetchFolder])
 
-  const handleMetadataUpdated = useCallback(async () => {
-    await fetchInitialData()
-  }, [fetchInitialData])
+  const handleMetadataUpdated = useCallback((change: FileMetadataMutationResult) => {
+    setPendingCacheBustCount(change.pendingCacheBustCount)
+
+    setInitialData((prev) => {
+      if (!prev) return prev
+
+      if (change.type === "upsert") {
+        const nextMetadata = [...prev.metadata]
+        const index = nextMetadata.findIndex((row) => row.driveId === change.file.driveId)
+        const nextRow: FileMetadata = index >= 0
+          ? {
+              ...nextMetadata[index],
+              driveId: change.file.driveId,
+              parentFolderId: change.file.parentFolderId,
+              displayName: change.file.displayName,
+              category: change.file.category,
+              password: change.file.isProtected ? (nextMetadata[index]?.password ?? "set") : null,
+              updatedAt: new Date().toISOString(),
+            }
+          : {
+              id: `pending-${change.file.driveId}`,
+              driveId: change.file.driveId,
+              parentFolderId: change.file.parentFolderId,
+              displayName: change.file.displayName,
+              password: change.file.isProtected ? "set" : null,
+              category: change.file.category,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            }
+
+        if (index >= 0) {
+          nextMetadata[index] = nextRow
+        } else {
+          nextMetadata.push(nextRow)
+        }
+
+        return {
+          ...prev,
+          metadata: nextMetadata,
+        }
+      }
+
+      return {
+        ...prev,
+        metadata: prev.metadata.filter((row) => row.driveId !== change.driveId),
+      }
+    })
+
+    setFolderStates((prev) => {
+      const next: Record<string, FolderLoadState> = {}
+      for (const [folderType, state] of Object.entries(prev)) {
+        next[folderType] = state.data
+          ? { ...state, data: updateNodeMetadata(state.data, change) as FolderNode }
+          : state
+      }
+      return next
+    })
+  }, [])
 
   const handleBustCache = useCallback(async () => {
     setMaintenanceError(null)
@@ -141,6 +231,7 @@ export function AdminFilesLoader() {
       }
 
       setMaintenanceMessage(result.message || "File caches were cleared.")
+      setPendingCacheBustCount(result.pendingCacheBustCount ?? 0)
       await fetchInitialData()
     } catch (error) {
       setMaintenanceError(error instanceof Error ? error.message : "Failed to clear caches.")
@@ -167,6 +258,7 @@ export function AdminFilesLoader() {
       }
 
       setMaintenanceMessage(result.message || "Stale metadata cleanup completed.")
+      setPendingCacheBustCount(result.pendingCacheBustCount ?? 0)
       await fetchInitialData()
     } catch (error) {
       setMaintenanceError(error instanceof Error ? error.message : "Failed to clean stale metadata.")
@@ -266,6 +358,11 @@ export function AdminFilesLoader() {
               <RefreshCw className="h-4 w-4 mr-2" />
             )}
             Bust Cache
+            {pendingCacheBustCount > 0 && (
+              <Badge variant="secondary" className="ml-2 h-5 min-w-5 px-1.5 text-[10px]">
+                {pendingCacheBustCount}
+              </Badge>
+            )}
           </Button>
           <Button
             variant="outline"
@@ -430,6 +527,7 @@ export function AdminFilesLoader() {
           <p>3. Files with custom metadata show a &quot;Custom&quot; badge.</p>
           <p>4. Password-protected files show a lock icon and require the password to view or download.</p>
           <p>5. Removing metadata reverts the file to using its original filename with no password.</p>
+          <p>6. Use the number on <span className="font-medium">Bust Cache</span> to see how many file changes are pending publish cache sync.</p>
         </CardContent>
       </Card>
     </div>
