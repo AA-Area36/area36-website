@@ -17,13 +17,13 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { CategoryCombobox } from "@/components/category-combobox"
 import { upsertFileMetadata, deleteFileMetadata, getFileMetadataById } from "./actions"
-import type { FileNode } from "./actions"
+import type { FileMetadataMutationResult, FileNode } from "./actions"
 
 interface FileMetadataDialogProps {
   file: FileNode | null
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSaved?: () => void | Promise<void>
+  onSaved?: (result: FileMetadataMutationResult) => void | Promise<void>
 }
 
 export function FileMetadataDialog({
@@ -82,7 +82,7 @@ export function FileMetadataDialog({
 
     startTransition(async () => {
       try {
-        await upsertFileMetadata({
+        const result = await upsertFileMetadata({
           driveId: file.id,
           parentFolderId: file.parentId,
           displayName: displayName.trim(),
@@ -90,7 +90,7 @@ export function FileMetadataDialog({
           category: category.trim() || null,
         })
         onOpenChange(false)
-        await onSaved?.()
+        await onSaved?.(result)
       } catch (err) {
         setError("Failed to save metadata")
       }
@@ -102,9 +102,9 @@ export function FileMetadataDialog({
 
     startDeleteTransition(async () => {
       try {
-        await deleteFileMetadata(file.id)
+        const result = await deleteFileMetadata(file.id)
         onOpenChange(false)
-        await onSaved?.()
+        await onSaved?.(result)
       } catch (err) {
         setError("Failed to delete metadata")
       }

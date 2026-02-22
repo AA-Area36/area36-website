@@ -2,7 +2,7 @@
 
 import { auth } from "@/lib/auth"
 import { getDb } from "@/lib/db"
-import { fileMetadata } from "@/lib/db/schema"
+import { fileCacheBustPending, fileMetadata } from "@/lib/db/schema"
 import { eq, inArray, sql } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { nanoid } from "nanoid"
@@ -35,11 +35,13 @@ const ROOT_FOLDER_ENV_KEYS = [
 ] as const
 
 const FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
+let pendingTableWarningLogged = false
 
 type FileAdminActionResult = {
   success: boolean
   message: string
   deletedCount?: number
+  pendingCacheBustCount?: number
 }
 
 async function getEnvForCacheInvalidation() {
@@ -156,6 +158,68 @@ async function collectVisibleDriveFileIds(
   return visibleFileIds
 }
 
+function isMissingPendingTableError(err: unknown): boolean {
+  const msg = String((err as any)?.cause?.message ?? (err as any)?.message ?? err).toLowerCase()
+  return msg.includes("no such table: file_cache_bust_pending")
+}
+
+async function getPendingFileCacheBustCount(): Promise<number> {
+  try {
+    const db = await getDb()
+    const [row] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(fileCacheBustPending)
+    return row?.count ?? 0
+  } catch (err) {
+    if (isMissingPendingTableError(err)) return 0
+    throw err
+  }
+}
+
+async function markFileCacheBustPending(driveId: string): Promise<void> {
+  try {
+    const db = await getDb()
+    await db
+      .insert(fileCacheBustPending)
+      .values({
+        driveId,
+        updatedAt: sql`datetime('now')`,
+      })
+      .onConflictDoUpdate({
+        target: fileCacheBustPending.driveId,
+        set: {
+          updatedAt: sql`datetime('now')`,
+        },
+      })
+  } catch (err) {
+    if (isMissingPendingTableError(err)) {
+      if (!pendingTableWarningLogged) {
+        pendingTableWarningLogged = true
+        console.warn("file_cache_bust_pending table is missing; pending cache bust tracking is disabled.")
+      }
+      return
+    }
+    throw err
+  }
+}
+
+async function clearPendingFileCacheBustEntries(): Promise<number> {
+  try {
+    const db = await getDb()
+    const [row] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(fileCacheBustPending)
+    const clearedCount = row?.count ?? 0
+    if (clearedCount > 0) {
+      await db.delete(fileCacheBustPending)
+    }
+    return clearedCount
+  } catch (err) {
+    if (isMissingPendingTableError(err)) return 0
+    throw err
+  }
+}
+
 export async function bustFileCaches(): Promise<FileAdminActionResult> {
   const session = await auth()
   if (!session?.user?.email) {
@@ -163,11 +227,16 @@ export async function bustFileCaches(): Promise<FileAdminActionResult> {
   }
 
   await invalidateFileCaches()
+  const clearedPendingCount = await clearPendingFileCacheBustEntries()
   revalidateFilePaths()
 
   return {
     success: true,
-    message: "File caches were cleared.",
+    message:
+      clearedPendingCount > 0
+        ? `File caches were cleared. ${clearedPendingCount} file change${clearedPendingCount === 1 ? "" : "s"} synchronized.`
+        : "File caches were cleared.",
+    pendingCacheBustCount: 0,
   }
 }
 
@@ -201,11 +270,13 @@ export async function cleanupStaleFileMetadata(): Promise<FileAdminActionResult>
 
   if (metadataRows.length === 0) {
     await invalidateFileCaches()
+    await clearPendingFileCacheBustEntries()
     revalidateFilePaths()
     return {
       success: true,
       message: "No metadata rows found to clean.",
       deletedCount: 0,
+      pendingCacheBustCount: 0,
     }
   }
 
@@ -219,6 +290,7 @@ export async function cleanupStaleFileMetadata(): Promise<FileAdminActionResult>
   }
 
   await invalidateFileCaches()
+  await clearPendingFileCacheBustEntries()
   revalidateFilePaths()
 
   return {
@@ -228,6 +300,7 @@ export async function cleanupStaleFileMetadata(): Promise<FileAdminActionResult>
         ? `Removed ${staleDriveIds.length} stale metadata entr${staleDriveIds.length === 1 ? "y" : "ies"}.`
         : "No stale metadata found.",
     deletedCount: staleDriveIds.length,
+    pendingCacheBustCount: 0,
   }
 }
 
@@ -257,6 +330,28 @@ export interface FileNode {
 }
 
 export type TreeNode = FolderNode | FileNode
+
+export interface FileMetadataSyncState {
+  driveId: string
+  parentFolderId: string
+  displayName: string
+  category: string | null
+  isProtected: boolean
+}
+
+export type FileMetadataMutationResult =
+  | {
+      success: true
+      type: "upsert"
+      pendingCacheBustCount: number
+      file: FileMetadataSyncState
+    }
+  | {
+      success: true
+      type: "delete"
+      pendingCacheBustCount: number
+      driveId: string
+    }
 
 /**
  * Get all file metadata from database
@@ -298,7 +393,7 @@ export async function upsertFileMetadata(data: {
   displayName: string
   password?: string | null
   category?: string | null
-}) {
+}): Promise<FileMetadataMutationResult> {
   const session = await auth()
   if (!session?.user?.email) {
     throw new Error("Unauthorized")
@@ -347,16 +442,44 @@ export async function upsertFileMetadata(data: {
     })
   }
 
-  await invalidateFileCaches()
-  revalidateFilePaths()
+  await markFileCacheBustPending(data.driveId)
+  const pendingCacheBustCount = await getPendingFileCacheBustCount()
+  revalidatePath("/admin/files")
 
-  return { success: true }
+  const [saved] = await db
+    .select({
+      driveId: fileMetadata.driveId,
+      parentFolderId: fileMetadata.parentFolderId,
+      displayName: fileMetadata.displayName,
+      category: fileMetadata.category,
+      password: fileMetadata.password,
+    })
+    .from(fileMetadata)
+    .where(eq(fileMetadata.driveId, data.driveId))
+    .limit(1)
+
+  if (!saved) {
+    throw new Error("Metadata save failed")
+  }
+
+  return {
+    success: true,
+    type: "upsert",
+    pendingCacheBustCount,
+    file: {
+      driveId: saved.driveId,
+      parentFolderId: saved.parentFolderId,
+      displayName: saved.displayName,
+      category: saved.category,
+      isProtected: !!saved.password,
+    },
+  }
 }
 
 /**
  * Delete file metadata (reverts to using filename)
  */
-export async function deleteFileMetadata(driveId: string) {
+export async function deleteFileMetadata(driveId: string): Promise<FileMetadataMutationResult> {
   const session = await auth()
   if (!session?.user?.email) {
     throw new Error("Unauthorized")
@@ -364,9 +487,14 @@ export async function deleteFileMetadata(driveId: string) {
 
   const db = await getDb()
   await db.delete(fileMetadata).where(eq(fileMetadata.driveId, driveId))
+  await markFileCacheBustPending(driveId)
+  const pendingCacheBustCount = await getPendingFileCacheBustCount()
+  revalidatePath("/admin/files")
 
-  await invalidateFileCaches()
-  revalidateFilePaths()
-
-  return { success: true }
+  return {
+    success: true,
+    type: "delete" as const,
+    pendingCacheBustCount,
+    driveId,
+  }
 }
