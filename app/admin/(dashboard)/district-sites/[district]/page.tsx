@@ -83,8 +83,13 @@ export default async function DistrictSiteDetailPage({
           </label>
 
           <div>
-            <label className="block text-xs font-medium text-muted-foreground">Mode</label>
-            <select name="mode" defaultValue={mode} className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm">
+            <label htmlFor="district-site-mode" className="block text-xs font-medium text-muted-foreground">Mode</label>
+            <select
+              id="district-site-mode"
+              name="mode"
+              defaultValue={mode}
+              className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
+            >
               <option value="hosted">Hosted</option>
               <option value="external_redirect">External Redirect (everything)</option>
             </select>
@@ -94,8 +99,9 @@ export default async function DistrictSiteDetailPage({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-muted-foreground">Display name</label>
+            <label htmlFor="district-site-display-name" className="block text-xs font-medium text-muted-foreground">Display name</label>
             <input
+              id="district-site-display-name"
               name="displayName"
               defaultValue={displayName}
               className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm"
@@ -104,8 +110,9 @@ export default async function DistrictSiteDetailPage({
           </div>
 
           <div className="md:col-span-2">
-            <label className="block text-xs font-medium text-muted-foreground">Redirect URL (https://...)</label>
+            <label htmlFor="district-site-redirect-url" className="block text-xs font-medium text-muted-foreground">Redirect URL (https://...)</label>
             <input
+              id="district-site-redirect-url"
               name="redirectUrl"
               defaultValue={redirectUrl}
               className="mt-1 h-9 w-full rounded-md border border-border bg-background px-3 text-sm"

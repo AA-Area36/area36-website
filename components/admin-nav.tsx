@@ -11,6 +11,7 @@ import {
   Languages,
   Map,
   Building2,
+  ShieldCheck,
   MoreHorizontal,
   Menu,
   LogOut,
@@ -36,14 +37,15 @@ const primaryLinks = [
   { href: "/admin/events", label: "Events", icon: CalendarDays },
   { href: "/admin/recordings", label: "Recordings", icon: Mic },
   { href: "/admin/files", label: "Files", icon: Files },
+  { href: "/admin/content", label: "Content", icon: Languages },
 ] as const
 
 const secondaryLinks = [
   { href: "/admin/subscription-drives", label: "Subscription Drives", icon: TrendingUp },
   { href: "/admin/reports", label: "Reports", icon: FileText },
-  { href: "/admin/content", label: "Content", icon: Languages },
   { href: "/admin/district-sites", label: "District Sites", icon: Map },
   { href: "/admin/corrections", label: "Corrections", icon: Building2 },
+  { href: "/admin/roles", label: "Role Management", icon: ShieldCheck },
 ] as const
 
 const allLinks = [...primaryLinks, ...secondaryLinks]

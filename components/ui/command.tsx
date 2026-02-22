@@ -27,12 +27,19 @@ const CommandInput = React.forwardRef<
     wrapperClassName?: string
   }
 >(({ className, wrapperClassName, ...props }, ref) => (
-  <div className={cn("flex items-center border-b px-3", wrapperClassName)} cmdk-input-wrapper="">
+  <div
+    className={cn(
+      "flex items-center border-b px-3 transition-[background-color,border-color,box-shadow]",
+      "has-[:focus-visible]:rounded-t-md has-[:focus-visible]:border-ring/70 has-[:focus-visible]:bg-accent/15 has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/35",
+      wrapperClassName
+    )}
+    cmdk-input-wrapper=""
+  >
     <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
     <CommandPrimitive.Input
       ref={ref}
       className={cn(
-        "flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
+        "flex h-10 w-full rounded-none bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50",
         className
       )}
       {...props}

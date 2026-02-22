@@ -5,7 +5,6 @@ import { Check, ChevronDown } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   Popover,
   PopoverContent,
@@ -37,8 +36,8 @@ export function MultiSelect({
   const triggerId = React.useId()
   const listboxId = React.useId()
   const [activeIndex, setActiveIndex] = React.useState(0)
-  const selectAllRef = React.useRef<HTMLButtonElement | null>(null)
-  const optionRefs = React.useRef<Array<HTMLButtonElement | null>>([])
+  const selectAllRef = React.useRef<HTMLDivElement | null>(null)
+  const optionRefs = React.useRef<Array<HTMLDivElement | null>>([])
 
   const itemCount = options.length + 1
 
@@ -168,59 +167,69 @@ export function MultiSelect({
       >
         <div className="max-h-[300px] overflow-auto">
           {/* Select All option */}
-          <button
-            type="button"
+          <div
             ref={selectAllRef}
+            role="option"
+            aria-selected={value.length === options.length}
             onClick={handleSelectAll}
             onFocus={() => setActiveIndex(0)}
             tabIndex={activeIndex === 0 ? 0 : -1}
-            className="flex w-full items-center gap-2 px-3 py-2 cursor-pointer border-0 border-b border-border bg-transparent text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            aria-pressed={value.length === options.length}
+            className="flex w-full cursor-pointer items-center gap-2 border-b border-border px-3 py-2 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
-            <Checkbox
-              checked={value.length === options.length}
-              className="pointer-events-none"
-            />
+            <span
+              aria-hidden="true"
+              className={cn(
+                "grid size-4 shrink-0 place-content-center rounded-[4px] border shadow-xs",
+                value.length === options.length
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-input bg-background"
+              )}
+            >
+              {value.length === options.length ? <Check className="size-3.5" /> : null}
+            </span>
             <span className="text-sm font-medium">
               {value.length === options.length ? "Deselect all" : "Select all"}
             </span>
-          </button>
+          </div>
 
           {/* Options */}
           {options.map((option, index) => {
             const isSelected = value.includes(option.value)
             const indexInList = index + 1
             return (
-              <button
-                type="button"
+              <div
                 key={option.value}
                 ref={(node) => {
                   optionRefs.current[index] = node
                 }}
+                role="option"
+                aria-selected={isSelected}
                 onClick={() => handleToggle(option.value)}
                 onFocus={() => setActiveIndex(indexInList)}
                 tabIndex={activeIndex === indexInList ? 0 : -1}
                 className={cn(
-                  "flex w-full items-center gap-2 px-3 py-2 cursor-pointer border-0 bg-transparent text-left transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                  "flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
                   isSelected
                     ? "bg-primary text-primary-foreground"
                     : "hover:bg-muted"
                 )}
-                role="option"
-                aria-selected={isSelected}
               >
-                <Checkbox
-                  checked={isSelected}
+                <span
+                  aria-hidden="true"
                   className={cn(
-                    "pointer-events-none",
-                    isSelected && "border-primary-foreground data-[state=checked]:bg-primary-foreground data-[state=checked]:text-primary dark:border-white dark:data-[state=checked]:bg-white dark:data-[state=checked]:text-primary"
+                    "grid size-4 shrink-0 place-content-center rounded-[4px] border shadow-xs",
+                    isSelected
+                      ? "border-primary-foreground bg-primary-foreground text-primary dark:border-white dark:bg-white"
+                      : "border-input bg-background"
                   )}
-                />
+                >
+                  {isSelected ? <Check className="size-3.5" /> : null}
+                </span>
                 <span className="flex-1 text-sm">{option.label}</span>
                 {isSelected && (
                   <Check className="h-4 w-4" aria-hidden="true" />
                 )}
-              </button>
+              </div>
             )
           })}
         </div>
