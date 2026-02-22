@@ -7,13 +7,15 @@ import { CommitteeFilesSection } from "@/components/committees/committee-files"
 import { CommitteeInfoCard } from "@/components/committees/committee-info-card"
 import type { CommitteeData } from "./page"
 import type { CommitteeFiles, CommitteeFile } from "@/lib/gdrive/committees"
+import { createTranslator } from "@/lib/content/t"
+import type { ContentDoc } from "@/lib/content/schema"
 
 interface CommitteesContentProps {
   committees: CommitteeData[]
   committeeFiles: CommitteeFiles
+  content?: ContentDoc
 }
 
-// Group files by category, returning categories sorted alphabetically
 function groupFilesByCategory(files: CommitteeFile[]) {
   const categorized: Record<string, CommitteeFile[]> = {}
   const uncategorized: CommitteeFile[] = []
@@ -29,46 +31,49 @@ function groupFilesByCategory(files: CommitteeFile[]) {
     }
   }
 
-  // Sort categories alphabetically
-  const sortedCategories = Object.keys(categorized).sort((a, b) => 
-    a.localeCompare(b, undefined, { sensitivity: 'base' })
+  const sortedCategories = Object.keys(categorized).sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: "base" }),
   )
 
   return { categorized, uncategorized, sortedCategories }
 }
 
-export function CommitteesContent({ committees, committeeFiles }: CommitteesContentProps) {
+export function CommitteesContent({ committees, committeeFiles, content }: CommitteesContentProps) {
+  const { t } = createTranslator(content ?? {})
+  const chairLabel = t("committeeUi.chairLabel", "Chair")
+  const contactCommitteeLabel = t("committeeUi.contactCommitteeLabel", "Contact Committee")
+  const archivistLabel = t("committeeUi.archivistLabel", "Area Archivist")
+  const webmasterLabel = t("committeeUi.webmasterLabel", "Webmaster")
+  const relatedLinkLabel = t("committeeUi.relatedLinkLabel", "Learn more")
+  const resourcesTitle = t("committeeUi.resourcesTitle", "Resources")
+  const pinkCanFormsTitle = t("committeeUi.pinkCanFormsTitle", "Pink Can Plan Forms")
+  const correctionsDatabaseTitle = t("committeeUi.correctionsDatabaseTitle", "Corrections Database")
+
   return (
     <Accordion type="single" collapsible className="space-y-4 pb-1">
       {committees.map((committee) => {
-        // Get files for this committee based on slug
         const files = committeeFiles[committee.slug] || []
-        
-        // Group files by category
         const { categorized, uncategorized, sortedCategories } = groupFilesByCategory(files)
-        
-        // Check if this is the corrections committee for special handling
+
         const isCorrections = committee.slug === "corrections"
-        
-        // For corrections, handle Pink Can Plan specially
         const pinkCanPlanFiles = categorized["Pink Can Plan"] || []
-        const otherSortedCategories = sortedCategories.filter(cat => cat !== "Pink Can Plan")
-        
-        // Find the database card index for corrections
-        const databaseCardIndex = committee.infoCards?.findIndex(
-          card => card.title === "Corrections Database"
-        ) ?? -1
-        
-        // Split info cards for corrections: before database, database, after database
-        const cardsBeforeDatabase = isCorrections && databaseCardIndex > 0
-          ? committee.infoCards?.slice(0, databaseCardIndex)
-          : null
-        const databaseCard = isCorrections && databaseCardIndex >= 0
-          ? committee.infoCards?.[databaseCardIndex]
-          : null
-        const cardsAfterDatabase = isCorrections && databaseCardIndex >= 0
-          ? committee.infoCards?.slice(databaseCardIndex + 1)
-          : null
+        const otherSortedCategories = sortedCategories.filter((cat) => cat !== "Pink Can Plan")
+
+        const databaseCardIndex =
+          committee.infoCards?.findIndex((card) => card.title === correctionsDatabaseTitle) ?? -1
+
+        const cardsBeforeDatabase =
+          isCorrections && databaseCardIndex > 0
+            ? committee.infoCards?.slice(0, databaseCardIndex)
+            : null
+        const databaseCard =
+          isCorrections && databaseCardIndex >= 0
+            ? committee.infoCards?.[databaseCardIndex]
+            : null
+        const cardsAfterDatabase =
+          isCorrections && databaseCardIndex >= 0
+            ? committee.infoCards?.slice(databaseCardIndex + 1)
+            : null
 
         return (
           <AccordionItem
@@ -82,31 +87,40 @@ export function CommitteesContent({ committees, committeeFiles }: CommitteesCont
                 <div>
                   <span className="font-semibold text-foreground">{committee.name}</span>
                   {committee.chairName && (
-                    <span className="ml-2 text-sm text-muted-foreground">Chair: {committee.chairName}</span>
+                    <span className="ml-2 text-sm text-muted-foreground">
+                      {chairLabel}: {committee.chairName}
+                    </span>
                   )}
                 </div>
               </div>
             </AccordionTrigger>
             <AccordionContent className="pb-6">
               <div className="pl-8">
-                {/* Description */}
                 <div className="text-muted-foreground mb-4">
-                  {typeof committee.description === "string" ? (
-                    <p>{committee.description}</p>
+                  {Array.isArray(committee.description) ? (
+                    <div className="space-y-3">
+                      {committee.description.map((paragraph) => (
+                        <p key={paragraph}>{paragraph}</p>
+                      ))}
+                    </div>
                   ) : (
-                    committee.description
+                    <p>{committee.description}</p>
                   )}
                 </div>
 
-                {/* Contact Information */}
                 <div className="space-y-2 mb-4">
-                  <Link
-                    href={`mailto:${committee.email}`}
-                    className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
-                  >
-                    <Mail className="h-4 w-4" aria-hidden="true" />
-                    {committee.chairName ? `Chair (${committee.chairName})` : "Contact Committee"}: {committee.email}
-                  </Link>
+                  <div>
+                    <Link
+                      href={`mailto:${committee.email}`}
+                      className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+                    >
+                      <Mail className="h-4 w-4" aria-hidden="true" />
+                      {committee.chairName
+                        ? `${chairLabel} (${committee.chairName})`
+                        : contactCommitteeLabel}
+                      : {committee.email}
+                    </Link>
+                  </div>
                   {committee.archivistName && (
                     <div>
                       <Link
@@ -114,7 +128,7 @@ export function CommitteesContent({ committees, committeeFiles }: CommitteesCont
                         className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
                       >
                         <Mail className="h-4 w-4" aria-hidden="true" />
-                        Area Archivist ({committee.archivistName}): {committee.archivistEmail}
+                        {archivistLabel} ({committee.archivistName}): {committee.archivistEmail}
                       </Link>
                     </div>
                   )}
@@ -125,7 +139,7 @@ export function CommitteesContent({ committees, committeeFiles }: CommitteesCont
                         className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
                       >
                         <Mail className="h-4 w-4" aria-hidden="true" />
-                        Webmaster ({committee.webmasterName}): {committee.webmasterEmail}
+                        {webmasterLabel} ({committee.webmasterName}): {committee.webmasterEmail}
                       </Link>
                     </div>
                   )}
@@ -142,14 +156,13 @@ export function CommitteesContent({ committees, committeeFiles }: CommitteesCont
                   ))}
                 </div>
 
-                {/* Related Page Link */}
                 {committee.relatedPageUrl && (
                   <div className="mb-4">
                     <Link
                       href={committee.relatedPageUrl}
                       className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
                     >
-                      {committee.relatedPageText || "Learn more"}
+                      {committee.relatedPageText || relatedLinkLabel}
                       <ArrowRight className="h-4 w-4" aria-hidden="true" />
                     </Link>
                   </div>
@@ -157,15 +170,10 @@ export function CommitteesContent({ committees, committeeFiles }: CommitteesCont
 
                 {isCorrections ? (
                   <>
-                    {/* Pink Can Plan Forms section - special placement for corrections */}
                     {pinkCanPlanFiles.length > 0 && (
-                      <CommitteeFilesSection
-                        title="Pink Can Plan Forms"
-                        files={pinkCanPlanFiles}
-                      />
+                      <CommitteeFilesSection title={pinkCanFormsTitle} files={pinkCanPlanFiles} />
                     )}
-                    
-                    {/* Info Cards before database */}
+
                     {cardsBeforeDatabase?.map((card, index) => (
                       <CommitteeInfoCard
                         key={index}
@@ -176,8 +184,7 @@ export function CommitteesContent({ committees, committeeFiles }: CommitteesCont
                         link={card.link}
                       />
                     ))}
-                    
-                    {/* Database Card */}
+
                     {databaseCard && (
                       <CommitteeInfoCard
                         title={databaseCard.title}
@@ -187,25 +194,15 @@ export function CommitteesContent({ committees, committeeFiles }: CommitteesCont
                         link={databaseCard.link}
                       />
                     )}
-                    
-                    {/* Other categorized files (alphabetically) */}
+
                     {otherSortedCategories.map((category) => (
-                      <CommitteeFilesSection
-                        key={category}
-                        title={category}
-                        files={categorized[category]}
-                      />
+                      <CommitteeFilesSection key={category} title={category} files={categorized[category]} />
                     ))}
-                    
-                    {/* Resources Section (uncategorized) - always last */}
+
                     {uncategorized.length > 0 && (
-                      <CommitteeFilesSection
-                        title="Resources"
-                        files={uncategorized}
-                      />
+                      <CommitteeFilesSection title={resourcesTitle} files={uncategorized} />
                     )}
-                    
-                    {/* Info Cards after database */}
+
                     {cardsAfterDatabase?.map((card, index) => (
                       <CommitteeInfoCard
                         key={`after-${index}`}
@@ -219,24 +216,14 @@ export function CommitteesContent({ committees, committeeFiles }: CommitteesCont
                   </>
                 ) : (
                   <>
-                    {/* Categorized files - alphabetically sorted */}
                     {sortedCategories.map((category) => (
-                      <CommitteeFilesSection
-                        key={category}
-                        title={category}
-                        files={categorized[category]}
-                      />
+                      <CommitteeFilesSection key={category} title={category} files={categorized[category]} />
                     ))}
 
-                    {/* Resources Section (uncategorized) - always last */}
                     {uncategorized.length > 0 && (
-                      <CommitteeFilesSection
-                        title="Resources"
-                        files={uncategorized}
-                      />
+                      <CommitteeFilesSection title={resourcesTitle} files={uncategorized} />
                     )}
 
-                    {/* Info Cards */}
                     {committee.infoCards?.map((card, index) => (
                       <CommitteeInfoCard
                         key={index}

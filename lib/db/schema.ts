@@ -482,7 +482,8 @@ export type NewContentDocument = typeof contentDocuments.$inferInsert
 /* -------------------------------------------------------------------------- */
 
 export const appRoleKeys = ["admin", "officer", "chair"] as const
-export type AppRoleKey = (typeof appRoleKeys)[number]
+export type BuiltInAppRoleKey = (typeof appRoleKeys)[number]
+export type AppRoleKey = string
 
 export const appRoles = sqliteTable("app_roles", {
   roleKey: text("role_key").primaryKey().$type<AppRoleKey>(),

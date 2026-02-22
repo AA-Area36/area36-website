@@ -6,6 +6,8 @@ export const CORRECTIONS_SOURCE_OPTIONS = [
   "Transition Fair",
 ] as const
 
+export const CORRECTIONS_GENDER_OPTIONS = ["Male", "Female"] as const
+
 export const CORRECTIONS_FACILITY_OPTIONS = [
   "ACF - Hennepin",
   "FCI - Sandstone",

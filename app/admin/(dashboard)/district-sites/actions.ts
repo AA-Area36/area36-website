@@ -7,6 +7,8 @@ import { sql } from "drizzle-orm"
 import { validateRedirectUrl } from "@/lib/district/sites"
 import { revalidatePath } from "next/cache"
 
+const PROTECTED_SITE_ADMIN_EMAIL = "webmaster@area36.org"
+
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase()
 }
@@ -60,7 +62,14 @@ export async function upsertDistrictSite(formData: FormData) {
 
   // If switching to external_redirect, purge any district admins (district is fully outside our system).
   if (mode === "external_redirect") {
-    await db.delete(schema.districtAdmins).where(eq(schema.districtAdmins.districtNumber, districtNumber))
+    await db
+      .delete(schema.districtAdmins)
+      .where(
+        and(
+          eq(schema.districtAdmins.districtNumber, districtNumber),
+          sql`lower(${schema.districtAdmins.email}) <> ${PROTECTED_SITE_ADMIN_EMAIL}`
+        )
+      )
   }
 
   revalidatePath("/admin/district-sites")
@@ -113,6 +122,9 @@ export async function removeDistrictAdmin(formData: FormData) {
   const districtNumber = Number(formData.get("districtNumber"))
   const email = normalizeEmail(String(formData.get("email") ?? ""))
   if (!Number.isFinite(districtNumber) || !email) throw new Error("Invalid input")
+  if (email === PROTECTED_SITE_ADMIN_EMAIL) {
+    throw new Error("The webmaster site admin cannot be removed")
+  }
 
   const db = await getDb()
   await db

@@ -5,7 +5,16 @@ import { EventsClient } from "./events-client"
 import { getAnnualCalendarFiles, type CalendarFile } from "./calendar-file-actions"
 import type { DisplayEvent } from "@/lib/types/recurrence"
 
-export function EventsLoader() {
+interface EventsHeroContent {
+  title: string
+  description: string
+}
+
+interface EventsLoaderProps {
+  hero: EventsHeroContent
+}
+
+export function EventsLoader({ hero }: EventsLoaderProps) {
   const [events, setEvents] = React.useState<DisplayEvent[] | null>(null)
   const [calendarFiles, setCalendarFiles] = React.useState<CalendarFile[]>([])
   const [error, setError] = React.useState<string | null>(null)
@@ -53,7 +62,7 @@ export function EventsLoader() {
     console.error("Failed to load events:", error)
   }
 
-  return <EventsClient events={events} calendarFiles={calendarFiles} />
+  return <EventsClient events={events} calendarFiles={calendarFiles} hero={hero} />
 }
 
 function EventsLoading() {

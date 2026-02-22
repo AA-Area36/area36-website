@@ -65,21 +65,23 @@ export default async function AdminContentPage({
       </div>
 
       {/* Scope tabs */}
-      <div className="flex items-center gap-1 border-b border-border -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8">
-        {Object.values(CONTENT_SCHEMAS).map((s) => (
-          <Link
-            key={s.scope}
-            href={`/admin/content?scope=${encodeURIComponent(s.scope)}`}
-            className={cn(
-              "relative px-4 py-2.5 text-sm font-medium transition-colors",
-              s.scope === scope
-                ? "text-foreground after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-primary after:rounded-full"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {s.title}
-          </Link>
-        ))}
+      <div className="border-b border-border -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 overflow-x-auto">
+        <div className="flex w-max min-w-full items-center gap-1">
+          {Object.values(CONTENT_SCHEMAS).map((s) => (
+            <Link
+              key={s.scope}
+              href={`/admin/content?scope=${encodeURIComponent(s.scope)}`}
+              className={cn(
+                "relative shrink-0 px-4 py-2.5 text-sm font-medium transition-colors",
+                s.scope === scope
+                  ? "text-foreground after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-primary after:rounded-full"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {s.title}
+            </Link>
+          ))}
+        </div>
       </div>
 
       {/* Editor */}

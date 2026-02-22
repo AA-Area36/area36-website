@@ -1,8 +1,8 @@
 "use server"
 
-import { and, eq } from "drizzle-orm"
+import { and, eq, inArray } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
-import { requireCorrectionsWriteSession } from "@/lib/auth/guards"
+import { requireCorrectionsDeleteSession, requireCorrectionsWriteSession } from "@/lib/auth/guards"
 import { getDb } from "@/lib/db"
 import {
   correctionsContacts,
@@ -10,7 +10,7 @@ import {
   correctionsRecipients,
   type CorrectionsRecipientStatus,
 } from "@/lib/db/schema"
-import { RECIPIENT_STATUS_OPTIONS } from "@/lib/corrections/options"
+import { CORRECTIONS_GENDER_OPTIONS, RECIPIENT_STATUS_OPTIONS } from "@/lib/corrections/options"
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -32,6 +32,28 @@ function parseOptionalText(value: unknown, maxLength = 300): string | null {
   return parsed
 }
 
+function parseGender(value: unknown): string {
+  const parsed = String(value ?? "").trim().toLowerCase()
+  if (!parsed) throw new Error("Gender is required")
+
+  if (parsed === "male" || parsed === "m" || parsed === "man" || parsed === "men") {
+    return CORRECTIONS_GENDER_OPTIONS[0]
+  }
+
+  if (parsed === "female" || parsed === "f" || parsed === "woman" || parsed === "women") {
+    return CORRECTIONS_GENDER_OPTIONS[1]
+  }
+
+  throw new Error("Gender must be Male or Female")
+}
+
+function parseOptionalZip(value: unknown): string | null {
+  const parsed = String(value ?? "").trim()
+  if (!parsed) return null
+  if (!/^\d{5}(?:-\d{4})?$/.test(parsed)) throw new Error("ZIP must be 5 digits or ZIP+4")
+  return parsed
+}
+
 function parseOptionalEmail(value: unknown): { email: string | null; normalized: string | null } {
   const parsed = String(value ?? "").trim()
   if (!parsed) return { email: null, normalized: null }
@@ -40,9 +62,26 @@ function parseOptionalEmail(value: unknown): { email: string | null; normalized:
   return { email: parsed, normalized }
 }
 
+function parseRequiredEmail(value: unknown): { email: string; normalized: string } {
+  const parsed = String(value ?? "").trim()
+  if (!parsed) throw new Error("Email is required")
+  const normalized = normalizeEmail(parsed)
+  if (!EMAIL_REGEX.test(normalized)) throw new Error("Email is invalid")
+  return { email: parsed, normalized }
+}
+
 function parseOptionalYear(value: unknown): number | null {
   const parsed = String(value ?? "").trim()
   if (!parsed) return null
+  if (!/^\d{4}$/.test(parsed)) throw new Error("Birth year must be 4 digits")
+  const year = Number(parsed)
+  if (!Number.isInteger(year) || year < 1900 || year > 2100) throw new Error("Birth year is invalid")
+  return year
+}
+
+function parseRequiredYear(value: unknown): number {
+  const parsed = String(value ?? "").trim()
+  if (!parsed) throw new Error("Birth year is required")
   if (!/^\d{4}$/.test(parsed)) throw new Error("Birth year must be 4 digits")
   const year = Number(parsed)
   if (!Number.isInteger(year) || year < 1900 || year > 2100) throw new Error("Birth year is invalid")
@@ -68,12 +107,12 @@ export async function createCorrectionsContact(formData: FormData) {
 
   const firstName = parseRequiredText(formData.get("firstName"), "First name", 120)
   const lastName = parseRequiredText(formData.get("lastName"), "Last name", 120)
-  const gender = parseRequiredText(formData.get("gender"), "Gender", 40)
+  const gender = parseGender(formData.get("gender"))
   const city = parseRequiredText(formData.get("city"), "City", 120)
   const homeGroup = parseOptionalText(formData.get("homeGroup"), 200)
-  const sobrietyDate = parseOptionalText(formData.get("sobrietyDate"), 20)
+  const sobrietyDate = parseRequiredText(formData.get("sobrietyDate"), "Sobriety date", 20)
 
-  const { email, normalized } = parseOptionalEmail(formData.get("email"))
+  const { email, normalized } = parseRequiredEmail(formData.get("email"))
 
   const db = await getDb()
   await db.insert(correctionsContacts).values({
@@ -85,13 +124,13 @@ export async function createCorrectionsContact(formData: FormData) {
     city,
     county: parseOptionalText(formData.get("county"), 120),
     state: parseOptionalText(formData.get("state"), 120),
-    zipCode: parseOptionalText(formData.get("zipCode"), 20),
+    zipCode: parseOptionalZip(formData.get("zipCode")),
     email,
     emailNormalized: normalized,
     sobrietyDate,
     phonePrimary: parseOptionalText(formData.get("phonePrimary"), 40),
     phoneSecondary: parseOptionalText(formData.get("phoneSecondary"), 40),
-    birthYear: parseOptionalYear(formData.get("birthYear")),
+    birthYear: parseRequiredYear(formData.get("birthYear")),
     isSpanishSpeaking: boolFromForm(formData.get("isSpanishSpeaking")),
     otherLanguages: parseOptionalText(formData.get("otherLanguages"), 300),
     homeGroup,
@@ -109,12 +148,12 @@ export async function updateCorrectionsContact(formData: FormData) {
   const id = parseRequiredText(formData.get("id"), "Contact id", 120)
   const firstName = parseRequiredText(formData.get("firstName"), "First name", 120)
   const lastName = parseRequiredText(formData.get("lastName"), "Last name", 120)
-  const gender = parseRequiredText(formData.get("gender"), "Gender", 40)
+  const gender = parseGender(formData.get("gender"))
   const city = parseRequiredText(formData.get("city"), "City", 120)
   const homeGroup = parseOptionalText(formData.get("homeGroup"), 200)
-  const sobrietyDate = parseOptionalText(formData.get("sobrietyDate"), 20)
+  const sobrietyDate = parseRequiredText(formData.get("sobrietyDate"), "Sobriety date", 20)
 
-  const { email, normalized } = parseOptionalEmail(formData.get("email"))
+  const { email, normalized } = parseRequiredEmail(formData.get("email"))
 
   const db = await getDb()
   await db
@@ -127,13 +166,13 @@ export async function updateCorrectionsContact(formData: FormData) {
       city,
       county: parseOptionalText(formData.get("county"), 120),
       state: parseOptionalText(formData.get("state"), 120),
-      zipCode: parseOptionalText(formData.get("zipCode"), 20),
+      zipCode: parseOptionalZip(formData.get("zipCode")),
       email,
       emailNormalized: normalized,
       sobrietyDate,
       phonePrimary: parseOptionalText(formData.get("phonePrimary"), 40),
       phoneSecondary: parseOptionalText(formData.get("phoneSecondary"), 40),
-      birthYear: parseOptionalYear(formData.get("birthYear")),
+      birthYear: parseRequiredYear(formData.get("birthYear")),
       isSpanishSpeaking: boolFromForm(formData.get("isSpanishSpeaking")),
       otherLanguages: parseOptionalText(formData.get("otherLanguages"), 300),
       homeGroup,
@@ -153,7 +192,7 @@ export async function createCorrectionsRecipient(formData: FormData) {
   const firstName = parseRequiredText(formData.get("firstName"), "First name", 120)
   const lastName = parseRequiredText(formData.get("lastName"), "Last name", 120)
   const idNumber = parseRequiredText(formData.get("idNumber"), "ID number", 120)
-  const gender = parseRequiredText(formData.get("gender"), "Gender", 40)
+  const gender = parseGender(formData.get("gender"))
   const facilityName = parseRequiredText(formData.get("facilityName"), "Facility", 200)
   const source = parseRequiredText(formData.get("source"), "Source", 200)
 
@@ -174,7 +213,7 @@ export async function createCorrectionsRecipient(formData: FormData) {
     releaseCity: parseOptionalText(formData.get("releaseCity"), 120),
     releaseCounty: parseOptionalText(formData.get("releaseCounty"), 120),
     releaseState: parseOptionalText(formData.get("releaseState"), 120),
-    releaseZip: parseOptionalText(formData.get("releaseZip"), 20),
+    releaseZip: parseOptionalZip(formData.get("releaseZip")),
     notes: parseOptionalText(formData.get("notes"), 4000),
     status: parseStatus(formData.get("status") || "unmatched"),
   })
@@ -190,7 +229,7 @@ export async function updateCorrectionsRecipient(formData: FormData) {
   const firstName = parseRequiredText(formData.get("firstName"), "First name", 120)
   const lastName = parseRequiredText(formData.get("lastName"), "Last name", 120)
   const idNumber = parseRequiredText(formData.get("idNumber"), "ID number", 120)
-  const gender = parseRequiredText(formData.get("gender"), "Gender", 40)
+  const gender = parseGender(formData.get("gender"))
   const facilityName = parseRequiredText(formData.get("facilityName"), "Facility", 200)
   const source = parseRequiredText(formData.get("source"), "Source", 200)
 
@@ -212,7 +251,7 @@ export async function updateCorrectionsRecipient(formData: FormData) {
       releaseCity: parseOptionalText(formData.get("releaseCity"), 120),
       releaseCounty: parseOptionalText(formData.get("releaseCounty"), 120),
       releaseState: parseOptionalText(formData.get("releaseState"), 120),
-      releaseZip: parseOptionalText(formData.get("releaseZip"), 20),
+      releaseZip: parseOptionalZip(formData.get("releaseZip")),
       notes: parseOptionalText(formData.get("notes"), 4000),
       status: parseStatus(formData.get("status") || "unmatched"),
       updatedAt: new Date().toISOString(),
@@ -296,6 +335,45 @@ export async function markRecipientUnmatched(formData: FormData) {
     .update(correctionsMatches)
     .set({ isActive: false, updatedAt: now })
     .where(and(eq(correctionsMatches.recipientId, recipientId), eq(correctionsMatches.isActive, true)))
+
+  revalidatePath("/admin/corrections")
+}
+
+export async function deleteCorrectionsContact(formData: FormData) {
+  const session = await requireCorrectionsDeleteSession()
+  if (!session?.user?.email) throw new Error("Unauthorized")
+
+  const contactId = parseRequiredText(formData.get("contactId"), "Contact id", 120)
+  const now = new Date().toISOString()
+  const db = await getDb()
+
+  const activeRecipientMatches = await db
+    .select({ recipientId: correctionsMatches.recipientId })
+    .from(correctionsMatches)
+    .where(and(eq(correctionsMatches.contactId, contactId), eq(correctionsMatches.isActive, true)))
+    .all()
+
+  await db.delete(correctionsContacts).where(eq(correctionsContacts.id, contactId))
+
+  const recipientIds = Array.from(new Set(activeRecipientMatches.map((row) => row.recipientId)))
+  if (recipientIds.length > 0) {
+    await db
+      .update(correctionsRecipients)
+      .set({ status: "unmatched", updatedAt: now })
+      .where(inArray(correctionsRecipients.id, recipientIds))
+  }
+
+  revalidatePath("/admin/corrections")
+}
+
+export async function deleteCorrectionsRecipient(formData: FormData) {
+  const session = await requireCorrectionsDeleteSession()
+  if (!session?.user?.email) throw new Error("Unauthorized")
+
+  const recipientId = parseRequiredText(formData.get("recipientId"), "Recipient id", 120)
+  const db = await getDb()
+
+  await db.delete(correctionsRecipients).where(eq(correctionsRecipients.id, recipientId))
 
   revalidatePath("/admin/corrections")
 }

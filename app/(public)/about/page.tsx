@@ -4,6 +4,9 @@ import { Triangle, Users, Target, Heart, Briefcase, ExternalLink, Accessibility,
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { PageHeader } from "@/components/page-header"
+import { getContent } from "@/lib/content/repo"
+import { createTranslator } from "@/lib/content/t"
+import { getRequestLocale } from "@/lib/i18n/get-locale"
 
 export const metadata: Metadata = {
   title: "About | Area 36",
@@ -11,12 +14,19 @@ export const metadata: Metadata = {
     "Learn about Southern Minnesota Area 36's purpose, structure, and accessibility commitment for Alcoholics Anonymous.",
 }
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  const locale = await getRequestLocale()
+  const aboutContent = await getContent("about", locale)
+  const { t } = createTranslator(aboutContent)
+
   return (
     <>
       <PageHeader
-        title="About Area 36"
-        description="Southern Minnesota Area 36 serves as the General Service structure for Alcoholics Anonymous in southern Minnesota, connecting groups to A.A. as a whole."
+        title={t("header.title", "About Area 36")}
+        description={t(
+          "header.description",
+          "Southern Minnesota Area 36 serves as the General Service structure for Alcoholics Anonymous in southern Minnesota, connecting groups to A.A. as a whole.",
+        )}
         ariaId="about-heading"
       />
 
@@ -26,23 +36,26 @@ export default function AboutPage() {
             <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
               <div>
                 <h2 id="mission-heading" className="text-3xl font-bold text-foreground">
-                  Our Purpose
+                  {t("mission.title", "Our Purpose")}
                 </h2>
                 <p className="mt-6 text-muted-foreground leading-relaxed">
-                  The primary purpose of Area 36 is to facilitate communication within the area and between Area 36 and
-                  A.A. members. We serve as a vital link in the chain that connects individual A.A. groups to the
-                  General Service Conference and A.A. World Services.
+                  {t(
+                    "mission.paragraph1",
+                    "The primary purpose of Area 36 is to facilitate communication within the area and between Area 36 and A.A. members. We serve as a vital link in the chain that connects individual A.A. groups to the General Service Conference and A.A. World Services.",
+                  )}
                 </p>
                 <p className="mt-4 text-muted-foreground leading-relaxed">
-                  Through assemblies, workshops, and service committees, we work together to carry the message of
-                  Alcoholics Anonymous and ensure that our fellowship remains available to all who need it.
+                  {t(
+                    "mission.paragraph2",
+                    "Through assemblies, workshops, and service committees, we work together to carry the message of Alcoholics Anonymous and ensure that our fellowship remains available to all who need it.",
+                  )}
                 </p>
                 <div className="mt-6">
                   <Link
                     href="/committees"
                     className="inline-flex items-center gap-2 text-primary font-medium hover:underline"
                   >
-                    View our Committees & Officers
+                    {t("mission.committeesLinkLabel", "View our Committees & Officers")}
                     <ArrowRight className="h-4 w-4" aria-hidden="true" />
                   </Link>
                 </div>
@@ -50,23 +63,23 @@ export default function AboutPage() {
               <div className="grid gap-6 sm:grid-cols-2">
                 <ValueCard
                   icon={Triangle}
-                  title="Unity"
-                  description="Working together for our common purpose of carrying the A.A. message."
+                  title={t("values.unity.title", "Unity")}
+                  description={t("values.unity.description", "Working together for our common purpose of carrying the A.A. message.")}
                 />
                 <ValueCard
                   icon={Users}
-                  title="Service"
-                  description="Giving back to the fellowship that saved our lives."
+                  title={t("values.service.title", "Service")}
+                  description={t("values.service.description", "Giving back to the fellowship that saved our lives.")}
                 />
                 <ValueCard
                   icon={Target}
-                  title="Recovery"
-                  description="Supporting the primary purpose of each A.A. group."
+                  title={t("values.recovery.title", "Recovery")}
+                  description={t("values.recovery.description", "Supporting the primary purpose of each A.A. group.")}
                 />
                 <ValueCard
                   icon={Heart}
-                  title="Tradition"
-                  description="Guided by our Twelve Traditions in all our affairs."
+                  title={t("values.tradition.title", "Tradition")}
+                  description={t("values.tradition.description", "Guided by our Twelve Traditions in all our affairs.")}
                 />
               </div>
             </div>
@@ -77,28 +90,59 @@ export default function AboutPage() {
         <section className="py-12 sm:py-16 bg-muted/30" aria-labelledby="structure-heading">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <h2 id="structure-heading" className="text-3xl font-bold text-foreground text-center">
-              Area Structure
+              {t("structure.title", "Area Structure")}
             </h2>
             <p className="mt-4 text-center text-muted-foreground max-w-2xl mx-auto">
-              Area 36 is organized into districts, each with elected service positions that work together to serve A.A.
-              groups throughout southern Minnesota.
+              {t(
+                "structure.description",
+                "Area 36 is organized into districts, each with elected service positions that work together to serve A.A. groups throughout southern Minnesota.",
+              )}
             </p>
 
             <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               <StructureCard
-                title="Area Officers"
-                items={["Delegate", "Alternate Delegate", "Chair", "Alternate Chair", "Secretary", "Treasurer"]}
+                title={t("structure.officers.title", "Area Officers")}
+                items={[
+                  t("structure.officers.items.0", "Delegate"),
+                  t("structure.officers.items.1", "Alternate Delegate"),
+                  t("structure.officers.items.2", "Chair"),
+                  t("structure.officers.items.3", "Alternate Chair"),
+                  t("structure.officers.items.4", "Secretary"),
+                  t("structure.officers.items.5", "Treasurer"),
+                ]}
                 href="/committees"
+                learnMoreLabel={t("structure.learnMoreLabel", "Learn more →")}
               />
               <StructureCard
-                title="Standing Committees"
-                items={["Accessibilities", "Archives", "CPC", "Corrections", "Finance", "Grapevine", "Literature", "Newsletter", "PI", "Registrar", "Structure", "Technology", "Treatment"]}
+                title={t("structure.committees.title", "Standing Committees")}
+                items={[
+                  t("structure.committees.items.0", "Accessibilities"),
+                  t("structure.committees.items.1", "Archives"),
+                  t("structure.committees.items.2", "CPC"),
+                  t("structure.committees.items.3", "Corrections"),
+                  t("structure.committees.items.4", "Finance"),
+                  t("structure.committees.items.5", "Grapevine"),
+                  t("structure.committees.items.6", "Literature"),
+                  t("structure.committees.items.7", "Newsletter"),
+                  t("structure.committees.items.8", "PI"),
+                  t("structure.committees.items.9", "Registrar"),
+                  t("structure.committees.items.10", "Structure"),
+                  t("structure.committees.items.11", "Technology"),
+                  t("structure.committees.items.12", "Treatment"),
+                ]}
                 href="/committees"
+                learnMoreLabel={t("structure.learnMoreLabel", "Learn more →")}
               />
               <StructureCard
-                title="Districts"
-                items={["26 Geographic Districts", "1 Linguistic District (Spanish)", "DCMs", "GSRs"]}
+                title={t("structure.districts.title", "Districts")}
+                items={[
+                  t("structure.districts.items.0", "26 Geographic Districts"),
+                  t("structure.districts.items.1", "1 Linguistic District (Spanish)"),
+                  t("structure.districts.items.2", "DCMs"),
+                  t("structure.districts.items.3", "GSRs"),
+                ]}
                 href="/districts"
+                learnMoreLabel={t("structure.learnMoreLabel", "Learn more →")}
               />
             </div>
           </div>
@@ -112,41 +156,47 @@ export default function AboutPage() {
                   <Accessibility className="h-6 w-6 text-primary" aria-hidden="true" />
                 </div>
                 <h2 id="accessibility-heading" className="text-3xl font-bold text-foreground">
-                  Accessibility Commitment
+                  {t("accessibility.title", "Accessibility Commitment")}
                 </h2>
               </div>
 
               <p className="text-muted-foreground leading-relaxed">
-                Area 36 is committed to ensuring that A.A. is accessible to all alcoholics, regardless of ability. Our
-                website and events strive to meet WCAG accessibility guidelines.
+                {t(
+                  "accessibility.intro",
+                  "Area 36 is committed to ensuring that A.A. is accessible to all alcoholics, regardless of ability. Our website and events strive to meet WCAG accessibility guidelines.",
+                )}
               </p>
 
               <div className="mt-8 grid gap-6 sm:grid-cols-2">
                 <div className="rounded-lg border border-border bg-card p-6">
-                  <h3 className="font-semibold text-foreground mb-2">Website Features</h3>
+                  <h3 className="font-semibold text-foreground mb-2">
+                    {t("accessibility.websiteFeaturesTitle", "Website Features")}
+                  </h3>
                   <ul className="space-y-2 text-sm text-muted-foreground">
-                    <li>High contrast color schemes</li>
-                    <li>Adjustable text sizing</li>
-                    <li>Dark mode support</li>
-                    <li>Screen reader compatibility</li>
-                    <li>Keyboard navigation</li>
+                    <li>{t("accessibility.websiteFeatures.0", "High contrast color schemes")}</li>
+                    <li>{t("accessibility.websiteFeatures.1", "Adjustable text sizing")}</li>
+                    <li>{t("accessibility.websiteFeatures.2", "Dark mode support")}</li>
+                    <li>{t("accessibility.websiteFeatures.3", "Screen reader compatibility")}</li>
+                    <li>{t("accessibility.websiteFeatures.4", "Keyboard navigation")}</li>
                   </ul>
                 </div>
                 <div className="rounded-lg border border-border bg-card p-6">
-                  <h3 className="font-semibold text-foreground mb-2">Event Accessibility</h3>
+                  <h3 className="font-semibold text-foreground mb-2">
+                    {t("accessibility.eventAccessibilityTitle", "Event Accessibility")}
+                  </h3>
                   <ul className="space-y-2 text-sm text-muted-foreground">
-                    <li>ASL interpretation available on request</li>
-                    <li>Wheelchair accessible venues</li>
-                    <li>Hybrid/online meeting options</li>
-                    <li>Large print materials</li>
+                    <li>{t("accessibility.eventAccessibility.0", "ASL interpretation available on request")}</li>
+                    <li>{t("accessibility.eventAccessibility.1", "Wheelchair accessible venues")}</li>
+                    <li>{t("accessibility.eventAccessibility.2", "Hybrid/online meeting options")}</li>
+                    <li>{t("accessibility.eventAccessibility.3", "Large print materials")}</li>
                   </ul>
                 </div>
               </div>
 
               <p className="mt-6 text-sm text-muted-foreground">
-                To request accommodations for an Area 36 event, please contact the{" "}
+                {t("accessibility.requestText", "To request accommodations for an Area 36 event, please contact the")}{" "}
                 <Link href="/committees" className="text-primary hover:underline">
-                  Accessibilities Committee
+                  {t("accessibility.requestLinkLabel", "Accessibilities Committee")}
                 </Link>
                 .
               </p>
@@ -163,18 +213,21 @@ export default function AboutPage() {
                   <Briefcase className="h-6 w-6 text-primary" aria-hidden="true" />
                 </div>
                 <h2 id="professionals-heading" className="text-3xl font-bold text-foreground">
-                  For Professionals
+                  {t("professionals.title", "For Professionals")}
                 </h2>
               </div>
 
               <p className="text-muted-foreground leading-relaxed">
-                Are you a professional looking for more information about Alcoholics Anonymous in southern Minnesota?
-                A.A. cooperates with professionals who work with alcoholics, including healthcare providers, clergy,
-                educators, and others.
+                {t(
+                  "professionals.intro",
+                  "Are you a professional looking for more information about Alcoholics Anonymous in southern Minnesota? A.A. cooperates with professionals who work with alcoholics, including healthcare providers, clergy, educators, and others.",
+                )}
               </p>
 
               <div className="mt-8 space-y-4">
-                <h3 className="text-lg font-semibold text-foreground">Resources</h3>
+                <h3 className="text-lg font-semibold text-foreground">
+                  {t("professionals.resourcesTitle", "Resources")}
+                </h3>
                 <ul className="space-y-3" role="list">
                   <li>
                     <Link
@@ -183,7 +236,7 @@ export default function AboutPage() {
                       rel="noopener noreferrer"
                       className="flex items-center gap-2 text-primary hover:underline"
                     >
-                      A.A. Information for Professionals
+                      {t("professionals.links.infoForProfessionals", "A.A. Information for Professionals")}
                       <ExternalLink className="h-4 w-4" aria-label="(opens in new tab)" />
                     </Link>
                   </li>
@@ -194,7 +247,7 @@ export default function AboutPage() {
                       rel="noopener noreferrer"
                       className="flex items-center gap-2 text-primary hover:underline"
                     >
-                      A.A. Literature
+                      {t("professionals.links.literature", "A.A. Literature")}
                       <ExternalLink className="h-4 w-4" aria-label="(opens in new tab)" />
                     </Link>
                   </li>
@@ -203,7 +256,7 @@ export default function AboutPage() {
                       href="/professionals"
                       className="flex items-center gap-2 text-primary hover:underline"
                     >
-                      Area 36 Resources for Professionals
+                      {t("professionals.links.areaResources", "Area 36 Resources for Professionals")}
                       <ArrowRight className="h-4 w-4" aria-hidden="true" />
                     </Link>
                   </li>
@@ -212,7 +265,7 @@ export default function AboutPage() {
 
               <div className="mt-8">
                 <Button asChild>
-                  <Link href="/contact">Contact Us</Link>
+                  <Link href="/contact">{t("professionals.contactButtonLabel", "Contact Us")}</Link>
                 </Button>
               </div>
             </div>
@@ -242,7 +295,17 @@ function ValueCard({
   )
 }
 
-function StructureCard({ title, items, href }: { title: string; items: string[]; href?: string }) {
+function StructureCard({
+  title,
+  items,
+  href,
+  learnMoreLabel,
+}: {
+  title: string
+  items: string[]
+  href?: string
+  learnMoreLabel: string
+}) {
   const content = (
     <div className="rounded-lg border border-border bg-card p-6 h-full transition-all hover:border-primary/30 hover:shadow-md">
       <h3 className="font-semibold text-foreground">{title}</h3>
@@ -256,7 +319,7 @@ function StructureCard({ title, items, href }: { title: string; items: string[];
       </ul>
       {href && (
         <div className="mt-4 pt-4 border-t border-border">
-          <span className="text-sm text-primary">Learn more →</span>
+          <span className="text-sm text-primary">{learnMoreLabel}</span>
         </div>
       )}
     </div>

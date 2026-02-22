@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
   ArrowDownRight,
@@ -18,18 +18,31 @@ import type { CorrectionsContact, CorrectionsRecipient } from "@/lib/db/schema"
 import { rankContactsForRecipient } from "@/lib/corrections/matching"
 import {
   CORRECTIONS_FACILITY_OPTIONS,
+  CORRECTIONS_GENDER_OPTIONS,
   CORRECTIONS_SOURCE_OPTIONS,
   RECIPIENT_STATUS_OPTIONS,
 } from "@/lib/corrections/options"
 import {
   createCorrectionsContact,
   createCorrectionsRecipient,
+  deleteCorrectionsContact,
+  deleteCorrectionsRecipient,
   markRecipientCompleted,
   markRecipientUnmatched,
   matchRecipientToContact,
   updateCorrectionsContact,
   updateCorrectionsRecipient,
 } from "./actions"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -64,6 +77,7 @@ import {
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 
 type PageSearchParams = Record<string, string | string[] | undefined>
@@ -91,6 +105,7 @@ type CorrectionsAdminClientProps = {
   contactsMetrics: SummaryMetric[]
   recipientMetrics: SummaryMetric[]
   canEdit: boolean
+  canDelete: boolean
   initialSearchParams: PageSearchParams
 }
 
@@ -150,7 +165,7 @@ type FilterChip = {
 type FilterDescriptor<T extends Record<string, string>> = {
   key: keyof T
   label: string
-  kind: "text" | "select"
+  kind: "text" | "select" | "birthYear"
   options?: string[]
 }
 
@@ -162,6 +177,7 @@ type ComboboxOption = {
 const CONTACT_MULTI_KEYS: Array<keyof ContactFilterState> = [
   "active",
   "spanish",
+  "gender",
   "city",
   "county",
   "state",
@@ -170,6 +186,7 @@ const CONTACT_MULTI_KEYS: Array<keyof ContactFilterState> = [
 
 const RECIPIENT_MULTI_KEYS: Array<keyof RecipientFilterState> = [
   "status",
+  "gender",
   "facilityName",
   "source",
   "releaseCity",
@@ -282,15 +299,81 @@ function matchesMultiSelectExact(value: string | null | undefined, filter: strin
   return selections.some((selection) => norm(selection) === normalizedValue)
 }
 
-function statusBadgeVariant(status: string): "outline" | "secondary" | "default" {
-  if (status === "completed") return "default"
-  if (status === "pending") return "secondary"
-  return "outline"
+function normalizeGender(value: string | null | undefined): "Male" | "Female" | null {
+  const parsed = norm(value)
+  if (!parsed) return null
+  if (parsed === "male" || parsed === "m" || parsed === "man" || parsed === "men") return "Male"
+  if (parsed === "female" || parsed === "f" || parsed === "woman" || parsed === "women") return "Female"
+  return null
+}
+
+function normalizeBirthYearFilter(value: string): string {
+  return value.replace(/\s+/g, "")
+}
+
+function parseBirthYearFilter(value: string): { min: number; max: number } | null {
+  const parsed = normalizeBirthYearFilter(value)
+  if (!parsed) return null
+
+  const single = /^(\d{4})$/.exec(parsed)
+  if (single) {
+    const year = Number(single[1])
+    return { min: year, max: year }
+  }
+
+  const range = /^(\d{4})-(\d{4})$/.exec(parsed)
+  if (!range) return null
+
+  const min = Number(range[1])
+  const max = Number(range[2])
+
+  if (min > max) {
+    return { min: max, max: min }
+  }
+
+  return { min, max }
+}
+
+function matchesBirthYearFilter(value: number | null | undefined, filter: string): boolean {
+  const parsedFilter = parseBirthYearFilter(filter)
+  if (!parsedFilter) return !filter.trim()
+  if (value == null) return false
+  return value >= parsedFilter.min && value <= parsedFilter.max
+}
+
+function formatBirthYearFilterLabel(value: string): string {
+  const parsed = parseBirthYearFilter(value)
+  if (!parsed) return value
+  if (parsed.min === parsed.max) return String(parsed.min)
+  return `${parsed.min}-${parsed.max}`
+}
+
+function statusBadgeClass(status: string): string {
+  if (status === "completed") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700"
+  }
+
+  if (status === "pending") {
+    return "border-blue-200 bg-blue-50 text-blue-700"
+  }
+
+  return "border-amber-200 bg-amber-50 text-amber-700"
+}
+
+function formatStatusLabel(status: string): string {
+  if (!status) return ""
+  return `${status.charAt(0).toUpperCase()}${status.slice(1)}`
 }
 
 function formatDelta(delta: number): string {
   if (delta > 0) return `+${delta}`
   return `${delta}`
+}
+
+function formatDetailValue(value: string | number | null | undefined): string {
+  if (value == null) return "-"
+  const parsed = String(value).trim()
+  return parsed || "-"
 }
 
 function parseContactFiltersFromParams(searchParams: URLSearchParams, initialSearchParams: PageSearchParams): ContactFilterState {
@@ -394,7 +477,7 @@ function summarizeContactFilterChips(filters: ContactFilterState): FilterChip[] 
   push("sobrietyDate", "Sobriety")
   push("phonePrimary", "Phone 1")
   push("phoneSecondary", "Phone 2")
-  push("birthYear", "Birth Year")
+  push("birthYear", "Birth Year", formatBirthYearFilterLabel(filters.birthYear))
   push("spanish", "Spanish")
   push("otherLanguages", "Languages")
   push("homeGroup", "Home Group")
@@ -445,7 +528,7 @@ function summarizeRecipientFilterChips(filters: RecipientFilterState): FilterChi
   push("lastName", "Last")
   push("idNumber", "ID")
   push("gender", "Gender")
-  push("birthYear", "Birth Year")
+  push("birthYear", "Birth Year", formatBirthYearFilterLabel(filters.birthYear))
   push("dischargeDate", "Discharge")
   push("phone", "Phone")
   push("contactEmail", "Email")
@@ -466,17 +549,21 @@ function updateObjectField<T extends Record<string, string>>(prev: T, key: keyof
 function SearchableValueCombobox({
   options,
   value,
+  values,
   placeholder,
   searchPlaceholder,
   onChange,
+  onToggleValue,
   triggerClassName,
   closeOnSelect = true,
 }: {
   options: ComboboxOption[]
-  value: string
+  value?: string
+  values?: string[]
   placeholder: string
   searchPlaceholder: string
-  onChange: (nextValue: string) => void
+  onChange?: (nextValue: string) => void
+  onToggleValue?: (nextValue: string) => void
   triggerClassName?: string
   closeOnSelect?: boolean
 }) {
@@ -498,7 +585,22 @@ function SearchableValueCombobox({
     [options]
   )
 
-  const selectedOption = normalizedOptions.find((option) => norm(option.value) === norm(value))
+  const selectedValues = useMemo(() => values ?? [], [values])
+  const isMultiSelect = typeof onToggleValue === "function"
+  const selectedOption = normalizedOptions.find((option) => norm(option.value) === norm(value ?? ""))
+  const selectedOptions = normalizedOptions.filter((option) =>
+    selectedValues.some((selectedValue) => norm(selectedValue) === norm(option.value))
+  )
+
+  const triggerLabel = useMemo(() => {
+    if (isMultiSelect) {
+      if (selectedOptions.length === 0) return placeholder
+      if (selectedOptions.length === 1) return selectedOptions[0]?.label ?? placeholder
+      return `${selectedOptions.length} selected`
+    }
+
+    return selectedOption?.label || placeholder
+  }, [isMultiSelect, placeholder, selectedOption?.label, selectedOptions])
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -507,13 +609,10 @@ function SearchableValueCombobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn(
-            "w-full justify-between font-normal focus:border-ring focus:ring-[3px] focus:ring-ring/50",
-            triggerClassName
-          )}
+          className={cn("w-full justify-between font-normal focus-visible:ring-0 focus-visible:border-input", triggerClassName)}
         >
-          <span className={cn("truncate", !selectedOption && "text-muted-foreground")}>
-            {selectedOption?.label || placeholder}
+          <span className={cn("truncate", triggerLabel === placeholder && "text-muted-foreground")}>
+            {triggerLabel}
           </span>
           <ChevronDown className="h-4 w-4 opacity-50" />
         </Button>
@@ -533,13 +632,28 @@ function SearchableValueCombobox({
                   key={option.value}
                   value={`${option.label} ${option.value}`}
                   onSelect={() => {
-                    onChange(option.value)
+                    if (isMultiSelect) {
+                      onToggleValue?.(option.value)
+                    } else {
+                      onChange?.(option.value)
+                    }
                     if (closeOnSelect) {
                       setOpen(false)
                     }
                   }}
                 >
-                  <Check className={cn("h-4 w-4", norm(value) === norm(option.value) ? "opacity-100" : "opacity-0")} />
+                  <Check
+                    className={cn(
+                      "h-4 w-4",
+                      isMultiSelect
+                        ? selectedValues.some((selectedValue) => norm(selectedValue) === norm(option.value))
+                          ? "opacity-100"
+                          : "opacity-0"
+                        : norm(value ?? "") === norm(option.value)
+                          ? "opacity-100"
+                          : "opacity-0"
+                    )}
+                  />
                   <span>{option.label}</span>
                 </CommandItem>
               ))}
@@ -573,6 +687,15 @@ function MetricCard({ metric }: { metric: SummaryMetric }) {
   )
 }
 
+function DetailItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-sm text-foreground break-words">{value}</p>
+    </div>
+  )
+}
+
 export function CorrectionsAdminClient({
   contacts,
   recipients,
@@ -580,6 +703,7 @@ export function CorrectionsAdminClient({
   contactsMetrics,
   recipientMetrics,
   canEdit,
+  canDelete,
   initialSearchParams,
 }: CorrectionsAdminClientProps) {
   const pathname = usePathname()
@@ -592,31 +716,43 @@ export function CorrectionsAdminClient({
   const [isAddRecipientOpen, setIsAddRecipientOpen] = useState(false)
   const [editingContact, setEditingContact] = useState<CorrectionsContact | null>(null)
   const [editingRecipient, setEditingRecipient] = useState<CorrectionsRecipient | null>(null)
+  const [viewingContact, setViewingContact] = useState<CorrectionsContact | null>(null)
+  const [viewingRecipient, setViewingRecipient] = useState<CorrectionsRecipient | null>(null)
+  const [deletingContact, setDeletingContact] = useState<CorrectionsContact | null>(null)
+  const [deletingRecipient, setDeletingRecipient] = useState<CorrectionsRecipient | null>(null)
   const [matchingRecipient, setMatchingRecipient] = useState<CorrectionsRecipient | null>(null)
   const [statusRecipient, setStatusRecipient] = useState<CorrectionsRecipient | null>(null)
   const [isContactFilterComposerOpen, setIsContactFilterComposerOpen] = useState(false)
   const [isRecipientFilterComposerOpen, setIsRecipientFilterComposerOpen] = useState(false)
 
+  const [newContactGender, setNewContactGender] = useState<string>(CORRECTIONS_GENDER_OPTIONS[0])
   const [newContactSpanish, setNewContactSpanish] = useState(false)
   const [newContactActive, setNewContactActive] = useState(true)
 
+  const [editContactGender, setEditContactGender] = useState<string>(CORRECTIONS_GENDER_OPTIONS[0])
   const [editContactSpanish, setEditContactSpanish] = useState(false)
   const [editContactActive, setEditContactActive] = useState(true)
 
+  const [newRecipientGender, setNewRecipientGender] = useState<string>(CORRECTIONS_GENDER_OPTIONS[0])
   const [newRecipientFacility, setNewRecipientFacility] = useState<string>(CORRECTIONS_FACILITY_OPTIONS[0] ?? "")
   const [newRecipientSource, setNewRecipientSource] = useState<string>(CORRECTIONS_SOURCE_OPTIONS[0] ?? "")
   const [newRecipientStatus, setNewRecipientStatus] = useState<string>("unmatched")
 
+  const [editRecipientGender, setEditRecipientGender] = useState<string>(CORRECTIONS_GENDER_OPTIONS[0])
   const [editRecipientFacility, setEditRecipientFacility] = useState<string>("")
   const [editRecipientSource, setEditRecipientSource] = useState<string>("")
   const [editRecipientStatus, setEditRecipientStatus] = useState<string>("unmatched")
 
   const [contactFilters, setContactFilters] = useState<ContactFilterState>(EMPTY_CONTACT_FILTERS)
   const [recipientFilters, setRecipientFilters] = useState<RecipientFilterState>(EMPTY_RECIPIENT_FILTERS)
+  const [contactFilterDrafts, setContactFilterDrafts] = useState<ContactFilterState>(EMPTY_CONTACT_FILTERS)
+  const [recipientFilterDrafts, setRecipientFilterDrafts] = useState<RecipientFilterState>(EMPTY_RECIPIENT_FILTERS)
+  const [contactSearchInput, setContactSearchInput] = useState("")
+  const [recipientSearchInput, setRecipientSearchInput] = useState("")
   const [contactFilterField, setContactFilterField] = useState<keyof ContactFilterState>("active")
-  const [contactFilterValue, setContactFilterValue] = useState("")
   const [recipientFilterField, setRecipientFilterField] = useState<keyof RecipientFilterState>("status")
-  const [recipientFilterValue, setRecipientFilterValue] = useState("")
+  const initializedContactDrafts = useRef(false)
+  const initializedRecipientDrafts = useRef(false)
 
   const contactMatchMap = useMemo(() => {
     const map = new Map<string, RecipientMatchSummary>()
@@ -653,19 +789,19 @@ export function CorrectionsAdminClient({
     return [
       { key: "active", label: "Activity", kind: "select", options: ["active", "inactive"] },
       { key: "spanish", label: "Spanish", kind: "select", options: ["yes", "no"] },
+      { key: "gender", label: "Gender", kind: "select", options: [...CORRECTIONS_GENDER_OPTIONS] },
       { key: "city", label: "City", kind: "select", options: contactCities },
       { key: "county", label: "County", kind: "select", options: contactCounties },
       { key: "state", label: "State", kind: "select", options: contactStates },
       { key: "zipCode", label: "ZIP", kind: "select", options: contactZips },
       { key: "firstName", label: "First Name", kind: "text" },
       { key: "lastName", label: "Last Name", kind: "text" },
-      { key: "gender", label: "Gender", kind: "text" },
       { key: "streetAddress", label: "Street Address", kind: "text" },
       { key: "email", label: "Email", kind: "text" },
       { key: "sobrietyDate", label: "Sobriety Date", kind: "text" },
       { key: "phonePrimary", label: "Phone 1", kind: "text" },
       { key: "phoneSecondary", label: "Phone 2", kind: "text" },
-      { key: "birthYear", label: "Birth Year", kind: "text" },
+      { key: "birthYear", label: "Birth Year", kind: "birthYear" },
       { key: "otherLanguages", label: "Other Languages", kind: "text" },
       { key: "homeGroup", label: "Home Group", kind: "text" },
       { key: "notes", label: "Notes", kind: "text" },
@@ -682,11 +818,11 @@ export function CorrectionsAdminClient({
       { key: "releaseCounty", label: "Release County", kind: "select", options: recipientCounties },
       { key: "releaseState", label: "Release State", kind: "select", options: recipientStates },
       { key: "releaseZip", label: "Release ZIP", kind: "select", options: recipientZips },
+      { key: "gender", label: "Gender", kind: "select", options: [...CORRECTIONS_GENDER_OPTIONS] },
       { key: "firstName", label: "First Name", kind: "text" },
       { key: "lastName", label: "Last Name", kind: "text" },
       { key: "idNumber", label: "ID Number", kind: "text" },
-      { key: "gender", label: "Gender", kind: "text" },
-      { key: "birthYear", label: "Birth Year", kind: "text" },
+      { key: "birthYear", label: "Birth Year", kind: "birthYear" },
       { key: "dischargeDate", label: "Discharge Date", kind: "text" },
       { key: "phone", label: "Phone", kind: "text" },
       { key: "contactEmail", label: "Contact Email", kind: "text" },
@@ -726,47 +862,76 @@ export function CorrectionsAdminClient({
     [recipientFilterDescriptors, recipientFilterField]
   )
 
+  const selectedContactDraftValue = contactFilterDrafts[contactFilterField] ?? ""
+  const selectedRecipientDraftValue = recipientFilterDrafts[recipientFilterField] ?? ""
+
   useEffect(() => {
-    setContactFilters(parseContactFiltersFromParams(searchParams, initialSearchParams))
+    const parsed = parseContactFiltersFromParams(searchParams, initialSearchParams)
+    setContactFilters(parsed)
+    if (!initializedContactDrafts.current) {
+      setContactFilterDrafts(parsed)
+      initializedContactDrafts.current = true
+    }
   }, [searchParams, initialSearchParams])
 
   useEffect(() => {
-    setRecipientFilters(parseRecipientFiltersFromParams(searchParams, initialSearchParams))
+    const parsed = parseRecipientFiltersFromParams(searchParams, initialSearchParams)
+    setRecipientFilters(parsed)
+    if (!initializedRecipientDrafts.current) {
+      setRecipientFilterDrafts(parsed)
+      initializedRecipientDrafts.current = true
+    }
   }, [searchParams, initialSearchParams])
+
+  useEffect(() => {
+    setContactSearchInput((prev) => (prev === contactFilters.q ? prev : contactFilters.q))
+  }, [contactFilters.q])
+
+  useEffect(() => {
+    setRecipientSearchInput((prev) => (prev === recipientFilters.q ? prev : recipientFilters.q))
+  }, [recipientFilters.q])
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setContactFilters((prev) => (prev.q === contactSearchInput ? prev : updateObjectField(prev, "q", contactSearchInput)))
+    }, 180)
+    return () => clearTimeout(timeout)
+  }, [contactSearchInput])
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setRecipientFilters((prev) =>
+        prev.q === recipientSearchInput ? prev : updateObjectField(prev, "q", recipientSearchInput)
+      )
+    }, 180)
+    return () => clearTimeout(timeout)
+  }, [recipientSearchInput])
 
   useEffect(() => {
     if (!editingContact) return
+    setEditContactGender(normalizeGender(editingContact.gender) ?? CORRECTIONS_GENDER_OPTIONS[0])
     setEditContactSpanish(editingContact.isSpanishSpeaking)
     setEditContactActive(editingContact.active)
   }, [editingContact])
 
   useEffect(() => {
     if (!editingRecipient) return
+    setEditRecipientGender(normalizeGender(editingRecipient.gender) ?? CORRECTIONS_GENDER_OPTIONS[0])
     setEditRecipientFacility(editingRecipient.facilityName)
     setEditRecipientSource(editingRecipient.source)
     setEditRecipientStatus(editingRecipient.status)
   }, [editingRecipient])
-
-  useEffect(() => {
-    if (!selectedContactFilterDescriptor) return
-    setContactFilterValue("")
-  }, [contactFilterField, selectedContactFilterDescriptor])
-
-  useEffect(() => {
-    if (!selectedRecipientFilterDescriptor) return
-    setRecipientFilterValue("")
-  }, [recipientFilterField, selectedRecipientFilterDescriptor])
 
   const filteredContacts = useMemo(() => {
     return contacts.filter((contact) => {
       if (!matchesMultiSelectExact(contact.active ? "active" : "inactive", contactFilters.active)) return false
       if (!matchesMultiSelectExact(contact.isSpanishSpeaking ? "yes" : "no", contactFilters.spanish)) return false
 
-      if (contactFilters.birthYear && String(contact.birthYear ?? "") !== contactFilters.birthYear.trim()) return false
+      if (!matchesBirthYearFilter(contact.birthYear, contactFilters.birthYear)) return false
 
       if (!stringIncludes(contact.firstName, contactFilters.firstName)) return false
       if (!stringIncludes(contact.lastName, contactFilters.lastName)) return false
-      if (!stringIncludes(contact.gender, contactFilters.gender)) return false
+      if (!matchesMultiSelectExact(normalizeGender(contact.gender) ?? contact.gender, contactFilters.gender)) return false
       if (!stringIncludes(contact.streetAddress, contactFilters.streetAddress)) return false
       if (!matchesMultiSelectExact(contact.city, contactFilters.city)) return false
       if (!matchesMultiSelectExact(contact.county, contactFilters.county)) return false
@@ -813,12 +978,12 @@ export function CorrectionsAdminClient({
   const filteredRecipients = useMemo(() => {
     return recipients.filter((recipient) => {
       if (!matchesMultiSelectExact(recipient.status, recipientFilters.status)) return false
-      if (recipientFilters.birthYear && String(recipient.birthYear ?? "") !== recipientFilters.birthYear.trim()) return false
+      if (!matchesBirthYearFilter(recipient.birthYear, recipientFilters.birthYear)) return false
 
       if (!stringIncludes(recipient.firstName, recipientFilters.firstName)) return false
       if (!stringIncludes(recipient.lastName, recipientFilters.lastName)) return false
       if (!stringIncludes(recipient.idNumber, recipientFilters.idNumber)) return false
-      if (!stringIncludes(recipient.gender, recipientFilters.gender)) return false
+      if (!matchesMultiSelectExact(normalizeGender(recipient.gender) ?? recipient.gender, recipientFilters.gender)) return false
       if (!stringIncludes(recipient.dischargeDate, recipientFilters.dischargeDate)) return false
       if (!stringIncludes(recipient.phone, recipientFilters.phone)) return false
       if (!matchesMultiSelectExact(recipient.facilityName, recipientFilters.facilityName)) return false
@@ -949,58 +1114,72 @@ export function CorrectionsAdminClient({
 
   function clearContactFilters() {
     setContactFilters(EMPTY_CONTACT_FILTERS)
+    setContactFilterDrafts(EMPTY_CONTACT_FILTERS)
     applyContactFilters(EMPTY_CONTACT_FILTERS)
   }
 
   function clearRecipientFilters() {
     setRecipientFilters(EMPTY_RECIPIENT_FILTERS)
+    setRecipientFilterDrafts(EMPTY_RECIPIENT_FILTERS)
     applyRecipientFilters(EMPTY_RECIPIENT_FILTERS)
   }
 
   function addContactFilterChip() {
     if (!selectedContactFilterDescriptor) return
-    const value = contactFilterValue.trim()
+    const rawValue = selectedContactDraftValue.trim()
+    const value =
+      selectedContactFilterDescriptor.kind === "birthYear"
+        ? normalizeBirthYearFilter(rawValue)
+        : rawValue
     if (!value) return
-    const nextValue =
-      selectedContactFilterDescriptor.kind === "select"
-        ? appendMultiValue(contactFilters[selectedContactFilterDescriptor.key], value)
-        : value
+    if (selectedContactFilterDescriptor.kind === "birthYear" && !parseBirthYearFilter(value)) return
+    const nextValue = selectedContactFilterDescriptor.kind === "select"
+      ? joinMultiValues([
+          ...splitMultiValues(contactFilters[selectedContactFilterDescriptor.key]),
+          ...splitMultiValues(value),
+        ])
+      : value
     const next = updateObjectField(contactFilters, selectedContactFilterDescriptor.key, nextValue)
     setContactFilters(next)
     applyContactFilters(next)
-    setContactFilterValue("")
   }
 
   function addRecipientFilterChip() {
     if (!selectedRecipientFilterDescriptor) return
-    const value = recipientFilterValue.trim()
+    const rawValue = selectedRecipientDraftValue.trim()
+    const value =
+      selectedRecipientFilterDescriptor.kind === "birthYear"
+        ? normalizeBirthYearFilter(rawValue)
+        : rawValue
     if (!value) return
-    const nextValue =
-      selectedRecipientFilterDescriptor.kind === "select"
-        ? appendMultiValue(recipientFilters[selectedRecipientFilterDescriptor.key], value)
-        : value
+    if (selectedRecipientFilterDescriptor.kind === "birthYear" && !parseBirthYearFilter(value)) return
+    const nextValue = selectedRecipientFilterDescriptor.kind === "select"
+      ? joinMultiValues([
+          ...splitMultiValues(recipientFilters[selectedRecipientFilterDescriptor.key]),
+          ...splitMultiValues(value),
+        ])
+      : value
     const next = updateObjectField(recipientFilters, selectedRecipientFilterDescriptor.key, nextValue)
     setRecipientFilters(next)
     applyRecipientFilters(next)
-    setRecipientFilterValue("")
   }
 
-  function addContactSelectValue(nextValue: string) {
+  function toggleContactSelectValue(nextValue: string) {
     if (!selectedContactFilterDescriptor || selectedContactFilterDescriptor.kind !== "select") return
-    const combined = appendMultiValue(contactFilters[selectedContactFilterDescriptor.key], nextValue)
-    const next = updateObjectField(contactFilters, selectedContactFilterDescriptor.key, combined)
-    setContactFilters(next)
-    applyContactFilters(next)
-    setContactFilterValue("")
+    const current = contactFilterDrafts[selectedContactFilterDescriptor.key]
+    const combined = includesMultiValue(current, nextValue)
+      ? removeMultiValue(current, nextValue)
+      : appendMultiValue(current, nextValue)
+    setContactFilterDrafts((prev) => updateObjectField(prev, selectedContactFilterDescriptor.key, combined))
   }
 
-  function addRecipientSelectValue(nextValue: string) {
+  function toggleRecipientSelectValue(nextValue: string) {
     if (!selectedRecipientFilterDescriptor || selectedRecipientFilterDescriptor.kind !== "select") return
-    const combined = appendMultiValue(recipientFilters[selectedRecipientFilterDescriptor.key], nextValue)
-    const next = updateObjectField(recipientFilters, selectedRecipientFilterDescriptor.key, combined)
-    setRecipientFilters(next)
-    applyRecipientFilters(next)
-    setRecipientFilterValue("")
+    const current = recipientFilterDrafts[selectedRecipientFilterDescriptor.key]
+    const combined = includesMultiValue(current, nextValue)
+      ? removeMultiValue(current, nextValue)
+      : appendMultiValue(current, nextValue)
+    setRecipientFilterDrafts((prev) => updateObjectField(prev, selectedRecipientFilterDescriptor.key, combined))
   }
 
   function applyContactShortcut(key: keyof ContactFilterState, value: string) {
@@ -1010,7 +1189,6 @@ export function CorrectionsAdminClient({
       : appendMultiValue(current, value)
     const next = updateObjectField(contactFilters, key, nextValue)
     setContactFilters(next)
-    applyContactFilters(next)
   }
 
   function applyRecipientShortcut(key: keyof RecipientFilterState, value: string) {
@@ -1020,7 +1198,6 @@ export function CorrectionsAdminClient({
       : appendMultiValue(current, value)
     const next = updateObjectField(recipientFilters, key, nextValue)
     setRecipientFilters(next)
-    applyRecipientFilters(next)
   }
 
   function removeContactChip(chip: FilterChip) {
@@ -1028,7 +1205,6 @@ export function CorrectionsAdminClient({
     const nextValue = chip.multi ? removeMultiValue(contactFilters[filterKey], chip.value) : ""
     const next = updateObjectField(contactFilters, filterKey, nextValue)
     setContactFilters(next)
-    applyContactFilters(next)
   }
 
   function removeRecipientChip(chip: FilterChip) {
@@ -1036,7 +1212,6 @@ export function CorrectionsAdminClient({
     const nextValue = chip.multi ? removeMultiValue(recipientFilters[filterKey], chip.value) : ""
     const next = updateObjectField(recipientFilters, filterKey, nextValue)
     setRecipientFilters(next)
-    applyRecipientFilters(next)
   }
 
   return (
@@ -1112,18 +1287,14 @@ export function CorrectionsAdminClient({
                       <Input
                         id="contacts-filter-search"
                         className="border-0 pl-9 shadow-none focus-visible:ring-0"
-                        value={contactFilters.q}
-                        onChange={(event) => {
-                          const next = updateObjectField(contactFilters, "q", event.target.value)
-                          setContactFilters(next)
-                          applyContactFilters(next)
-                        }}
+                        value={contactSearchInput}
+                        onChange={(event) => setContactSearchInput(event.target.value)}
                         placeholder="Name, phone, location, home group, or notes..."
                       />
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
                     <Popover open={isContactFilterComposerOpen} onOpenChange={setIsContactFilterComposerOpen}>
                       <PopoverTrigger asChild>
                         <Button variant="outline" className="gap-2">
@@ -1157,33 +1328,44 @@ export function CorrectionsAdminClient({
                                   value: option,
                                   label: option,
                                 }))}
-                                value={contactFilterValue}
+                                values={splitMultiValues(selectedContactDraftValue)}
                                 placeholder="Select value(s)"
                                 searchPlaceholder="Search values..."
                                 closeOnSelect={false}
-                                onChange={(nextValue) => addContactSelectValue(nextValue)}
+                                onToggleValue={(nextValue) => toggleContactSelectValue(nextValue)}
                               />
                             ) : (
                               <div className="rounded-md border border-input bg-background transition-[border-color,box-shadow] shadow-xs focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
                                 <Input
                                   className="border-0 shadow-none focus-visible:ring-0"
-                                  value={contactFilterValue}
-                                  onChange={(event) => setContactFilterValue(event.target.value)}
+                                  value={selectedContactDraftValue}
+                                  onChange={(event) =>
+                                    setContactFilterDrafts((prev) =>
+                                      updateObjectField(prev, contactFilterField, event.target.value)
+                                    )
+                                  }
                                   onKeyDown={(event) => {
                                     if (event.key === "Enter") {
                                       event.preventDefault()
                                       addContactFilterChip()
                                     }
                                   }}
-                                  placeholder="Type a value and press Enter"
+                                  placeholder={
+                                    selectedContactFilterDescriptor?.kind === "birthYear"
+                                      ? "YYYY or YYYY-YYYY"
+                                      : "Type a value"
+                                  }
                                 />
                               </div>
                             )}
                           </div>
 
                           <div className="flex justify-end gap-2">
+                            <Button variant="outline" onClick={addContactFilterChip}>
+                              Add Value
+                            </Button>
                             <Button variant="ghost" onClick={() => setIsContactFilterComposerOpen(false)}>
-                              Cancel
+                              Done
                             </Button>
                           </div>
                         </div>
@@ -1263,92 +1445,176 @@ export function CorrectionsAdminClient({
             </CardContent>
           </Card>
 
-          <div className="grid gap-4 xl:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Active Contacts ({activeContacts.length})</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {activeContacts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No active contacts match this filter.</p>
-                ) : (
-                  <ScrollArea className="h-[560px] pr-3">
-                    <div className="space-y-2">
-                      {activeContacts.map((contact) => (
-                        <div key={contact.id} className="rounded-md border border-border p-3">
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                            <div className="space-y-1">
-                              <p className="font-medium">
-                                {contact.firstName} {contact.lastName}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {contact.city}
-                                {contact.state ? `, ${contact.state}` : ""}
-                                {contact.zipCode ? ` ${contact.zipCode}` : ""}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {contact.email ?? "No email"}
-                                {contact.phonePrimary ? ` • ${contact.phonePrimary}` : ""}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {contact.homeGroup ? `Home Group: ${contact.homeGroup}` : "Home Group: -"}
-                              </p>
-                            </div>
-                            {canEdit && (
-                              <Button variant="outline" size="sm" onClick={() => setEditingContact(contact)}>
-                                Edit
-                              </Button>
-                            )}
+          <Card>
+            <CardHeader>
+              <CardTitle>Active Contacts ({activeContacts.length})</CardTitle>
+              <CardDescription>Current volunteers used for matching.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {activeContacts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No active contacts match this filter.</p>
+              ) : (
+                <ScrollArea className="h-[640px] pr-3">
+                  <div className="space-y-2">
+                    {activeContacts.map((contact) => (
+                      <div
+                        key={contact.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`View contact ${contact.firstName} ${contact.lastName}`}
+                        onClick={() => setViewingContact(contact)}
+                        onKeyDown={(event) => {
+                          if (event.currentTarget !== event.target) return
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault()
+                            setViewingContact(contact)
+                          }
+                        }}
+                        className="rounded-md border border-border p-3 cursor-pointer transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="space-y-1">
+                            <p className="font-medium">
+                              {contact.firstName} {contact.lastName}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {normalizeGender(contact.gender) ?? contact.gender} • {contact.city}
+                              {contact.state ? `, ${contact.state}` : ""}
+                              {contact.zipCode ? ` ${contact.zipCode}` : ""}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {contact.email ?? "No email"}
+                              {contact.phonePrimary ? ` • ${contact.phonePrimary}` : ""}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {contact.homeGroup ? `Home Group: ${contact.homeGroup}` : "Home Group: -"}
+                            </p>
                           </div>
+                          {(canEdit || canDelete) && (
+                            <div className="flex items-center gap-2">
+                              {canEdit && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    setEditingContact(contact)
+                                  }}
+                                >
+                                  Edit
+                                </Button>
+                              )}
+                              {canDelete && (
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    setDeletingContact(contact)
+                                  }}
+                                >
+                                  Delete
+                                </Button>
+                              )}
+                            </div>
+                          )}
                         </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                )}
-              </CardContent>
-            </Card>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              )}
+            </CardContent>
+          </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Inactive Contacts ({inactiveContacts.length})</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {inactiveContacts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No inactive contacts match this filter.</p>
-                ) : (
-                  <ScrollArea className="h-[560px] pr-3">
-                    <div className="space-y-2">
-                      {inactiveContacts.map((contact) => (
-                        <div key={contact.id} className="rounded-md border border-border p-3">
-                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                            <div className="space-y-1">
-                              <p className="font-medium">
-                                {contact.firstName} {contact.lastName}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {contact.city}
-                                {contact.state ? `, ${contact.state}` : ""}
-                                {contact.zipCode ? ` ${contact.zipCode}` : ""}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {contact.email ?? "No email"}
-                                {contact.phonePrimary ? ` • ${contact.phonePrimary}` : ""}
-                              </p>
-                            </div>
-                            {canEdit && (
-                              <Button variant="outline" size="sm" onClick={() => setEditingContact(contact)}>
-                                Edit
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+          <Card className="border-dashed">
+            <CardContent className="pt-4">
+              <Accordion type="single" collapsible>
+                <AccordionItem value="inactive-history" className="border-b-0">
+                  <AccordionTrigger className="py-2">
+                    <div className="text-left">
+                      <p className="font-medium">Inactive Contacts (Historical) ({inactiveContacts.length})</p>
+                      <p className="text-xs text-muted-foreground">
+                        Archived records that are not prioritized for matching.
+                      </p>
                     </div>
-                  </ScrollArea>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    {inactiveContacts.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No inactive contacts match this filter.</p>
+                    ) : (
+                      <ScrollArea className="h-[320px] pr-3">
+                        <div className="space-y-2">
+                          {inactiveContacts.map((contact) => (
+                            <div
+                              key={contact.id}
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`View contact ${contact.firstName} ${contact.lastName}`}
+                              onClick={() => setViewingContact(contact)}
+                              onKeyDown={(event) => {
+                                if (event.currentTarget !== event.target) return
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault()
+                                  setViewingContact(contact)
+                                }
+                              }}
+                              className="rounded-md border border-border p-3 cursor-pointer transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="space-y-1">
+                                  <p className="font-medium">
+                                    {contact.firstName} {contact.lastName}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {normalizeGender(contact.gender) ?? contact.gender} • {contact.city}
+                                    {contact.state ? `, ${contact.state}` : ""}
+                                    {contact.zipCode ? ` ${contact.zipCode}` : ""}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {contact.email ?? "No email"}
+                                    {contact.phonePrimary ? ` • ${contact.phonePrimary}` : ""}
+                                  </p>
+                                </div>
+                                {(canEdit || canDelete) && (
+                                  <div className="flex items-center gap-2">
+                                    {canEdit && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={(event) => {
+                                          event.stopPropagation()
+                                          setEditingContact(contact)
+                                        }}
+                                      >
+                                        Edit
+                                      </Button>
+                                    )}
+                                    {canDelete && (
+                                      <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        onClick={(event) => {
+                                          event.stopPropagation()
+                                          setDeletingContact(contact)
+                                        }}
+                                      >
+                                        Delete
+                                      </Button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="recipients" className="space-y-4">
@@ -1374,18 +1640,14 @@ export function CorrectionsAdminClient({
                       <Input
                         id="recipients-filter-search"
                         className="border-0 pl-9 shadow-none focus-visible:ring-0"
-                        value={recipientFilters.q}
-                        onChange={(event) => {
-                          const next = updateObjectField(recipientFilters, "q", event.target.value)
-                          setRecipientFilters(next)
-                          applyRecipientFilters(next)
-                        }}
+                        value={recipientSearchInput}
+                        onChange={(event) => setRecipientSearchInput(event.target.value)}
                         placeholder="Name, ID number, facility, source, location, or notes..."
                       />
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
                     <Popover open={isRecipientFilterComposerOpen} onOpenChange={setIsRecipientFilterComposerOpen}>
                       <PopoverTrigger asChild>
                         <Button variant="outline" className="gap-2">
@@ -1419,33 +1681,44 @@ export function CorrectionsAdminClient({
                                   value: option,
                                   label: option,
                                 }))}
-                                value={recipientFilterValue}
+                                values={splitMultiValues(selectedRecipientDraftValue)}
                                 placeholder="Select value(s)"
                                 searchPlaceholder="Search values..."
                                 closeOnSelect={false}
-                                onChange={(nextValue) => addRecipientSelectValue(nextValue)}
+                                onToggleValue={(nextValue) => toggleRecipientSelectValue(nextValue)}
                               />
                             ) : (
                               <div className="rounded-md border border-input bg-background transition-[border-color,box-shadow] shadow-xs focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
                                 <Input
                                   className="border-0 shadow-none focus-visible:ring-0"
-                                  value={recipientFilterValue}
-                                  onChange={(event) => setRecipientFilterValue(event.target.value)}
+                                  value={selectedRecipientDraftValue}
+                                  onChange={(event) =>
+                                    setRecipientFilterDrafts((prev) =>
+                                      updateObjectField(prev, recipientFilterField, event.target.value)
+                                    )
+                                  }
                                   onKeyDown={(event) => {
                                     if (event.key === "Enter") {
                                       event.preventDefault()
                                       addRecipientFilterChip()
                                     }
                                   }}
-                                  placeholder="Type a value and press Enter"
+                                  placeholder={
+                                    selectedRecipientFilterDescriptor?.kind === "birthYear"
+                                      ? "YYYY or YYYY-YYYY"
+                                      : "Type a value"
+                                  }
                                 />
                               </div>
                             )}
                           </div>
 
                           <div className="flex justify-end gap-2">
+                            <Button variant="outline" onClick={addRecipientFilterChip}>
+                              Add Value
+                            </Button>
                             <Button variant="ghost" onClick={() => setIsRecipientFilterComposerOpen(false)}>
-                              Cancel
+                              Done
                             </Button>
                           </div>
                         </div>
@@ -1539,38 +1812,88 @@ export function CorrectionsAdminClient({
                       const match = contactMatchMap.get(recipient.id)
 
                       return (
-                        <div key={recipient.id} className="rounded-md border border-border p-3">
-                          <div className="flex flex-col gap-3">
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                              <div className="space-y-1">
-                                <p className="font-medium">
-                                  {recipient.firstName} {recipient.lastName}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  ID {recipient.idNumber} • {recipient.facilityName}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  Release: {recipient.releaseCity || "Unknown city"}
-                                  {recipient.releaseState ? `, ${recipient.releaseState}` : ""}
-                                  {recipient.releaseZip ? ` ${recipient.releaseZip}` : ""}
-                                </p>
-                                {match && <p className="text-xs text-primary">Matched with: {match.contactName}</p>}
-                              </div>
-                              <Badge variant={statusBadgeVariant(recipient.status)}>{recipient.status}</Badge>
+                        <div
+                          key={recipient.id}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`View recipient ${recipient.firstName} ${recipient.lastName}`}
+                          onClick={() => setViewingRecipient(recipient)}
+                          onKeyDown={(event) => {
+                            if (event.currentTarget !== event.target) return
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault()
+                              setViewingRecipient(recipient)
+                            }
+                          }}
+                          className="rounded-md border border-border p-3 cursor-pointer transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="space-y-1">
+                              <Badge variant="outline" className={cn("mb-1", statusBadgeClass(recipient.status))}>
+                                {formatStatusLabel(recipient.status)}
+                              </Badge>
+                              <p className="font-medium">
+                                {recipient.firstName} {recipient.lastName}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                ID {recipient.idNumber} • {normalizeGender(recipient.gender) ?? recipient.gender} • {recipient.facilityName}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Release: {recipient.releaseCity || "Unknown city"}
+                                {recipient.releaseState ? `, ${recipient.releaseState}` : ""}
+                                {recipient.releaseZip ? ` ${recipient.releaseZip}` : ""}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Discharge: {recipient.dischargeDate || "-"}
+                              </p>
+                              {match && <p className="text-xs text-primary">Matched with: {match.contactName}</p>}
                             </div>
 
-                            <div className="flex flex-wrap gap-2">
-                              <Button variant="outline" size="sm" onClick={() => setMatchingRecipient(recipient)}>
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  setMatchingRecipient(recipient)
+                                }}
+                              >
                                 Find Match
                               </Button>
                               {canEdit && (
-                                <Button variant="outline" size="sm" onClick={() => setStatusRecipient(recipient)}>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    setStatusRecipient(recipient)
+                                  }}
+                                >
                                   Update Status
                                 </Button>
                               )}
                               {canEdit && (
-                                <Button variant="outline" size="sm" onClick={() => setEditingRecipient(recipient)}>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    setEditingRecipient(recipient)
+                                  }}
+                                >
                                   Edit
+                                </Button>
+                              )}
+                              {canDelete && (
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    setDeletingRecipient(recipient)
+                                  }}
+                                >
+                                  Delete
                                 </Button>
                               )}
                             </div>
@@ -1586,6 +1909,186 @@ export function CorrectionsAdminClient({
         </TabsContent>
       </Tabs>
 
+      <Dialog
+        open={!!viewingContact}
+        onOpenChange={(open) => {
+          if (!open) setViewingContact(null)
+        }}
+      >
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>
+              Contact Details{viewingContact ? `: ${viewingContact.firstName} ${viewingContact.lastName}` : ""}
+            </DialogTitle>
+            <DialogDescription>Complete contact profile information.</DialogDescription>
+          </DialogHeader>
+
+          {viewingContact && (
+            <ScrollArea className="max-h-[72vh] pr-4">
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={viewingContact.active ? "default" : "secondary"}>
+                    {viewingContact.active ? "Active" : "Inactive"}
+                  </Badge>
+                  {viewingContact.isSpanishSpeaking && <Badge variant="outline">Spanish-speaking</Badge>}
+                </div>
+
+                <div className="rounded-lg border border-border bg-muted/20 p-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <DetailItem label="First Name" value={formatDetailValue(viewingContact.firstName)} />
+                    <DetailItem label="Last Name" value={formatDetailValue(viewingContact.lastName)} />
+                    <DetailItem label="Gender" value={formatDetailValue(normalizeGender(viewingContact.gender) ?? viewingContact.gender)} />
+                    <DetailItem label="Birth Year" value={formatDetailValue(viewingContact.birthYear)} />
+                    <DetailItem label="Sobriety Date" value={formatDetailValue(viewingContact.sobrietyDate)} />
+                    <DetailItem label="Home Group" value={formatDetailValue(viewingContact.homeGroup)} />
+                    <DetailItem label="Other Languages" value={formatDetailValue(viewingContact.otherLanguages)} />
+                    <DetailItem label="Email" value={formatDetailValue(viewingContact.email)} />
+                    <DetailItem label="Phone 1" value={formatDetailValue(viewingContact.phonePrimary)} />
+                    <DetailItem label="Phone 2" value={formatDetailValue(viewingContact.phoneSecondary)} />
+                    <DetailItem label="Street Address" value={formatDetailValue(viewingContact.streetAddress)} />
+                    <DetailItem label="City" value={formatDetailValue(viewingContact.city)} />
+                    <DetailItem label="County" value={formatDetailValue(viewingContact.county)} />
+                    <DetailItem label="State" value={formatDetailValue(viewingContact.state)} />
+                    <DetailItem label="ZIP" value={formatDetailValue(viewingContact.zipCode)} />
+                    <DetailItem label="Legacy Source" value={formatDetailValue(viewingContact.legacySourcePage)} />
+                    <DetailItem label="Legacy ID" value={formatDetailValue(viewingContact.legacyInternalId)} />
+                    <DetailItem label="Record ID" value={formatDetailValue(viewingContact.id)} />
+                    <div className="sm:col-span-2">
+                      <DetailItem label="Notes" value={formatDetailValue(viewingContact.notes)} />
+                    </div>
+                    <DetailItem label="Created At" value={formatDetailValue(viewingContact.createdAt)} />
+                    <DetailItem label="Updated At" value={formatDetailValue(viewingContact.updatedAt)} />
+                  </div>
+                </div>
+              </div>
+            </ScrollArea>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!viewingRecipient}
+        onOpenChange={(open) => {
+          if (!open) setViewingRecipient(null)
+        }}
+      >
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>
+              Recipient Details{viewingRecipient ? `: ${viewingRecipient.firstName} ${viewingRecipient.lastName}` : ""}
+            </DialogTitle>
+            <DialogDescription>Complete recipient profile information.</DialogDescription>
+          </DialogHeader>
+
+          {viewingRecipient && (
+            <ScrollArea className="max-h-[72vh] pr-4">
+              <div className="space-y-4">
+                <Badge variant="outline" className={cn(statusBadgeClass(viewingRecipient.status))}>
+                  {formatStatusLabel(viewingRecipient.status)}
+                </Badge>
+
+                <div className="rounded-lg border border-border bg-muted/20 p-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <DetailItem label="First Name" value={formatDetailValue(viewingRecipient.firstName)} />
+                    <DetailItem label="Last Name" value={formatDetailValue(viewingRecipient.lastName)} />
+                    <DetailItem label="ID Number" value={formatDetailValue(viewingRecipient.idNumber)} />
+                    <DetailItem label="Gender" value={formatDetailValue(normalizeGender(viewingRecipient.gender) ?? viewingRecipient.gender)} />
+                    <DetailItem label="Birth Year" value={formatDetailValue(viewingRecipient.birthYear)} />
+                    <DetailItem label="Discharge Date" value={formatDetailValue(viewingRecipient.dischargeDate)} />
+                    <DetailItem label="Facility" value={formatDetailValue(viewingRecipient.facilityName)} />
+                    <DetailItem label="Source" value={formatDetailValue(viewingRecipient.source)} />
+                    <DetailItem label="Phone" value={formatDetailValue(viewingRecipient.phone)} />
+                    <DetailItem label="Contact Email" value={formatDetailValue(viewingRecipient.contactEmail)} />
+                    <DetailItem label="Release Address" value={formatDetailValue(viewingRecipient.releaseAddress)} />
+                    <DetailItem label="Release City" value={formatDetailValue(viewingRecipient.releaseCity)} />
+                    <DetailItem label="Release County" value={formatDetailValue(viewingRecipient.releaseCounty)} />
+                    <DetailItem label="Release State" value={formatDetailValue(viewingRecipient.releaseState)} />
+                    <DetailItem label="Release ZIP" value={formatDetailValue(viewingRecipient.releaseZip)} />
+                    <DetailItem label="Legacy Source" value={formatDetailValue(viewingRecipient.legacySourcePage)} />
+                    <DetailItem label="Legacy ID" value={formatDetailValue(viewingRecipient.legacyInternalId)} />
+                    <DetailItem label="Record ID" value={formatDetailValue(viewingRecipient.id)} />
+                    <div className="sm:col-span-2">
+                      <DetailItem label="Notes" value={formatDetailValue(viewingRecipient.notes)} />
+                    </div>
+                    <DetailItem label="Created At" value={formatDetailValue(viewingRecipient.createdAt)} />
+                    <DetailItem label="Updated At" value={formatDetailValue(viewingRecipient.updatedAt)} />
+                  </div>
+                </div>
+              </div>
+            </ScrollArea>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={!!deletingContact}
+        onOpenChange={(open) => {
+          if (!open) setDeletingContact(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete Contact{deletingContact ? `: ${deletingContact.firstName} ${deletingContact.lastName}` : ""}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the contact. Any active matches tied to this contact will be cleared.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            {deletingContact && (
+              <form
+                action={deleteCorrectionsContact}
+                onSubmit={() => {
+                  setDeletingContact(null)
+                }}
+              >
+                <input type="hidden" name="contactId" value={deletingContact.id} />
+                <FormSubmitButton variant="destructive" pendingText="Deleting...">
+                  Delete Contact
+                </FormSubmitButton>
+              </form>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!deletingRecipient}
+        onOpenChange={(open) => {
+          if (!open) setDeletingRecipient(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete Recipient
+              {deletingRecipient ? `: ${deletingRecipient.firstName} ${deletingRecipient.lastName}` : ""}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the recipient and any related match history.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            {deletingRecipient && (
+              <form
+                action={deleteCorrectionsRecipient}
+                onSubmit={() => {
+                  setDeletingRecipient(null)
+                }}
+              >
+                <input type="hidden" name="recipientId" value={deletingRecipient.id} />
+                <FormSubmitButton variant="destructive" pendingText="Deleting...">
+                  Delete Recipient
+                </FormSubmitButton>
+              </form>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Dialog open={isAddContactOpen} onOpenChange={setIsAddContactOpen}>
         <DialogContent className="max-w-5xl">
           <DialogHeader>
@@ -1599,94 +2102,153 @@ export function CorrectionsAdminClient({
               onSubmit={() => {
                 setIsAddContactOpen(false)
               }}
-              className="grid gap-3 md:grid-cols-3"
+              className="space-y-4"
             >
-              <div>
-                <Label htmlFor="new-contact-firstName">First Name</Label>
-                <Input id="new-contact-firstName" name="firstName" required />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="new-contact-firstName">
+                    First Name <span className="text-destructive">*</span>
+                  </Label>
+                  <Input id="new-contact-firstName" name="firstName" required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-contact-lastName">
+                    Last Name <span className="text-destructive">*</span>
+                  </Label>
+                  <Input id="new-contact-lastName" name="lastName" required />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="new-contact-lastName">Last Name</Label>
-                <Input id="new-contact-lastName" name="lastName" required />
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="new-contact-gender">
+                    Gender <span className="text-destructive">*</span>
+                  </Label>
+                  <Select value={newContactGender} onValueChange={setNewContactGender}>
+                    <SelectTrigger id="new-contact-gender" className="w-full">
+                      <SelectValue placeholder="Select gender" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CORRECTIONS_GENDER_OPTIONS.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <input type="hidden" name="gender" value={newContactGender} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-contact-birthYear">
+                    Birth Year <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="new-contact-birthYear"
+                    name="birthYear"
+                    inputMode="numeric"
+                    pattern="\\d{4}"
+                    maxLength={4}
+                    placeholder="YYYY"
+                    required
+                  />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="new-contact-gender">Gender</Label>
-                <Input id="new-contact-gender" name="gender" required />
-              </div>
-              <div>
+
+              <div className="space-y-2">
                 <Label htmlFor="new-contact-streetAddress">Street Address</Label>
                 <Input id="new-contact-streetAddress" name="streetAddress" />
               </div>
-              <div>
-                <Label htmlFor="new-contact-city">City</Label>
-                <Input id="new-contact-city" name="city" required />
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="new-contact-city">
+                    City <span className="text-destructive">*</span>
+                  </Label>
+                  <Input id="new-contact-city" name="city" required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-contact-county">County</Label>
+                  <Input id="new-contact-county" name="county" />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="new-contact-county">County</Label>
-                <Input id="new-contact-county" name="county" />
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="new-contact-state">State</Label>
+                  <Input id="new-contact-state" name="state" maxLength={2} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-contact-zipCode">ZIP</Label>
+                  <Input id="new-contact-zipCode" name="zipCode" inputMode="numeric" pattern="\\d{5}(-\\d{4})?" />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="new-contact-state">State</Label>
-                <Input id="new-contact-state" name="state" />
+
+              <div className="space-y-2">
+                <Label htmlFor="new-contact-email">
+                  Email <span className="text-destructive">*</span>
+                </Label>
+                <Input id="new-contact-email" name="email" type="email" required />
               </div>
-              <div>
-                <Label htmlFor="new-contact-zipCode">ZIP</Label>
-                <Input id="new-contact-zipCode" name="zipCode" />
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="new-contact-sobrietyDate">
+                    Sobriety Date <span className="text-destructive">*</span>
+                  </Label>
+                  <Input id="new-contact-sobrietyDate" name="sobrietyDate" type="date" required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-contact-homeGroup">Home Group</Label>
+                  <Input id="new-contact-homeGroup" name="homeGroup" />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="new-contact-email">Email</Label>
-                <Input id="new-contact-email" name="email" type="email" />
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="new-contact-phonePrimary">Phone 1</Label>
+                  <Input id="new-contact-phonePrimary" name="phonePrimary" type="tel" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-contact-phoneSecondary">Phone 2</Label>
+                  <Input id="new-contact-phoneSecondary" name="phoneSecondary" type="tel" />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="new-contact-sobrietyDate">Sobriety Date</Label>
-                <Input id="new-contact-sobrietyDate" name="sobrietyDate" type="date" />
+
+              <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    id="new-contact-isSpanishSpeaking"
+                    checked={newContactSpanish}
+                    onCheckedChange={(checked) => setNewContactSpanish(checked === true)}
+                  />
+                  <Label htmlFor="new-contact-isSpanishSpeaking" className="font-normal cursor-pointer">
+                    Spanish-speaking
+                  </Label>
+                  <input type="hidden" name="isSpanishSpeaking" value={newContactSpanish ? "true" : "false"} />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="new-contact-otherLanguages">Other Languages Spoken</Label>
+                  <Input id="new-contact-otherLanguages" name="otherLanguages" />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="new-contact-phonePrimary">Phone 1</Label>
-                <Input id="new-contact-phonePrimary" name="phonePrimary" />
-              </div>
-              <div>
-                <Label htmlFor="new-contact-phoneSecondary">Phone 2</Label>
-                <Input id="new-contact-phoneSecondary" name="phoneSecondary" />
-              </div>
-              <div>
-                <Label htmlFor="new-contact-birthYear">Birth Year</Label>
-                <Input id="new-contact-birthYear" name="birthYear" />
-              </div>
-              <div>
-                <Label htmlFor="new-contact-homeGroup">Home Group</Label>
-                <Input id="new-contact-homeGroup" name="homeGroup" />
-              </div>
-              <div>
-                <Label htmlFor="new-contact-otherLanguages">Other Languages</Label>
-                <Input id="new-contact-otherLanguages" name="otherLanguages" />
-              </div>
-              <div className="md:col-span-3">
+
+              <div className="space-y-2">
                 <Label htmlFor="new-contact-notes">Notes</Label>
                 <Textarea id="new-contact-notes" name="notes" />
               </div>
 
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="new-contact-isSpanishSpeaking"
-                  checked={newContactSpanish}
-                  onCheckedChange={(checked) => setNewContactSpanish(checked === true)}
-                />
-                <Label htmlFor="new-contact-isSpanishSpeaking">Spanish-speaking</Label>
-                <input type="hidden" name="isSpanishSpeaking" value={newContactSpanish ? "true" : "false"} />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="new-contact-active"
-                  checked={newContactActive}
-                  onCheckedChange={(checked) => setNewContactActive(checked === true)}
-                />
-                <Label htmlFor="new-contact-active">Active</Label>
+              <div className="rounded-lg border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor="new-contact-active" className="font-normal cursor-pointer">
+                    Active contact
+                  </Label>
+                  <Switch id="new-contact-active" checked={newContactActive} onCheckedChange={setNewContactActive} />
+                </div>
                 <input type="hidden" name="active" value={newContactActive ? "true" : "false"} />
               </div>
 
-              <DialogFooter className="md:col-span-3 mt-2">
+              <DialogFooter className="mt-2">
                 <FormSubmitButton pendingText="Saving...">Create Contact</FormSubmitButton>
               </DialogFooter>
             </form>
@@ -1711,109 +2273,177 @@ export function CorrectionsAdminClient({
               <form
                 action={updateCorrectionsContact}
                 onSubmit={() => setEditingContact(null)}
-                className="grid gap-3 md:grid-cols-3"
+                className="space-y-4"
               >
                 <input type="hidden" name="id" value={editingContact.id} />
 
-                <div>
-                  <Label htmlFor="edit-contact-firstName">First Name</Label>
-                  <Input id="edit-contact-firstName" name="firstName" defaultValue={editingContact.firstName} required />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-contact-firstName">
+                      First Name <span className="text-destructive">*</span>
+                    </Label>
+                    <Input id="edit-contact-firstName" name="firstName" defaultValue={editingContact.firstName} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-contact-lastName">
+                      Last Name <span className="text-destructive">*</span>
+                    </Label>
+                    <Input id="edit-contact-lastName" name="lastName" defaultValue={editingContact.lastName} required />
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="edit-contact-lastName">Last Name</Label>
-                  <Input id="edit-contact-lastName" name="lastName" defaultValue={editingContact.lastName} required />
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-contact-gender">
+                      Gender <span className="text-destructive">*</span>
+                    </Label>
+                    <Select value={editContactGender} onValueChange={setEditContactGender}>
+                      <SelectTrigger id="edit-contact-gender" className="w-full">
+                        <SelectValue placeholder="Select gender" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CORRECTIONS_GENDER_OPTIONS.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <input type="hidden" name="gender" value={editContactGender} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-contact-birthYear">
+                      Birth Year <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="edit-contact-birthYear"
+                      name="birthYear"
+                      defaultValue={editingContact.birthYear ? String(editingContact.birthYear) : ""}
+                      inputMode="numeric"
+                      pattern="\\d{4}"
+                      maxLength={4}
+                      placeholder="YYYY"
+                      required
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="edit-contact-gender">Gender</Label>
-                  <Input id="edit-contact-gender" name="gender" defaultValue={editingContact.gender} required />
-                </div>
-                <div>
+
+                <div className="space-y-2">
                   <Label htmlFor="edit-contact-streetAddress">Street Address</Label>
                   <Input id="edit-contact-streetAddress" name="streetAddress" defaultValue={editingContact.streetAddress ?? ""} />
                 </div>
-                <div>
-                  <Label htmlFor="edit-contact-city">City</Label>
-                  <Input id="edit-contact-city" name="city" defaultValue={editingContact.city} required />
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-contact-city">
+                      City <span className="text-destructive">*</span>
+                    </Label>
+                    <Input id="edit-contact-city" name="city" defaultValue={editingContact.city} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-contact-county">County</Label>
+                    <Input id="edit-contact-county" name="county" defaultValue={editingContact.county ?? ""} />
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="edit-contact-county">County</Label>
-                  <Input id="edit-contact-county" name="county" defaultValue={editingContact.county ?? ""} />
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-contact-state">State</Label>
+                    <Input id="edit-contact-state" name="state" defaultValue={editingContact.state ?? ""} maxLength={2} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-contact-zipCode">ZIP</Label>
+                    <Input
+                      id="edit-contact-zipCode"
+                      name="zipCode"
+                      defaultValue={editingContact.zipCode ?? ""}
+                      inputMode="numeric"
+                      pattern="\\d{5}(-\\d{4})?"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="edit-contact-state">State</Label>
-                  <Input id="edit-contact-state" name="state" defaultValue={editingContact.state ?? ""} />
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-contact-email">
+                    Email <span className="text-destructive">*</span>
+                  </Label>
+                  <Input id="edit-contact-email" name="email" type="email" defaultValue={editingContact.email ?? ""} required />
                 </div>
-                <div>
-                  <Label htmlFor="edit-contact-zipCode">ZIP</Label>
-                  <Input id="edit-contact-zipCode" name="zipCode" defaultValue={editingContact.zipCode ?? ""} />
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-contact-sobrietyDate">
+                      Sobriety Date <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="edit-contact-sobrietyDate"
+                      name="sobrietyDate"
+                      type="date"
+                      defaultValue={editingContact.sobrietyDate ?? ""}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-contact-homeGroup">Home Group</Label>
+                    <Input id="edit-contact-homeGroup" name="homeGroup" defaultValue={editingContact.homeGroup ?? ""} />
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="edit-contact-email">Email</Label>
-                  <Input id="edit-contact-email" name="email" type="email" defaultValue={editingContact.email ?? ""} />
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-contact-phonePrimary">Phone 1</Label>
+                    <Input id="edit-contact-phonePrimary" name="phonePrimary" type="tel" defaultValue={editingContact.phonePrimary ?? ""} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-contact-phoneSecondary">Phone 2</Label>
+                    <Input
+                      id="edit-contact-phoneSecondary"
+                      name="phoneSecondary"
+                      type="tel"
+                      defaultValue={editingContact.phoneSecondary ?? ""}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="edit-contact-sobrietyDate">Sobriety Date</Label>
-                  <Input
-                    id="edit-contact-sobrietyDate"
-                    name="sobrietyDate"
-                    type="date"
-                    defaultValue={editingContact.sobrietyDate ?? ""}
-                  />
+
+                <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      id="edit-contact-isSpanishSpeaking"
+                      checked={editContactSpanish}
+                      onCheckedChange={(checked) => setEditContactSpanish(checked === true)}
+                    />
+                    <Label htmlFor="edit-contact-isSpanishSpeaking" className="font-normal cursor-pointer">
+                      Spanish-speaking
+                    </Label>
+                    <input type="hidden" name="isSpanishSpeaking" value={editContactSpanish ? "true" : "false"} />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-contact-otherLanguages">Other Languages Spoken</Label>
+                    <Input
+                      id="edit-contact-otherLanguages"
+                      name="otherLanguages"
+                      defaultValue={editingContact.otherLanguages ?? ""}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="edit-contact-phonePrimary">Phone 1</Label>
-                  <Input id="edit-contact-phonePrimary" name="phonePrimary" defaultValue={editingContact.phonePrimary ?? ""} />
-                </div>
-                <div>
-                  <Label htmlFor="edit-contact-phoneSecondary">Phone 2</Label>
-                  <Input id="edit-contact-phoneSecondary" name="phoneSecondary" defaultValue={editingContact.phoneSecondary ?? ""} />
-                </div>
-                <div>
-                  <Label htmlFor="edit-contact-birthYear">Birth Year</Label>
-                  <Input
-                    id="edit-contact-birthYear"
-                    name="birthYear"
-                    defaultValue={editingContact.birthYear ? String(editingContact.birthYear) : ""}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="edit-contact-homeGroup">Home Group</Label>
-                  <Input id="edit-contact-homeGroup" name="homeGroup" defaultValue={editingContact.homeGroup ?? ""} />
-                </div>
-                <div>
-                  <Label htmlFor="edit-contact-otherLanguages">Other Languages</Label>
-                  <Input
-                    id="edit-contact-otherLanguages"
-                    name="otherLanguages"
-                    defaultValue={editingContact.otherLanguages ?? ""}
-                  />
-                </div>
-                <div className="md:col-span-3">
+
+                <div className="space-y-2">
                   <Label htmlFor="edit-contact-notes">Notes</Label>
                   <Textarea id="edit-contact-notes" name="notes" defaultValue={editingContact.notes ?? ""} />
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="edit-contact-isSpanishSpeaking"
-                    checked={editContactSpanish}
-                    onCheckedChange={(checked) => setEditContactSpanish(checked === true)}
-                  />
-                  <Label htmlFor="edit-contact-isSpanishSpeaking">Spanish-speaking</Label>
-                  <input type="hidden" name="isSpanishSpeaking" value={editContactSpanish ? "true" : "false"} />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="edit-contact-active"
-                    checked={editContactActive}
-                    onCheckedChange={(checked) => setEditContactActive(checked === true)}
-                  />
-                  <Label htmlFor="edit-contact-active">Active</Label>
+                <div className="rounded-lg border border-border bg-muted/20 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <Label htmlFor="edit-contact-active" className="font-normal cursor-pointer">
+                      Active contact
+                    </Label>
+                    <Switch id="edit-contact-active" checked={editContactActive} onCheckedChange={setEditContactActive} />
+                  </div>
                   <input type="hidden" name="active" value={editContactActive ? "true" : "false"} />
                 </div>
 
-                <DialogFooter className="md:col-span-3 mt-2">
+                <DialogFooter className="mt-2">
                   <FormSubmitButton pendingText="Saving...">Save Contact</FormSubmitButton>
                 </DialogFooter>
               </form>
@@ -1833,100 +2463,145 @@ export function CorrectionsAdminClient({
             <form
               action={createCorrectionsRecipient}
               onSubmit={() => setIsAddRecipientOpen(false)}
-              className="grid gap-3 md:grid-cols-3"
+              className="space-y-4"
             >
-              <div>
-                <Label htmlFor="new-recipient-firstName">First Name</Label>
-                <Input id="new-recipient-firstName" name="firstName" required />
-              </div>
-              <div>
-                <Label htmlFor="new-recipient-lastName">Last Name</Label>
-                <Input id="new-recipient-lastName" name="lastName" required />
-              </div>
-              <div>
-                <Label htmlFor="new-recipient-idNumber">ID Number</Label>
-                <Input id="new-recipient-idNumber" name="idNumber" required />
-              </div>
-              <div>
-                <Label htmlFor="new-recipient-gender">Gender</Label>
-                <Input id="new-recipient-gender" name="gender" required />
-              </div>
-              <div>
-                <Label htmlFor="new-recipient-birthYear">Birth Year</Label>
-                <Input id="new-recipient-birthYear" name="birthYear" />
-              </div>
-              <div>
-                <Label htmlFor="new-recipient-dischargeDate">Discharge Date</Label>
-                <Input id="new-recipient-dischargeDate" name="dischargeDate" type="date" />
-              </div>
-              <div>
-                <Label htmlFor="new-recipient-phone">Phone</Label>
-                <Input id="new-recipient-phone" name="phone" />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="new-recipient-firstName">
+                    First Name <span className="text-destructive">*</span>
+                  </Label>
+                  <Input id="new-recipient-firstName" name="firstName" required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-recipient-lastName">
+                    Last Name <span className="text-destructive">*</span>
+                  </Label>
+                  <Input id="new-recipient-lastName" name="lastName" required />
+                </div>
               </div>
 
-              <div>
-                <Label>Facility</Label>
-                <Select value={newRecipientFacility} onValueChange={setNewRecipientFacility}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select facility" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {facilityOptions.map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <input type="hidden" name="facilityName" value={newRecipientFacility} />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="new-recipient-idNumber">
+                    ID Number <span className="text-destructive">*</span>
+                  </Label>
+                  <Input id="new-recipient-idNumber" name="idNumber" required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-recipient-gender">
+                    Gender <span className="text-destructive">*</span>
+                  </Label>
+                  <Select value={newRecipientGender} onValueChange={setNewRecipientGender}>
+                    <SelectTrigger id="new-recipient-gender" className="w-full">
+                      <SelectValue placeholder="Select gender" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CORRECTIONS_GENDER_OPTIONS.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <input type="hidden" name="gender" value={newRecipientGender} />
+                </div>
               </div>
 
-              <div>
-                <Label>Source</Label>
-                <Select value={newRecipientSource} onValueChange={setNewRecipientSource}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select source" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sourceOptions.map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <input type="hidden" name="source" value={newRecipientSource} />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="new-recipient-birthYear">Birth Year</Label>
+                  <Input
+                    id="new-recipient-birthYear"
+                    name="birthYear"
+                    inputMode="numeric"
+                    pattern="\\d{4}"
+                    maxLength={4}
+                    placeholder="YYYY"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-recipient-dischargeDate">Discharge Date</Label>
+                  <Input id="new-recipient-dischargeDate" name="dischargeDate" type="date" />
+                </div>
               </div>
 
-              <div>
-                <Label htmlFor="new-recipient-contactEmail">Contact Email</Label>
-                <Input id="new-recipient-contactEmail" name="contactEmail" type="email" />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Facility <span className="text-destructive">*</span></Label>
+                  <Select value={newRecipientFacility} onValueChange={setNewRecipientFacility}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select facility" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {facilityOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <input type="hidden" name="facilityName" value={newRecipientFacility} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Source <span className="text-destructive">*</span></Label>
+                  <Select value={newRecipientSource} onValueChange={setNewRecipientSource}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select source" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sourceOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <input type="hidden" name="source" value={newRecipientSource} />
+                </div>
               </div>
-              <div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="new-recipient-phone">Phone</Label>
+                  <Input id="new-recipient-phone" name="phone" type="tel" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-recipient-contactEmail">Contact Email</Label>
+                  <Input id="new-recipient-contactEmail" name="contactEmail" type="email" />
+                </div>
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="new-recipient-releaseAddress">Release Address</Label>
                 <Input id="new-recipient-releaseAddress" name="releaseAddress" />
               </div>
-              <div>
-                <Label htmlFor="new-recipient-releaseCity">Release City</Label>
-                <Input id="new-recipient-releaseCity" name="releaseCity" />
-              </div>
-              <div>
-                <Label htmlFor="new-recipient-releaseCounty">Release County</Label>
-                <Input id="new-recipient-releaseCounty" name="releaseCounty" />
-              </div>
-              <div>
-                <Label htmlFor="new-recipient-releaseState">Release State</Label>
-                <Input id="new-recipient-releaseState" name="releaseState" defaultValue="MN" />
-              </div>
-              <div>
-                <Label htmlFor="new-recipient-releaseZip">Release ZIP</Label>
-                <Input id="new-recipient-releaseZip" name="releaseZip" />
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="new-recipient-releaseCity">Release City</Label>
+                  <Input id="new-recipient-releaseCity" name="releaseCity" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-recipient-releaseCounty">Release County</Label>
+                  <Input id="new-recipient-releaseCounty" name="releaseCounty" />
+                </div>
               </div>
 
-              <div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="new-recipient-releaseState">Release State</Label>
+                  <Input id="new-recipient-releaseState" name="releaseState" defaultValue="MN" maxLength={2} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-recipient-releaseZip">Release ZIP</Label>
+                  <Input id="new-recipient-releaseZip" name="releaseZip" inputMode="numeric" pattern="\\d{5}(-\\d{4})?" />
+                </div>
+              </div>
+
+              <div className="space-y-2">
                 <Label>Status</Label>
                 <Select value={newRecipientStatus} onValueChange={setNewRecipientStatus}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1940,12 +2615,12 @@ export function CorrectionsAdminClient({
                 <input type="hidden" name="status" value={newRecipientStatus} />
               </div>
 
-              <div className="md:col-span-3">
+              <div className="space-y-2">
                 <Label htmlFor="new-recipient-notes">Notes</Label>
                 <Textarea id="new-recipient-notes" name="notes" />
               </div>
 
-              <DialogFooter className="md:col-span-3 mt-2">
+              <DialogFooter className="mt-2">
                 <FormSubmitButton pendingText="Saving...">Create Recipient</FormSubmitButton>
               </DialogFooter>
             </form>
@@ -1970,91 +2645,128 @@ export function CorrectionsAdminClient({
               <form
                 action={updateCorrectionsRecipient}
                 onSubmit={() => setEditingRecipient(null)}
-                className="grid gap-3 md:grid-cols-3"
+                className="space-y-4"
               >
                 <input type="hidden" name="id" value={editingRecipient.id} />
 
-                <div>
-                  <Label htmlFor="edit-recipient-firstName">First Name</Label>
-                  <Input id="edit-recipient-firstName" name="firstName" defaultValue={editingRecipient.firstName} required />
-                </div>
-                <div>
-                  <Label htmlFor="edit-recipient-lastName">Last Name</Label>
-                  <Input id="edit-recipient-lastName" name="lastName" defaultValue={editingRecipient.lastName} required />
-                </div>
-                <div>
-                  <Label htmlFor="edit-recipient-idNumber">ID Number</Label>
-                  <Input id="edit-recipient-idNumber" name="idNumber" defaultValue={editingRecipient.idNumber} required />
-                </div>
-                <div>
-                  <Label htmlFor="edit-recipient-gender">Gender</Label>
-                  <Input id="edit-recipient-gender" name="gender" defaultValue={editingRecipient.gender} required />
-                </div>
-                <div>
-                  <Label htmlFor="edit-recipient-birthYear">Birth Year</Label>
-                  <Input
-                    id="edit-recipient-birthYear"
-                    name="birthYear"
-                    defaultValue={editingRecipient.birthYear ? String(editingRecipient.birthYear) : ""}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="edit-recipient-dischargeDate">Discharge Date</Label>
-                  <Input
-                    id="edit-recipient-dischargeDate"
-                    name="dischargeDate"
-                    type="date"
-                    defaultValue={editingRecipient.dischargeDate ?? ""}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="edit-recipient-phone">Phone</Label>
-                  <Input id="edit-recipient-phone" name="phone" defaultValue={editingRecipient.phone ?? ""} />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-recipient-firstName">
+                      First Name <span className="text-destructive">*</span>
+                    </Label>
+                    <Input id="edit-recipient-firstName" name="firstName" defaultValue={editingRecipient.firstName} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-recipient-lastName">
+                      Last Name <span className="text-destructive">*</span>
+                    </Label>
+                    <Input id="edit-recipient-lastName" name="lastName" defaultValue={editingRecipient.lastName} required />
+                  </div>
                 </div>
 
-                <div>
-                  <Label>Facility</Label>
-                  <Select value={editRecipientFacility} onValueChange={setEditRecipientFacility}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select facility" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {facilityOptions.map((option) => (
-                        <SelectItem key={option} value={option}>
-                          {option}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <input type="hidden" name="facilityName" value={editRecipientFacility} />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-recipient-idNumber">
+                      ID Number <span className="text-destructive">*</span>
+                    </Label>
+                    <Input id="edit-recipient-idNumber" name="idNumber" defaultValue={editingRecipient.idNumber} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-recipient-gender">
+                      Gender <span className="text-destructive">*</span>
+                    </Label>
+                    <Select value={editRecipientGender} onValueChange={setEditRecipientGender}>
+                      <SelectTrigger id="edit-recipient-gender" className="w-full">
+                        <SelectValue placeholder="Select gender" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CORRECTIONS_GENDER_OPTIONS.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <input type="hidden" name="gender" value={editRecipientGender} />
+                  </div>
                 </div>
 
-                <div>
-                  <Label>Source</Label>
-                  <Select value={editRecipientSource} onValueChange={setEditRecipientSource}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select source" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sourceOptions.map((option) => (
-                        <SelectItem key={option} value={option}>
-                          {option}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <input type="hidden" name="source" value={editRecipientSource} />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-recipient-birthYear">Birth Year</Label>
+                    <Input
+                      id="edit-recipient-birthYear"
+                      name="birthYear"
+                      defaultValue={editingRecipient.birthYear ? String(editingRecipient.birthYear) : ""}
+                      inputMode="numeric"
+                      pattern="\\d{4}"
+                      maxLength={4}
+                      placeholder="YYYY"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-recipient-dischargeDate">Discharge Date</Label>
+                    <Input
+                      id="edit-recipient-dischargeDate"
+                      name="dischargeDate"
+                      type="date"
+                      defaultValue={editingRecipient.dischargeDate ?? ""}
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <Label htmlFor="edit-recipient-contactEmail">Contact Email</Label>
-                  <Input
-                    id="edit-recipient-contactEmail"
-                    name="contactEmail"
-                    defaultValue={editingRecipient.contactEmail ?? ""}
-                  />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Facility <span className="text-destructive">*</span></Label>
+                    <Select value={editRecipientFacility} onValueChange={setEditRecipientFacility}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select facility" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {facilityOptions.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <input type="hidden" name="facilityName" value={editRecipientFacility} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Source <span className="text-destructive">*</span></Label>
+                    <Select value={editRecipientSource} onValueChange={setEditRecipientSource}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select source" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {sourceOptions.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <input type="hidden" name="source" value={editRecipientSource} />
+                  </div>
                 </div>
-                <div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-recipient-phone">Phone</Label>
+                    <Input id="edit-recipient-phone" name="phone" type="tel" defaultValue={editingRecipient.phone ?? ""} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-recipient-contactEmail">Contact Email</Label>
+                    <Input
+                      id="edit-recipient-contactEmail"
+                      name="contactEmail"
+                      type="email"
+                      defaultValue={editingRecipient.contactEmail ?? ""}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="edit-recipient-releaseAddress">Release Address</Label>
                   <Input
                     id="edit-recipient-releaseAddress"
@@ -2062,43 +2774,52 @@ export function CorrectionsAdminClient({
                     defaultValue={editingRecipient.releaseAddress ?? ""}
                   />
                 </div>
-                <div>
-                  <Label htmlFor="edit-recipient-releaseCity">Release City</Label>
-                  <Input
-                    id="edit-recipient-releaseCity"
-                    name="releaseCity"
-                    defaultValue={editingRecipient.releaseCity ?? ""}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="edit-recipient-releaseCounty">Release County</Label>
-                  <Input
-                    id="edit-recipient-releaseCounty"
-                    name="releaseCounty"
-                    defaultValue={editingRecipient.releaseCounty ?? ""}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="edit-recipient-releaseState">Release State</Label>
-                  <Input
-                    id="edit-recipient-releaseState"
-                    name="releaseState"
-                    defaultValue={editingRecipient.releaseState ?? ""}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="edit-recipient-releaseZip">Release ZIP</Label>
-                  <Input
-                    id="edit-recipient-releaseZip"
-                    name="releaseZip"
-                    defaultValue={editingRecipient.releaseZip ?? ""}
-                  />
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-recipient-releaseCity">Release City</Label>
+                    <Input
+                      id="edit-recipient-releaseCity"
+                      name="releaseCity"
+                      defaultValue={editingRecipient.releaseCity ?? ""}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-recipient-releaseCounty">Release County</Label>
+                    <Input
+                      id="edit-recipient-releaseCounty"
+                      name="releaseCounty"
+                      defaultValue={editingRecipient.releaseCounty ?? ""}
+                    />
+                  </div>
                 </div>
 
-                <div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-recipient-releaseState">Release State</Label>
+                    <Input
+                      id="edit-recipient-releaseState"
+                      name="releaseState"
+                      defaultValue={editingRecipient.releaseState ?? ""}
+                      maxLength={2}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-recipient-releaseZip">Release ZIP</Label>
+                    <Input
+                      id="edit-recipient-releaseZip"
+                      name="releaseZip"
+                      defaultValue={editingRecipient.releaseZip ?? ""}
+                      inputMode="numeric"
+                      pattern="\\d{5}(-\\d{4})?"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
                   <Label>Status</Label>
                   <Select value={editRecipientStatus} onValueChange={setEditRecipientStatus}>
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2112,12 +2833,12 @@ export function CorrectionsAdminClient({
                   <input type="hidden" name="status" value={editRecipientStatus} />
                 </div>
 
-                <div className="md:col-span-3">
+                <div className="space-y-2">
                   <Label htmlFor="edit-recipient-notes">Notes</Label>
                   <Textarea id="edit-recipient-notes" name="notes" defaultValue={editingRecipient.notes ?? ""} />
                 </div>
 
-                <DialogFooter className="md:col-span-3 mt-2">
+                <DialogFooter className="mt-2">
                   <FormSubmitButton pendingText="Saving...">Save Recipient</FormSubmitButton>
                 </DialogFooter>
               </form>
@@ -2202,9 +2923,12 @@ export function CorrectionsAdminClient({
                   Target: {matchingRecipient.firstName} {matchingRecipient.lastName}
                 </div>
                 <div>
-                  {matchingRecipient.releaseCity || "Unknown city"}
+                  Location: {matchingRecipient.releaseCity || "Unknown city"}
                   {matchingRecipient.releaseState ? `, ${matchingRecipient.releaseState}` : ""}
                   {matchingRecipient.releaseZip ? ` ${matchingRecipient.releaseZip}` : ""}
+                </div>
+                <div>
+                  Birth Year: {matchingRecipient.birthYear ?? "-"} • Discharge: {matchingRecipient.dischargeDate || "-"}
                 </div>
               </div>
 
@@ -2224,6 +2948,9 @@ export function CorrectionsAdminClient({
                               {candidate.contact.city}
                               {candidate.contact.state ? `, ${candidate.contact.state}` : ""}
                               {candidate.contact.zipCode ? ` ${candidate.contact.zipCode}` : ""}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Birth Year: {candidate.contact.birthYear ?? "-"} • Sobriety: {candidate.contact.sobrietyDate || "-"}
                             </p>
                             <p className="text-xs text-muted-foreground">
                               Score {candidate.score} • {candidate.reasons.join(", ")}

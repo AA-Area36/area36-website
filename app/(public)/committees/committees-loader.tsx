@@ -5,9 +5,12 @@ import { GdriveLoader } from "@/components/gdrive-loader"
 import { CommitteesContent } from "./committees-content"
 import type { CommitteeData } from "./page"
 import type { CommitteeFiles } from "@/lib/gdrive/committees"
+import { createTranslator } from "@/lib/content/t"
+import type { ContentDoc } from "@/lib/content/schema"
 
 interface CommitteesLoaderProps {
   committees: CommitteeData[]
+  content?: ContentDoc
 }
 
 /**
@@ -18,11 +21,12 @@ interface CommitteesLoaderProps {
  * without their files. This ensures the page remains usable even if GDrive
  * is unavailable.
  */
-export function CommitteesLoader({ committees }: CommitteesLoaderProps) {
+export function CommitteesLoader({ committees, content }: CommitteesLoaderProps) {
   const { data, isLoading, error } = useCommittees()
+  const { t } = createTranslator(content ?? {})
 
   if (isLoading) {
-    return <GdriveLoader message="Loading committee files..." />
+    return <GdriveLoader message={t("committeeUi.loadingFilesLabel", "Loading committee files...")} />
   }
 
   // Graceful degradation: log error but show committees without files
@@ -33,5 +37,5 @@ export function CommitteesLoader({ committees }: CommitteesLoaderProps) {
   // Even if no files or error, show the committees with their static info
   const committeeFiles: CommitteeFiles = data || {}
 
-  return <CommitteesContent committees={committees} committeeFiles={committeeFiles} />
+  return <CommitteesContent committees={committees} committeeFiles={committeeFiles} content={content} />
 }

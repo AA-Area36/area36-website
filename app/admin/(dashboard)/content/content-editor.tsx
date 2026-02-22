@@ -79,6 +79,32 @@ function safeJsonParse(value: string | null | undefined): ContentDoc | null {
   }
 }
 
+const DEFAULT_PREVIEW_PATH_BY_SCOPE: Partial<Record<Scope, string>> = {
+  home: "/",
+  districts: "/districts",
+  about: "/about",
+  committees: "/committees",
+  contact: "/contact",
+  contribute: "/contribute",
+  correctionsTcp: "/corrections-temporary-contact-program",
+  events: "/events",
+  generalServiceConference: "/general-service-conference",
+  grapevine: "/grapevine",
+  newsletter: "/newsletter",
+  professionals: "/professionals",
+  recordings: "/recordings",
+  reports: "/reports",
+  resources: "/resources",
+  serviceBasics: "/service-basics",
+  temporaryContactPrograms: "/temporary-contact-programs",
+  treatmentTcp: "/treatment-temporary-contact-program",
+  ypaa: "/ypaa",
+}
+
+function getDefaultPreviewPath(scope: Scope): string {
+  return DEFAULT_PREVIEW_PATH_BY_SCOPE[scope] ?? "/"
+}
+
 /* ============================== Main Editor =============================== */
 
 export function ContentEditor({
@@ -102,9 +128,7 @@ export function ContentEditor({
 
   /* ----------------------------- Preview state ----------------------------- */
   const [previewEnabled, setPreviewEnabled] = React.useState(initialPreviewEnabled)
-  const [previewPath, setPreviewPath] = React.useState(() =>
-    scope === "districts" ? "/districts" : "/",
-  )
+  const [previewPath, setPreviewPath] = React.useState(() => getDefaultPreviewPath(scope))
   const [previewNonce, setPreviewNonce] = React.useState(0)
   const [previewOpen, setPreviewOpen] = React.useState(false)
 
@@ -529,7 +553,8 @@ export function ContentEditor({
                 </Button>
               </DialogTrigger>
               <DialogContent
-                className="fixed inset-y-0 right-0 left-auto h-screen w-[min(640px,90vw)] max-w-none translate-x-0 translate-y-0 top-0 rounded-l-xl rounded-r-none data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-300 flex flex-col gap-0 p-0"
+                className="fixed inset-y-0 right-0 left-auto h-screen w-screen sm:w-[min(1400px,100vw)] !max-w-none sm:!max-w-none translate-x-0 translate-y-0 top-0 rounded-l-xl rounded-r-none data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-300 flex flex-col gap-0 p-0"
+                style={{ width: "min(1400px, 100vw)", maxWidth: "none" }}
               >
                 <DialogHeader className="px-5 pt-5 pb-3 border-b border-border shrink-0">
                   <DialogTitle className="text-base">Page Preview</DialogTitle>
@@ -553,7 +578,7 @@ export function ContentEditor({
                       value={previewPath}
                       onChange={(e) => setPreviewPath(e.target.value)}
                       className="flex-1 h-8 text-sm font-mono"
-                      placeholder={scope === "districts" ? "/districts" : "/"}
+                      placeholder={getDefaultPreviewPath(scope)}
                     />
                     <Button
                       variant="outline"

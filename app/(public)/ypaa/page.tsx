@@ -4,6 +4,9 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { PageHeader } from "@/components/page-header"
+import { getContent } from "@/lib/content/repo"
+import { createTranslator } from "@/lib/content/t"
+import { getRequestLocale } from "@/lib/i18n/get-locale"
 
 export const metadata: Metadata = {
   title: "YPAA | Area 36",
@@ -11,15 +14,22 @@ export const metadata: Metadata = {
     "Young People in Alcoholics Anonymous — connecting young members with events, meetings, and service in Minnesota.",
 }
 
-export default function YPAAPage() {
+export default async function YPAAPage() {
+  const locale = await getRequestLocale()
+  const ypaaContent = await getContent("ypaa", locale)
+  const { t } = createTranslator(ypaaContent)
+
   return (
     <>
       <PageHeader
         variant="featured"
         icon={Users}
-        badge="Young People in A.A."
-        title="YPAA"
-        description="Young People in Alcoholics Anonymous (YPAA) is for A.A. members of all ages who identify as young people or young at heart. If you think you're young, you're young!"
+        badge={t("header.badge", "Young People in A.A.")}
+        title={t("header.title", "YPAA")}
+        description={t(
+          "header.description",
+          "Young People in Alcoholics Anonymous (YPAA) is for A.A. members of all ages who identify as young people or young at heart. If you think you're young, you're young!",
+        )}
         ariaId="ypaa-heading"
       />
 
@@ -29,21 +39,26 @@ export default function YPAAPage() {
             <div className="grid gap-12 lg:grid-cols-2 items-start">
               <div>
                 <h2 id="what-is-ypaa-heading" className="text-2xl font-bold text-foreground mb-4">
-                  What is YPAA?
+                  {t("about.title", "What is YPAA?")}
                 </h2>
                 <div className="prose prose-muted dark:prose-invert max-w-none">
                   <p className="text-muted-foreground leading-relaxed">
-                    YPAA committees exist to make Alcoholics Anonymous more accessible and welcoming to younger
-                    alcoholics. While there is no official age requirement, YPAA groups and events provide a space where
-                    young people can connect with others who share similar experiences.
+                    {t(
+                      "about.paragraph1",
+                      "YPAA committees exist to make Alcoholics Anonymous more accessible and welcoming to younger alcoholics. While there is no official age requirement, YPAA groups and events provide a space where young people can connect with others who share similar experiences.",
+                    )}
                   </p>
                   <p className="text-muted-foreground leading-relaxed mt-4">
-                    YPAA is not separate from A.A. - it is A.A. for young people. YPAA committees organize events,
-                    conferences, and activities that help carry the message to young alcoholics who might otherwise feel
-                    out of place.
+                    {t(
+                      "about.paragraph2",
+                      "YPAA is not separate from A.A. - it is A.A. for young people. YPAA committees organize events, conferences, and activities that help carry the message to young alcoholics who might otherwise feel out of place.",
+                    )}
                   </p>
                   <p className="text-muted-foreground leading-relaxed mt-4">
-                    Whether you got sober at 18 or 45, if you feel young in sobriety, YPAA is for you!
+                    {t(
+                      "about.paragraph3",
+                      "Whether you got sober at 18 or 45, if you feel young in sobriety, YPAA is for you!",
+                    )}
                   </p>
                 </div>
               </div>
@@ -53,17 +68,21 @@ export default function YPAAPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Heart className="h-5 w-5 text-primary" aria-hidden="true" />
-                      Why YPAA Matters
+                      {t("whyItMatters.title", "Why YPAA Matters")}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3 text-muted-foreground">
                     <p>
-                      Alcoholism does not discriminate by age. Many young people struggle with alcohol before they ever
-                      have a legal drink.
+                      {t(
+                        "whyItMatters.paragraph1",
+                        "Alcoholism does not discriminate by age. Many young people struggle with alcohol before they ever have a legal drink.",
+                      )}
                     </p>
                     <p>
-                      YPAA helps young people find others who understand their unique challenges - from not yet having a
-                      career to still living with parents to navigating sober dating.
+                      {t(
+                        "whyItMatters.paragraph2",
+                        "YPAA helps young people find others who understand their unique challenges - from not yet having a career to still living with parents to navigating sober dating.",
+                      )}
                     </p>
                   </CardContent>
                 </Card>
@@ -75,35 +94,39 @@ export default function YPAAPage() {
         {/* MNYPAA and ICYPAA */}
         <section className="py-12 sm:py-16 bg-muted/30" aria-labelledby="ypaa-organizations-heading">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <h2 id="ypaa-organizations-heading" className="text-2xl font-bold text-foreground mb-8">
-              YPAA Organizations
-            </h2>
+              <h2 id="ypaa-organizations-heading" className="text-2xl font-bold text-foreground mb-8">
+                {t("organizations.title", "YPAA Organizations")}
+              </h2>
 
             <div className="grid gap-6 md:grid-cols-2">
               {/* MNYPAA */}
               <Card>
                 <CardHeader>
-                  <CardTitle>MNYPAA</CardTitle>
-                  <CardDescription>Minnesota Young People in A.A.</CardDescription>
+                  <CardTitle>{t("organizations.mnypaa.title", "MNYPAA")}</CardTitle>
+                  <CardDescription>
+                    {t("organizations.mnypaa.subtitle", "Minnesota Young People in A.A.")}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <p className="text-muted-foreground">
-                    MNYPAA is the statewide YPAA committee for Minnesota, organizing events, conferences, and service
-                    opportunities for young people across the state.
+                    {t(
+                      "organizations.mnypaa.body",
+                      "MNYPAA is the statewide YPAA committee for Minnesota, organizing events, conferences, and service opportunities for young people across the state.",
+                    )}
                   </p>
                   <div className="space-y-3">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Calendar className="h-4 w-4 text-primary" aria-hidden="true" />
-                      <span>Annual Minnesota Young People&apos;s Conference</span>
+                      <span>{t("organizations.mnypaa.item1", "Annual Minnesota Young People's Conference")}</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <MapPin className="h-4 w-4 text-primary" aria-hidden="true" />
-                      <span>Events throughout Minnesota</span>
+                      <span>{t("organizations.mnypaa.item2", "Events throughout Minnesota")}</span>
                     </div>
                   </div>
                   <Button asChild className="w-full mt-4">
                     <Link href="https://mnypaa.org" target="_blank" rel="noopener noreferrer">
-                      Visit MNYPAA.org
+                      {t("organizations.mnypaa.buttonLabel", "Visit MNYPAA.org")}
                       <ExternalLink className="ml-2 h-4 w-4" aria-label="(opens in new tab)" />
                     </Link>
                   </Button>
@@ -113,27 +136,31 @@ export default function YPAAPage() {
               {/* ICYPAA */}
               <Card>
                 <CardHeader>
-                  <CardTitle>ICYPAA</CardTitle>
-                  <CardDescription>International Conference of Young People in A.A.</CardDescription>
+                  <CardTitle>{t("organizations.icypaa.title", "ICYPAA")}</CardTitle>
+                  <CardDescription>
+                    {t("organizations.icypaa.subtitle", "International Conference of Young People in A.A.")}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <p className="text-muted-foreground">
-                    ICYPAA is the largest annual gathering of young people in A.A., bringing together thousands of young
-                    alcoholics from around the world for a weekend of recovery, fellowship, and fun.
+                    {t(
+                      "organizations.icypaa.body",
+                      "ICYPAA is the largest annual gathering of young people in A.A., bringing together thousands of young alcoholics from around the world for a weekend of recovery, fellowship, and fun.",
+                    )}
                   </p>
                   <div className="space-y-3">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Calendar className="h-4 w-4 text-primary" aria-hidden="true" />
-                      <span>Annual international conference</span>
+                      <span>{t("organizations.icypaa.item1", "Annual international conference")}</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <MapPin className="h-4 w-4 text-primary" aria-hidden="true" />
-                      <span>Rotating host cities worldwide</span>
+                      <span>{t("organizations.icypaa.item2", "Rotating host cities worldwide")}</span>
                     </div>
                   </div>
                   <Button asChild variant="outline" className="w-full mt-4 bg-transparent">
                     <Link href="https://icypaa.org" target="_blank" rel="noopener noreferrer">
-                      Visit ICYPAA.org
+                      {t("organizations.icypaa.buttonLabel", "Visit ICYPAA.org")}
                       <ExternalLink className="ml-2 h-4 w-4" aria-label="(opens in new tab)" />
                     </Link>
                   </Button>
@@ -149,23 +176,24 @@ export default function YPAAPage() {
             <div className="rounded-2xl border border-border bg-card p-8 sm:p-10">
               <div className="max-w-2xl">
                 <h2 id="find-meetings-heading" className="text-2xl font-bold text-foreground mb-4">
-                  Find YPAA Meetings
+                  {t("meetings.title", "Find YPAA Meetings")}
                 </h2>
                 <p className="text-muted-foreground mb-6">
-                  Many areas have meetings specifically for young people, or meetings that attract a younger crowd.
-                  Check the A.A. meeting finder or contact your local intergroup to find YPAA-friendly meetings in your
-                  area.
+                  {t(
+                    "meetings.body",
+                    "Many areas have meetings specifically for young people, or meetings that attract a younger crowd. Check the A.A. meeting finder or contact your local intergroup to find YPAA-friendly meetings in your area.",
+                  )}
                 </p>
                 <div className="flex flex-wrap gap-4">
                   <Button asChild>
                     <Link href="https://aaminneapolis.org/meetings/#/?type=young-people-attend" target="_blank" rel="noopener noreferrer">
-                      Minneapolis Area
+                      {t("meetings.minneapolisButtonLabel", "Minneapolis Area")}
                       <ExternalLink className="ml-2 h-4 w-4" aria-label="(opens in new tab)" />
                     </Link>
                   </Button>
                   <Button asChild variant="outline">
                     <Link href="/contact">
-                      Contact Area 36
+                      {t("meetings.contactButtonLabel", "Contact Area 36")}
                       <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
                     </Link>
                   </Button>
@@ -179,15 +207,17 @@ export default function YPAAPage() {
         <section className="py-12 sm:py-16 bg-primary text-primary-foreground">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
             <Users className="h-12 w-12 mx-auto mb-4 opacity-80" aria-hidden="true" />
-            <h2 className="text-2xl font-bold mb-4">Get Involved</h2>
+            <h2 className="text-2xl font-bold mb-4">{t("getInvolved.title", "Get Involved")}</h2>
             <p className="max-w-2xl mx-auto opacity-90 mb-6">
-              Whether you want to attend a YPAA event, start a young people&apos;s meeting, or get involved in YPAA
-              service, there are many ways to connect with young people in A.A.
+              {t(
+                "getInvolved.description",
+                "Whether you want to attend a YPAA event, start a young people's meeting, or get involved in YPAA service, there are many ways to connect with young people in A.A.",
+              )}
             </p>
             <div className="flex flex-wrap justify-center gap-4">
               <Button asChild variant="secondary">
                 <Link href="https://mnypaa.org" target="_blank" rel="noopener noreferrer">
-                  Connect with MNYPAA
+                  {t("getInvolved.connectButtonLabel", "Connect with MNYPAA")}
                   <ExternalLink className="ml-2 h-4 w-4" aria-label="(opens in new tab)" />
                 </Link>
               </Button>
@@ -196,7 +226,7 @@ export default function YPAAPage() {
                 variant="outline"
                 className="bg-transparent border-primary-foreground/30 hover:bg-primary-foreground/10"
               >
-                <Link href="/events">View Area 36 Events</Link>
+                <Link href="/events">{t("getInvolved.eventsButtonLabel", "View Area 36 Events")}</Link>
               </Button>
             </div>
           </div>
