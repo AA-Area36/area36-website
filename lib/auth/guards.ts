@@ -1,7 +1,7 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare"
 import { getSession, type A36Session } from "@/lib/auth"
 import { isLocalAdminBypassEnabled } from "@/lib/auth/dev-bypass"
-import { hasPermission, requireCorrectionsWrite } from "@/lib/auth/rbac"
+import { hasPermission, requireCorrectionsDelete, requireCorrectionsWrite } from "@/lib/auth/rbac"
 
 type DistrictSiteMode = "hosted" | "external_redirect"
 
@@ -43,6 +43,17 @@ export async function requireCorrectionsWriteSession(): Promise<A36Session | nul
   if (!session) return null
 
   if (await requireCorrectionsWrite(session)) {
+    return session
+  }
+
+  return null
+}
+
+export async function requireCorrectionsDeleteSession(): Promise<A36Session | null> {
+  const session = await getSession()
+  if (!session) return null
+
+  if (await requireCorrectionsDelete(session)) {
     return session
   }
 

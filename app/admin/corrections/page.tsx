@@ -78,6 +78,7 @@ export default async function CorrectionsAdminPage({
   }
 
   const canEdit = !!(await requireCorrectionsWriteSession())
+  const canDelete = session.user.isAreaAdmin || (await hasPermission(session, "corrections:delete"))
   const resolvedSearchParams = (await searchParams) ?? {}
 
   const db = await getDb()
@@ -214,6 +215,7 @@ export default async function CorrectionsAdminPage({
       contactsMetrics={contactsMetrics}
       recipientMetrics={recipientMetrics}
       canEdit={canEdit}
+      canDelete={canDelete}
       initialSearchParams={resolvedSearchParams}
     />
   )

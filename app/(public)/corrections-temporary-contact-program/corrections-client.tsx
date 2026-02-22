@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition, useCallback } from "react"
-import { useForm } from "react-hook-form"
+import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useGoogleReCaptcha } from "react-google-recaptcha-v3"
 import { Building2, Mail, CheckCircle, Shield, Loader2 } from "lucide-react"
@@ -12,17 +12,28 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { correctionsContactFormSchema, type CorrectionsContactFormData } from "@/lib/schemas/corrections-tcp"
+import { createTranslator } from "@/lib/content/t"
+import type { ContentDoc } from "@/lib/content/schema"
 import { submitCorrectionsContactForm } from "./actions"
 
-function VolunteerForm() {
+type CorrectionsHeaderContent = {
+  badge?: string
+  title?: string
+  description?: string
+  backLinkLabel?: string
+}
+
+function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }) {
   const [submitted, setSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const { executeRecaptcha } = useGoogleReCaptcha()
 
   const {
+    control,
     register,
     handleSubmit,
     setValue,
@@ -34,7 +45,7 @@ function VolunteerForm() {
     defaultValues: {
       firstName: "",
       lastName: "",
-      gender: "",
+      gender: undefined,
       streetAddress: "",
       city: "",
       county: "",
@@ -62,7 +73,7 @@ function VolunteerForm() {
       startTransition(async () => {
         try {
           if (!executeRecaptcha) {
-            setSubmitError("reCAPTCHA not loaded. Please refresh and try again.")
+            setSubmitError(t("form.recaptchaNotLoadedError", "reCAPTCHA not loaded. Please refresh and try again."))
             return
           }
           const token = await executeRecaptcha("corrections_volunteer_form")
@@ -71,11 +82,11 @@ function VolunteerForm() {
           if (result.success) {
             setSubmitted(true)
           } else {
-            setSubmitError(result.error ?? "An error occurred")
+            setSubmitError(result.error ?? t("form.genericError", "An error occurred"))
           }
         } catch (error) {
           console.error("Form submission error:", error)
-          setSubmitError("An error occurred. Please try again.")
+          setSubmitError(t("form.genericError", "An error occurred"))
         }
       })
     },
@@ -88,9 +99,14 @@ function VolunteerForm() {
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
           <CheckCircle className="h-6 w-6" aria-hidden="true" />
         </div>
-        <h3 className="mt-4 text-lg font-semibold text-foreground">Volunteer Sign Up Received</h3>
+        <h3 className="mt-4 text-lg font-semibold text-foreground">
+          {t("form.successTitle", "Volunteer Sign Up Received")}
+        </h3>
         <p className="mt-2 text-muted-foreground">
-          Thank you for volunteering. The Corrections TCP Coordinator will contact you soon.
+          {t(
+            "form.successBody",
+            "Thank you for volunteering. The Corrections TCP Coordinator will contact you soon.",
+          )}
         </p>
         <Button
           variant="outline"
@@ -100,7 +116,7 @@ function VolunteerForm() {
             reset()
           }}
         >
-          Submit Another Volunteer
+          {t("form.successButtonLabel", "Submit Another Volunteer")}
         </Button>
       </div>
     )
@@ -117,14 +133,14 @@ function VolunteerForm() {
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="corrections-firstName">
-            First Name <span className="text-destructive">*</span>
+            {t("form.firstNameLabel", "First Name")} <span className="text-destructive">*</span>
           </Label>
           <Input id="corrections-firstName" {...register("firstName")} />
           {errors.firstName && <p className="text-sm text-destructive">{errors.firstName.message}</p>}
         </div>
         <div className="space-y-2">
           <Label htmlFor="corrections-lastName">
-            Last Name <span className="text-destructive">*</span>
+            {t("form.lastNameLabel", "Last Name")} <span className="text-destructive">*</span>
           </Label>
           <Input id="corrections-lastName" {...register("lastName")} />
           {errors.lastName && <p className="text-sm text-destructive">{errors.lastName.message}</p>}
@@ -134,14 +150,33 @@ function VolunteerForm() {
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="corrections-gender">
-            Gender <span className="text-destructive">*</span>
+            {t("form.genderLabel", "Gender")} <span className="text-destructive">*</span>
           </Label>
-          <Input id="corrections-gender" {...register("gender")} />
+          <Controller
+            name="gender"
+            control={control}
+            render={({ field }) => (
+              <Select
+                value={field.value}
+                onValueChange={(value) => {
+                  field.onChange(value)
+                }}
+              >
+                <SelectTrigger id="corrections-gender" className="w-full" aria-invalid={!!errors.gender}>
+                  <SelectValue placeholder={t("form.genderPlaceholder", "Select gender")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Male">{t("form.genderMale", "Male")}</SelectItem>
+                  <SelectItem value="Female">{t("form.genderFemale", "Female")}</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
           {errors.gender && <p className="text-sm text-destructive">{errors.gender.message}</p>}
         </div>
         <div className="space-y-2">
           <Label htmlFor="corrections-birthYear">
-            Birth Year <span className="text-destructive">*</span>
+            {t("form.birthYearLabel", "Birth Year")} <span className="text-destructive">*</span>
           </Label>
           <Input id="corrections-birthYear" inputMode="numeric" maxLength={4} {...register("birthYear")} />
           {errors.birthYear && <p className="text-sm text-destructive">{errors.birthYear.message}</p>}
@@ -149,38 +184,38 @@ function VolunteerForm() {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="corrections-streetAddress">Street Address</Label>
+        <Label htmlFor="corrections-streetAddress">{t("form.streetAddressLabel", "Street Address")}</Label>
         <Input id="corrections-streetAddress" {...register("streetAddress")} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="corrections-city">
-            City <span className="text-destructive">*</span>
+            {t("form.cityLabel", "City")} <span className="text-destructive">*</span>
           </Label>
           <Input id="corrections-city" {...register("city")} />
           {errors.city && <p className="text-sm text-destructive">{errors.city.message}</p>}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="corrections-county">County</Label>
+          <Label htmlFor="corrections-county">{t("form.countyLabel", "County")}</Label>
           <Input id="corrections-county" {...register("county")} />
         </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="corrections-state">State</Label>
+          <Label htmlFor="corrections-state">{t("form.stateLabel", "State")}</Label>
           <Input id="corrections-state" {...register("state")} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="corrections-zipCode">Zip Code</Label>
+          <Label htmlFor="corrections-zipCode">{t("form.zipCodeLabel", "Zip Code")}</Label>
           <Input id="corrections-zipCode" {...register("zipCode")} />
         </div>
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="corrections-email">
-          Email <span className="text-destructive">*</span>
+          {t("form.emailLabel", "Email")} <span className="text-destructive">*</span>
         </Label>
         <Input id="corrections-email" type="email" {...register("email")} />
         {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
@@ -189,15 +224,13 @@ function VolunteerForm() {
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="corrections-sobrietyDate">
-            Sobriety Date <span className="text-destructive">*</span>
+            {t("form.sobrietyDateLabel", "Sobriety Date")} <span className="text-destructive">*</span>
           </Label>
           <Input id="corrections-sobrietyDate" type="date" {...register("sobrietyDate")} />
           {errors.sobrietyDate && <p className="text-sm text-destructive">{errors.sobrietyDate.message}</p>}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="corrections-homeGroup">
-            Home Group <span className="text-destructive">*</span>
-          </Label>
+          <Label htmlFor="corrections-homeGroup">{t("form.homeGroupLabel", "Home Group")}</Label>
           <Input id="corrections-homeGroup" {...register("homeGroup")} />
           {errors.homeGroup && <p className="text-sm text-destructive">{errors.homeGroup.message}</p>}
         </div>
@@ -205,11 +238,11 @@ function VolunteerForm() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="corrections-phonePrimary">Phone Number 1</Label>
+          <Label htmlFor="corrections-phonePrimary">{t("form.phonePrimaryLabel", "Phone Number 1")}</Label>
           <Input id="corrections-phonePrimary" type="tel" {...register("phonePrimary")} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="corrections-phoneSecondary">Phone Number 2</Label>
+          <Label htmlFor="corrections-phoneSecondary">{t("form.phoneSecondaryLabel", "Phone Number 2")}</Label>
           <Input id="corrections-phoneSecondary" type="tel" {...register("phoneSecondary")} />
         </div>
       </div>
@@ -222,24 +255,26 @@ function VolunteerForm() {
             onCheckedChange={(checked) => setValue("isSpanishSpeaking", checked === true)}
           />
           <Label htmlFor="corrections-isSpanishSpeaking" className="font-normal cursor-pointer">
-            I am Spanish-speaking.
+            {t("form.spanishSpeakingLabel", "I am Spanish-speaking.")}
           </Label>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="corrections-otherLanguages">Other Languages Spoken</Label>
+          <Label htmlFor="corrections-otherLanguages">
+            {t("form.otherLanguagesLabel", "Other Languages Spoken")}
+          </Label>
           <Input id="corrections-otherLanguages" {...register("otherLanguages")} />
         </div>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="corrections-notes">Additional Notes</Label>
+        <Label htmlFor="corrections-notes">{t("form.notesLabel", "Additional Notes")}</Label>
         <Textarea id="corrections-notes" className="min-h-24" {...register("notes")} />
       </div>
 
       <div className="rounded-lg border border-border bg-muted/30 p-3">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Shield className="h-4 w-4 text-primary" aria-hidden="true" />
-          <span>This form is protected by Google reCAPTCHA v3.</span>
+          <span>{t("form.recaptchaNotice", "This form is protected by Google reCAPTCHA v3.")}</span>
         </div>
       </div>
 
@@ -247,26 +282,33 @@ function VolunteerForm() {
         {isPending ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-            Submitting...
+            {t("form.submittingLabel", "Submitting...")}
           </>
         ) : (
-          "Submit Volunteer Sign Up"
+          t("form.submitLabel", "Submit Volunteer Sign Up")
         )}
       </Button>
     </form>
   )
 }
 
-function CorrectionsTCPContent() {
+function CorrectionsTCPContent({
+  header,
+  content,
+}: {
+  header?: CorrectionsHeaderContent
+  content?: ContentDoc
+}) {
+  const { t } = createTranslator(content ?? {})
   return (
     <>
       <PageHeader
         variant="featured"
         icon={Building2}
-        badge="Corrections"
-        title="Corrections Temporary Contact Program"
-        description="Helping alcoholics transition from correctional facilities to the A.A. community."
-        backLink={{ href: "/temporary-contact-programs", label: "Back to Temporary Contact Programs" }}
+        badge={header?.badge || "Corrections"}
+        title={header?.title || "Corrections Temporary Contact Program"}
+        description={header?.description || "Helping alcoholics transition from correctional facilities to the A.A. community."}
+        backLink={{ href: "/temporary-contact-programs", label: header?.backLinkLabel || "Back to Temporary Contact Programs" }}
         ariaId="corrections-tcp-heading"
       />
 
@@ -275,18 +317,22 @@ function CorrectionsTCPContent() {
           <div className="grid gap-8 lg:grid-cols-2">
             <div>
               <h2 id="contact-form-heading" className="text-2xl font-bold text-foreground mb-4">
-                Volunteer as a Temporary Contact
+                {t("page.volunteerHeading", "Volunteer as a Temporary Contact")}
               </h2>
               <p className="text-muted-foreground mb-4">
-                Complete this volunteer sign-up form to help people leaving correctional facilities connect with A.A.
-                in their home community.
+                {t(
+                  "page.volunteerIntro1",
+                  "Complete this volunteer sign-up form to help people leaving correctional facilities connect with A.A. in their home community.",
+                )}
               </p>
               <p className="text-muted-foreground mb-4">
-                We use this information to find the best location match and support successful first-meeting
-                connections.
+                {t(
+                  "page.volunteerIntro2",
+                  "We use this information to find the best location match and support successful first-meeting connections.",
+                )}
               </p>
               <p className="text-muted-foreground">
-                You can also reach us directly at{" "}
+                {t("page.volunteerIntro3", "You can also reach us directly at")}{" "}
                 <Link href="mailto:ctcp@area36.org" className="text-primary hover:underline">
                   ctcp@area36.org
                 </Link>
@@ -295,13 +341,16 @@ function CorrectionsTCPContent() {
 
             <Card className="border-primary/20">
               <CardHeader>
-                <CardTitle>Corrections Volunteer Sign Up</CardTitle>
+                <CardTitle>{t("page.formCardTitle", "Corrections Volunteer Sign Up")}</CardTitle>
                 <CardDescription>
-                  Required fields are marked with an asterisk. Please provide as much location detail as available.
+                  {t(
+                    "page.formCardDescription",
+                    "Required fields are marked with an asterisk. Please provide as much location detail as available.",
+                  )}
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <VolunteerForm />
+                <VolunteerForm t={t} />
               </CardContent>
             </Card>
           </div>
@@ -313,14 +362,19 @@ function CorrectionsTCPContent() {
           <div className="rounded-2xl border border-border bg-card p-8 sm:p-10">
             <div className="max-w-2xl">
               <h2 id="pink-can-heading" className="text-2xl font-bold text-foreground mb-4">
-                The Pink Can Plan
+                {t("pinkCan.title", "The Pink Can Plan")}
               </h2>
               <p className="text-muted-foreground mb-4">
-                The Pink Can Plan is a separate fund dedicated to carrying the A.A. message to those in correctional
-                facilities.
+                {t(
+                  "pinkCan.body1",
+                  "The Pink Can Plan is a separate fund dedicated to carrying the A.A. message to those in correctional facilities.",
+                )}
               </p>
               <p className="text-muted-foreground mb-6">
-                To learn more or contribute to the Pink Can Plan, contact the Pink Can Coordinator.
+                {t(
+                  "pinkCan.body2",
+                  "To learn more or contribute to the Pink Can Plan, contact the Pink Can Coordinator.",
+                )}
               </p>
               <Button asChild>
                 <Link href="mailto:pinkcanplan@area36.org">
@@ -337,20 +391,23 @@ function CorrectionsTCPContent() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto">
             <h2 id="committee-contact-heading" className="text-2xl font-bold text-foreground mb-4">
-              Corrections Committee
+              {t("committee.title", "Corrections Committee")}
             </h2>
             <p className="text-muted-foreground mb-6">
-              For more information about corrections service work in Area 36, contact the committee.
+              {t(
+                "committee.description",
+                "For more information about corrections service work in Area 36, contact the committee.",
+              )}
             </p>
             <div className="flex flex-wrap justify-center gap-4">
               <Button asChild>
                 <Link href="mailto:corrections@area36.org">
                   <Mail className="mr-2 h-4 w-4" aria-hidden="true" />
-                  corrections@area36.org
+                  {t("committee.emailButtonLabel", "corrections@area36.org")}
                 </Link>
               </Button>
               <Button asChild variant="outline">
-                <Link href="/committees">View All Committees</Link>
+                <Link href="/committees">{t("committee.committeesButtonLabel", "View All Committees")}</Link>
               </Button>
             </div>
           </div>
@@ -360,6 +417,12 @@ function CorrectionsTCPContent() {
   )
 }
 
-export function CorrectionsTCPClient() {
-  return <CorrectionsTCPContent />
+export function CorrectionsTCPClient({
+  content,
+  fallbackHeader,
+}: {
+  content?: ContentDoc
+  fallbackHeader?: CorrectionsHeaderContent
+}) {
+  return <CorrectionsTCPContent content={content} header={fallbackHeader} />
 }

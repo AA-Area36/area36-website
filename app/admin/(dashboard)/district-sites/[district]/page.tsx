@@ -5,6 +5,7 @@ import { eq, asc } from "drizzle-orm"
 import { upsertDistrictSite, addDistrictAdmin, removeDistrictAdmin } from "../actions"
 
 export const dynamic = "force-dynamic"
+const PROTECTED_SITE_ADMIN_EMAIL = "webmaster@area36.org"
 
 function coerceDistrict(param: string): number | null {
   const n = Number(param)
@@ -178,13 +179,17 @@ export default async function DistrictSiteDetailPage({
                       <div className="truncate text-sm font-medium">{a.email}</div>
                       <div className="text-xs text-muted-foreground capitalize">{a.role}</div>
                     </div>
-                    <form action={removeDistrictAdmin}>
-                      <input type="hidden" name="districtNumber" value={districtNumber} />
-                      <input type="hidden" name="email" value={a.email} />
-                      <button type="submit" className="text-sm text-muted-foreground hover:text-foreground">
-                        Remove
-                      </button>
-                    </form>
+                    {a.email.trim().toLowerCase() === PROTECTED_SITE_ADMIN_EMAIL ? (
+                      <span className="text-xs text-muted-foreground">Protected</span>
+                    ) : (
+                      <form action={removeDistrictAdmin}>
+                        <input type="hidden" name="districtNumber" value={districtNumber} />
+                        <input type="hidden" name="email" value={a.email} />
+                        <button type="submit" className="text-sm text-muted-foreground hover:text-foreground">
+                          Remove
+                        </button>
+                      </form>
+                    )}
                   </div>
                 ))
               )}

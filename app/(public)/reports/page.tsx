@@ -5,6 +5,9 @@ import { Card, CardContent } from "@/components/ui/card"
 import { getDb } from "@/lib/db"
 import { reportsMonthly } from "@/lib/db/schema"
 import { PageHeader } from "@/components/page-header"
+import { getContent } from "@/lib/content/repo"
+import { createTranslator } from "@/lib/content/t"
+import { getRequestLocale } from "@/lib/i18n/get-locale"
 
 export const metadata: Metadata = {
   title: "Monthly Reports | Area 36",
@@ -24,6 +27,9 @@ function formatDate(value: string) {
 }
 
 export default async function ReportsPage() {
+  const locale = await getRequestLocale()
+  const reportsContent = await getContent("reports", locale)
+  const { t } = createTranslator(reportsContent)
   const db = await getDb()
   const reports = await db.select().from(reportsMonthly).orderBy(desc(reportsMonthly.month))
 
@@ -31,8 +37,8 @@ export default async function ReportsPage() {
     <>
       <PageHeader
         variant="compact"
-        title="Monthly Reports"
-        description="Operational summaries for Area 36 web services, published monthly."
+        title={t("header.title", "Monthly Reports")}
+        description={t("header.description", "Operational summaries for Area 36 web services, published monthly.")}
         maxWidth="2xl"
       />
 
@@ -41,7 +47,7 @@ export default async function ReportsPage() {
             {reports.length === 0 ? (
               <Card>
                 <CardContent className="py-8 text-center text-muted-foreground">
-                  No reports available yet.
+                  {t("list.empty", "No reports available yet.")}
                 </CardContent>
               </Card>
             ) : (
@@ -52,14 +58,15 @@ export default async function ReportsPage() {
                       <div>
                         <div className="text-lg font-semibold text-foreground">{report.subject}</div>
                         <div className="text-sm text-muted-foreground">
-                          Month: {report.month} • Generated: {formatDate(report.generatedAt)}
+                          {t("list.monthPrefix", "Month:")} {report.month} • {t("list.generatedPrefix", "Generated:")}{" "}
+                          {formatDate(report.generatedAt)}
                         </div>
                       </div>
                       <Link
                         className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90 transition-colors"
                         href={`/reports/${report.month}`}
                       >
-                        View Report
+                        {t("list.viewReportLabel", "View Report")}
                       </Link>
                     </CardContent>
                   </Card>

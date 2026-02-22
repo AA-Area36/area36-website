@@ -135,7 +135,7 @@ export async function submitCorrectionsContactForm(data: CorrectionsContactFormD
           birthYear: Number(result.data.birthYear),
           isSpanishSpeaking: result.data.isSpanishSpeaking,
           otherLanguages: result.data.otherLanguages?.trim() || null,
-          homeGroup: result.data.homeGroup.trim(),
+          homeGroup: result.data.homeGroup?.trim() || null,
           notes: result.data.notes?.trim() || null,
           active: true,
           updatedAt: now,
@@ -160,7 +160,7 @@ export async function submitCorrectionsContactForm(data: CorrectionsContactFormD
         birthYear: Number(result.data.birthYear),
         isSpanishSpeaking: result.data.isSpanishSpeaking,
         otherLanguages: result.data.otherLanguages?.trim() || null,
-        homeGroup: result.data.homeGroup.trim(),
+        homeGroup: result.data.homeGroup?.trim() || null,
         notes: result.data.notes?.trim() || null,
         active: true,
       })
@@ -186,13 +186,13 @@ Phone 2: ${result.data.phoneSecondary || ""}
 Birth Year: ${result.data.birthYear}
 Spanish Speaking: ${result.data.isSpanishSpeaking ? "Yes" : "No"}
 Other Languages: ${result.data.otherLanguages || ""}
-Home Group: ${result.data.homeGroup}
+Home Group: ${result.data.homeGroup || ""}
 Notes: ${result.data.notes || ""}
 
 ---
 This form was submitted via the Area 36 Corrections Temporary Contact Program page.`
 
-    const recipients = ["ctcp@area36.org", "corrections@area36.org"]
+    const recipients = ["ctcp@area36.org"]
     for (const recipient of recipients) {
       const emailResult = await sendEmail(credentials, {
         to: recipient,

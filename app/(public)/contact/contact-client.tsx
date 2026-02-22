@@ -15,50 +15,55 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { MultiSelect } from "@/components/multi-select"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { contactFormSchema, type ContactFormData } from "@/lib/schemas/contact"
+import { createTranslator } from "@/lib/content/t"
+import type { ContentDoc } from "@/lib/content/schema"
 import { submitContactForm } from "./actions"
 
-const recipients = [
-  { value: "general", label: "General Inquiry", email: "chairperson@area36.org" },
-  { value: "chairperson", label: "Area Chairperson", email: "chairperson@area36.org" },
-  { value: "delegate", label: "Delegate", email: "delegate@area36.org" },
-  { value: "treasurer", label: "Treasurer", email: "treasurer@area36.org" },
-  { value: "secretary", label: "Secretary", email: "secretary@area36.org" },
-  { value: "technology", label: "Technology Chair", email: "technology@area36.org" },
-  { value: "webmaster", label: "Webmaster", email: "webmaster@area36.org" },
-  { value: "accessibility", label: "Accessibility Committee", email: "accessibility@area36.org" },
-  { value: "archives", label: "Archives Committee", email: "archives@area36.org" },
-  { value: "cpc", label: "CPC Committee", email: "cpc@area36.org" },
-  { value: "corrections", label: "Corrections Committee", email: "corrections@area36.org" },
-  { value: "grapevine", label: "Grapevine Committee", email: "grapevine@area36.org" },
-  { value: "literature", label: "Literature Committee", email: "literature@area36.org" },
-  { value: "pi", label: "Public Information Committee", email: "pi@area36.org" },
-  { value: "treatment", label: "Treatment Committee", email: "treatment@area36.org" },
-]
+type ContactHeaderContent = {
+  title?: string
+  description?: string
+}
 
-const officers = [
-  { role: "Delegate", email: "delegate@area36.org", description: "GSC representative" },
-  { role: "Alternate Delegate", email: "altdelegate@area36.org", description: "Assists Delegate" },
-  { role: "Chairperson", email: "chairperson@area36.org", description: "Area leadership" },
-  { role: "Alternate Chair", email: "altchairperson@area36.org", description: "Assists Chair" },
-  { role: "Secretary", email: "secretary@area36.org", description: "Area records" },
-  { role: "Treasurer", email: "treasurer@area36.org", description: "Financial matters" },
-]
-
-const committees = [
-  { name: "Accessibility", email: "accessibility@area36.org" },
-  { name: "Archives", email: "archives@area36.org" },
-  { name: "CPC", email: "cpc@area36.org" },
-  { name: "Corrections", email: "corrections@area36.org" },
-  { name: "Grapevine / La Viña", email: "grapevine@area36.org" },
-  { name: "Group Records", email: "grouprecords@area36.org" },
-  { name: "Literature", email: "literature@area36.org" },
-  { name: "Public Information", email: "pi@area36.org" },
-  { name: "Technology", email: "technology@area36.org" },
-  { name: "Treatment", email: "treatment@area36.org" },
-  { name: "Website", email: "webmaster@area36.org" },
-]
-
-function ContactForm() {
+function ContactForm({ content, header }: { content?: ContentDoc; header?: ContactHeaderContent }) {
+  const { t } = createTranslator(content ?? {})
+  const recipients = [
+    { value: "general", label: t("recipients.general.label", "General Inquiry"), email: t("recipients.general.email", "chairperson@area36.org") },
+    { value: "chairperson", label: t("recipients.chairperson.label", "Area Chairperson"), email: t("recipients.chairperson.email", "chairperson@area36.org") },
+    { value: "delegate", label: t("recipients.delegate.label", "Delegate"), email: t("recipients.delegate.email", "delegate@area36.org") },
+    { value: "treasurer", label: t("recipients.treasurer.label", "Treasurer"), email: t("recipients.treasurer.email", "treasurer@area36.org") },
+    { value: "secretary", label: t("recipients.secretary.label", "Secretary"), email: t("recipients.secretary.email", "secretary@area36.org") },
+    { value: "technology", label: t("recipients.technology.label", "Technology Chair"), email: t("recipients.technology.email", "technology@area36.org") },
+    { value: "webmaster", label: t("recipients.webmaster.label", "Webmaster"), email: t("recipients.webmaster.email", "webmaster@area36.org") },
+    { value: "accessibility", label: t("recipients.accessibility.label", "Accessibility Committee"), email: t("recipients.accessibility.email", "accessibility@area36.org") },
+    { value: "archives", label: t("recipients.archives.label", "Archives Committee"), email: t("recipients.archives.email", "archives@area36.org") },
+    { value: "cpc", label: t("recipients.cpc.label", "CPC Committee"), email: t("recipients.cpc.email", "cpc@area36.org") },
+    { value: "corrections", label: t("recipients.corrections.label", "Corrections Committee"), email: t("recipients.corrections.email", "corrections@area36.org") },
+    { value: "grapevine", label: t("recipients.grapevine.label", "Grapevine Committee"), email: t("recipients.grapevine.email", "grapevine@area36.org") },
+    { value: "literature", label: t("recipients.literature.label", "Literature Committee"), email: t("recipients.literature.email", "literature@area36.org") },
+    { value: "pi", label: t("recipients.pi.label", "Public Information Committee"), email: t("recipients.pi.email", "pi@area36.org") },
+    { value: "treatment", label: t("recipients.treatment.label", "Treatment Committee"), email: t("recipients.treatment.email", "treatment@area36.org") },
+  ]
+  const officers = [
+    { role: t("officers.delegate.role", "Delegate"), description: t("officers.delegate.description", "GSC representative"), email: t("officers.delegate.email", "delegate@area36.org") },
+    { role: t("officers.alternateDelegate.role", "Alternate Delegate"), description: t("officers.alternateDelegate.description", "Assists Delegate"), email: t("officers.alternateDelegate.email", "altdelegate@area36.org") },
+    { role: t("officers.chairperson.role", "Chairperson"), description: t("officers.chairperson.description", "Area leadership"), email: t("officers.chairperson.email", "chairperson@area36.org") },
+    { role: t("officers.alternateChair.role", "Alternate Chair"), description: t("officers.alternateChair.description", "Assists Chair"), email: t("officers.alternateChair.email", "altchairperson@area36.org") },
+    { role: t("officers.secretary.role", "Secretary"), description: t("officers.secretary.description", "Area records"), email: t("officers.secretary.email", "secretary@area36.org") },
+    { role: t("officers.treasurer.role", "Treasurer"), description: t("officers.treasurer.description", "Financial matters"), email: t("officers.treasurer.email", "treasurer@area36.org") },
+  ]
+  const committees = [
+    { name: t("committees.accessibility.name", "Accessibility"), email: t("committees.accessibility.email", "accessibility@area36.org") },
+    { name: t("committees.archives.name", "Archives"), email: t("committees.archives.email", "archives@area36.org") },
+    { name: t("committees.cpc.name", "CPC"), email: t("committees.cpc.email", "cpc@area36.org") },
+    { name: t("committees.corrections.name", "Corrections"), email: t("committees.corrections.email", "corrections@area36.org") },
+    { name: t("committees.grapevine.name", "Grapevine / La Viña"), email: t("committees.grapevine.email", "grapevine@area36.org") },
+    { name: t("committees.groupRecords.name", "Group Records"), email: t("committees.groupRecords.email", "grouprecords@area36.org") },
+    { name: t("committees.literature.name", "Literature"), email: t("committees.literature.email", "literature@area36.org") },
+    { name: t("committees.pi.name", "Public Information"), email: t("committees.pi.email", "pi@area36.org") },
+    { name: t("committees.technology.name", "Technology"), email: t("committees.technology.email", "technology@area36.org") },
+    { name: t("committees.treatment.name", "Treatment"), email: t("committees.treatment.email", "treatment@area36.org") },
+    { name: t("committees.website.name", "Website"), email: t("committees.website.email", "webmaster@area36.org") },
+  ]
   const [submitted, setSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -106,7 +111,7 @@ function ContactForm() {
     startTransition(async () => {
       try {
         if (!executeRecaptcha) {
-          setSubmitError("reCAPTCHA not loaded. Please refresh and try again.")
+          setSubmitError(t("form.recaptchaNotLoadedError", "reCAPTCHA not loaded. Please refresh and try again."))
           return
         }
         const token = await executeRecaptcha("contact_form")
@@ -117,11 +122,13 @@ function ContactForm() {
         if (result.success) {
           setSubmitted(true)
         } else {
-          setSubmitError(result.error ?? "An error occurred")
+          setSubmitError(result.error ?? t("form.genericError", "An error occurred"))
         }
       } catch (error) {
         console.error("Form submission error:", error)
-        setSubmitError(`reCAPTCHA error: ${error instanceof Error ? error.message : "Unknown error"}`)
+        setSubmitError(
+          `${t("form.recaptchaErrorPrefix", "reCAPTCHA error:")} ${error instanceof Error ? error.message : "Unknown error"}`,
+        )
       }
     })
   }, [executeRecaptcha])
@@ -135,8 +142,14 @@ function ContactForm() {
   return (
       <>
         <PageHeader
-          title="Contact Us"
-          description="Have questions about Area 36 or general service? Select who you'd like to contact and send us a message."
+          title={header?.title || t("header.title", "Contact Us")}
+          description={
+            header?.description ||
+            t(
+              "header.description",
+              "Have questions about Area 36 or general service? Select who you'd like to contact and send us a message.",
+            )
+          }
           maxWidth="2xl"
           ariaId="contact-heading"
         />
@@ -146,22 +159,24 @@ function ContactForm() {
             <div className="grid gap-12 lg:grid-cols-2">
               {/* Contact Form */}
               <div>
-                <h2 className="text-2xl font-bold text-foreground mb-6">Send a Message</h2>
+                <h2 className="text-2xl font-bold text-foreground mb-6">{t("form.title", "Send a Message")}</h2>
 
                 {submitted ? (
                   <div className="rounded-xl border border-border bg-card p-8 text-center">
                     <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
                       <CheckCircle className="h-6 w-6" aria-hidden="true" />
                     </div>
-                    <h3 className="mt-4 text-lg font-semibold text-foreground">Message Sent!</h3>
+                    <h3 className="mt-4 text-lg font-semibold text-foreground">
+                      {t("form.successTitle", "Message Sent!")}
+                    </h3>
                     <p className="mt-2 text-muted-foreground">
-                      Thank you for your message.{" "}
+                      {t("form.successPrefix", "Thank you for your message.")}{" "}
                       {selectedRecipientDetails.length > 0
-                        ? `${selectedRecipientDetails.map((recipient) => recipient.label).join(", ")} will get back to you soon.`
-                        : "Your selected recipients will get back to you soon."}
+                        ? `${selectedRecipientDetails.map((recipient) => recipient.label).join(", ")} ${t("form.successSuffix", "will get back to you soon.")}`
+                        : t("form.successFallback", "Your selected recipients will get back to you soon.")}
                     </p>
                     <Button variant="outline" className="mt-6 bg-transparent" onClick={handleSendAnother}>
-                      Send Another Message
+                      {t("form.sendAnotherLabel", "Send Another Message")}
                     </Button>
                   </div>
                 ) : (
@@ -174,7 +189,7 @@ function ContactForm() {
 
                     <div className="space-y-2">
                       <Label>
-                        Who would you like to contact? <span className="text-destructive">*</span>
+                        {t("form.recipientsLabel", "Who would you like to contact?")} <span className="text-destructive">*</span>
                       </Label>
                       <MultiSelect
                         options={recipients.map((recipient) => ({
@@ -183,7 +198,7 @@ function ContactForm() {
                         }))}
                         value={selectedRecipients}
                         onChange={(value) => setValue("recipients", value, { shouldValidate: true })}
-                        placeholder="Select recipients"
+                        placeholder={t("form.recipientsPlaceholder", "Select recipients")}
                         className="w-full"
                       />
                       {errors.recipients && (
@@ -191,7 +206,9 @@ function ContactForm() {
                       )}
                       {selectedRecipientDetails.length > 0 && (
                         <div className="rounded-md border border-border bg-muted/20 p-3">
-                          <p className="text-xs uppercase tracking-wide text-muted-foreground">Selected recipients</p>
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                            {t("form.selectedRecipientsLabel", "Selected recipients")}
+                          </p>
                           <ul className="mt-2 space-y-1">
                             {selectedRecipientDetails.map((recipient) => (
                               <li key={recipient.value} className="text-sm text-muted-foreground">
@@ -207,7 +224,7 @@ function ContactForm() {
                     <div className="grid gap-6 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor="firstName">
-                          First Name <span className="text-destructive">*</span>
+                          {t("form.firstNameLabel", "First Name")} <span className="text-destructive">*</span>
                         </Label>
                         <Input id="firstName" {...register("firstName")} />
                         {errors.firstName && (
@@ -216,7 +233,7 @@ function ContactForm() {
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="lastName">
-                          Last Name <span className="text-destructive">*</span>
+                          {t("form.lastNameLabel", "Last Name")} <span className="text-destructive">*</span>
                         </Label>
                         <Input id="lastName" {...register("lastName")} />
                         {errors.lastName && (
@@ -227,7 +244,7 @@ function ContactForm() {
 
                     <div className="space-y-2">
                       <Label htmlFor="email">
-                        Email <span className="text-destructive">*</span>
+                        {t("form.emailLabel", "Email")} <span className="text-destructive">*</span>
                       </Label>
                       <Input id="email" type="email" {...register("email")} />
                       {errors.email && (
@@ -236,15 +253,15 @@ function ContactForm() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="phone">Phone Number</Label>
+                      <Label htmlFor="phone">{t("form.phoneLabel", "Phone Number")}</Label>
                       <Input id="phone" type="tel" {...register("phone")} />
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="subject">
-                        Subject <span className="text-destructive">*</span>
+                        {t("form.subjectLabel", "Subject")} <span className="text-destructive">*</span>
                       </Label>
-                      <Input id="subject" placeholder="Brief subject line" {...register("subject")} />
+                      <Input id="subject" placeholder={t("form.subjectPlaceholder", "Brief subject line")} {...register("subject")} />
                       {errors.subject && (
                         <p className="text-sm text-destructive">{errors.subject.message}</p>
                       )}
@@ -252,7 +269,7 @@ function ContactForm() {
 
                     <div className="space-y-2">
                       <Label htmlFor="message">
-                        Message <span className="text-destructive">*</span>
+                        {t("form.messageLabel", "Message")} <span className="text-destructive">*</span>
                       </Label>
                       <Textarea id="message" rows={5} className="resize-none" {...register("message")} />
                       {errors.message && (
@@ -263,7 +280,7 @@ function ContactForm() {
                     <div className="rounded-lg border border-border bg-muted/30 p-4">
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Shield className="h-4 w-4 text-primary" aria-hidden="true" />
-                        <span>This form is protected by Google reCAPTCHA v3.</span>
+                        <span>{t("form.recaptchaNotice", "This form is protected by Google reCAPTCHA v3.")}</span>
                       </div>
                       {errors.recaptchaToken && (
                         <p className="text-sm text-destructive mt-2">{errors.recaptchaToken.message}</p>
@@ -279,8 +296,10 @@ function ContactForm() {
                         }
                       />
                       <Label htmlFor="consent" className="text-sm text-muted-foreground leading-relaxed">
-                        I understand that A.A. is a program of anonymity and that my contact information will be kept
-                        confidential.
+                        {t(
+                          "form.consentText",
+                          "I understand that A.A. is a program of anonymity and that my contact information will be kept confidential.",
+                        )}
                       </Label>
                     </div>
                     {errors.consent && (
@@ -291,12 +310,12 @@ function ContactForm() {
                       {isPending ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                          Sending...
+                          {t("form.sendingLabel", "Sending...")}
                         </>
                       ) : (
                         <>
                           <Send className="mr-2 h-4 w-4" aria-hidden="true" />
-                          Send Message
+                          {t("form.sendButtonLabel", "Send Message")}
                         </>
                       )}
                     </Button>
@@ -313,13 +332,15 @@ function ContactForm() {
                       <MapPin className="h-5 w-5" aria-hidden="true" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-foreground">Mailing Address</h3>
+                      <h3 className="font-semibold text-foreground">
+                        {t("contactInfo.mailingAddressTitle", "Mailing Address")}
+                      </h3>
                       <address className="mt-2 text-muted-foreground not-italic leading-relaxed">
-                        SMAA
+                        {t("contactInfo.mailingAddressLine1", "SMAA")}
                         <br />
-                        P.O. Box 2812
+                        {t("contactInfo.mailingAddressLine2", "P.O. Box 2812")}
                         <br />
-                        Minneapolis, MN 55402
+                        {t("contactInfo.mailingAddressLine3", "Minneapolis, MN 55402")}
                       </address>
                     </div>
                   </div>
@@ -332,12 +353,14 @@ function ContactForm() {
                       <Mail className="h-5 w-5" aria-hidden="true" />
                     </div>
                     <div className="flex-1">
-                      <h3 className="font-semibold text-foreground mb-4">Direct Email Contacts</h3>
+                      <h3 className="font-semibold text-foreground mb-4">
+                        {t("contactInfo.directContactsTitle", "Direct Email Contacts")}
+                      </h3>
 
                       <Accordion type="single" collapsible className="w-full">
                         <AccordionItem value="officers" className="border-b-0">
                           <AccordionTrigger className="py-3 hover:no-underline">
-                            <span className="text-sm font-medium">Area Officers</span>
+                            <span className="text-sm font-medium">{t("contactInfo.officersTitle", "Area Officers")}</span>
                           </AccordionTrigger>
                           <AccordionContent>
                             <ul className="space-y-2 pl-1">
@@ -361,7 +384,9 @@ function ContactForm() {
 
                         <AccordionItem value="committees" className="border-b-0">
                           <AccordionTrigger className="py-3 hover:no-underline">
-                            <span className="text-sm font-medium">Committee Chairs</span>
+                            <span className="text-sm font-medium">
+                              {t("contactInfo.committeesTitle", "Committee Chairs")}
+                            </span>
                           </AccordionTrigger>
                           <AccordionContent>
                             <ul className="space-y-2 pl-1">
@@ -386,14 +411,18 @@ function ContactForm() {
 
                 {/* Need Immediate Help */}
                 <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-6">
-                  <h3 className="font-semibold text-amber-800 dark:text-amber-200 mb-2">Need Immediate Help?</h3>
+                  <h3 className="font-semibold text-amber-800 dark:text-amber-200 mb-2">
+                    {t("contactInfo.immediateHelpTitle", "Need Immediate Help?")}
+                  </h3>
                   <p className="text-sm text-amber-700 dark:text-amber-300 mb-4">
-                    If you or someone you know is struggling with alcohol, the most important thing is to find a
-                    meeting.
+                    {t(
+                      "contactInfo.immediateHelpBody",
+                      "If you or someone you know is struggling with alcohol, the most important thing is to find a meeting.",
+                    )}
                   </p>
                   <Button asChild variant="outline" className="bg-transparent border-amber-300 dark:border-amber-700">
                     <Link href="https://www.aa.org/find-aa" target="_blank" rel="noopener noreferrer">
-                      Find a Meeting
+                      {t("contactInfo.immediateHelpButtonLabel", "Find a Meeting")}
                     </Link>
                   </Button>
                 </div>
@@ -405,6 +434,12 @@ function ContactForm() {
   )
 }
 
-export function ContactClient() {
-  return <ContactForm />
+export function ContactClient({
+  content,
+  fallbackHeader,
+}: {
+  content?: ContentDoc
+  fallbackHeader?: ContactHeaderContent
+}) {
+  return <ContactForm content={content} header={fallbackHeader} />
 }

@@ -339,9 +339,13 @@ function SectionPagination({
 interface EventsClientProps {
   events: DisplayEvent[]
   calendarFiles: CalendarFile[]
+  hero: {
+    title: string
+    description: string
+  }
 }
 
-export function EventsClient({ events, calendarFiles }: EventsClientProps) {
+export function EventsClient({ events, calendarFiles, hero }: EventsClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { executeRecaptcha } = useGoogleReCaptcha()
@@ -943,10 +947,10 @@ export function EventsClient({ events, calendarFiles }: EventsClientProps) {
             <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
               <div>
                 <h1 id="events-heading" className="text-4xl font-bold text-foreground sm:text-5xl">
-                  Events Calendar
+                  {hero.title}
                 </h1>
                 <p className="mt-4 text-lg text-muted-foreground max-w-2xl">
-                  Stay connected with Area 36 assemblies, workshops, and service events throughout southern Minnesota.
+                  {hero.description}
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">

@@ -2,6 +2,8 @@ import { asc, eq } from "drizzle-orm"
 import { getDb, schema } from "@/lib/db"
 import { ADMIN_PERMISSIONS } from "@/lib/auth/rbac"
 import {
+  createAppRole,
+  updateAppRole,
   addAppUserPermission,
   removeAppUserAccess,
   removeAppUserPermission,
@@ -54,9 +56,9 @@ export default async function RoleManagementPage() {
   const roleOptions = roles.length > 0
     ? roles
     : [
-        { roleKey: "chair" as const, displayName: "Chair", defaultPermissionsJson: "[]" },
-        { roleKey: "officer" as const, displayName: "Officer", defaultPermissionsJson: "[]" },
-        { roleKey: "admin" as const, displayName: "Admin", defaultPermissionsJson: "[]" },
+        { roleKey: "chair", displayName: "Chair", defaultPermissionsJson: "[]" },
+        { roleKey: "officer", displayName: "Officer", defaultPermissionsJson: "[]" },
+        { roleKey: "admin", displayName: "Admin", defaultPermissionsJson: JSON.stringify(ADMIN_PERMISSIONS) },
       ]
 
   const normalizedAssignments = assignments.map((assignment) => ({
@@ -72,6 +74,8 @@ export default async function RoleManagementPage() {
       roleOptions={roleOptions}
       assignments={normalizedAssignments}
       permissionOptions={[...ADMIN_PERMISSIONS]}
+      createAppRoleAction={createAppRole}
+      updateAppRoleAction={updateAppRole}
       upsertAppUserRoleAction={upsertAppUserRole}
       updateAppUserRoleAction={updateAppUserRole}
       removeAppUserAccessAction={removeAppUserAccess}

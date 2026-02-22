@@ -1,6 +1,9 @@
 import type { Metadata } from "next"
 import { NewsletterLoader } from "./newsletter-loader"
 import { PageHeader } from "@/components/page-header"
+import { getContent } from "@/lib/content/repo"
+import { createTranslator } from "@/lib/content/t"
+import { getRequestLocale } from "@/lib/i18n/get-locale"
 
 export const metadata: Metadata = {
   title: "The Pigeon Newsletter | Area 36",
@@ -10,14 +13,24 @@ export const metadata: Metadata = {
 
 // Page loads instantly - GDrive data is lazy loaded on client
 
-export default function NewsletterPage() {
+export default async function NewsletterPage() {
+  const locale = await getRequestLocale()
+  const newsletterContent = await getContent("newsletter", locale)
+  const { t } = createTranslator(newsletterContent)
+
   return (
     <>
       <PageHeader
         variant="compact"
-        title="The Pigeon"
-        description="The Pigeon is a General Service paper newsletter published four times a year by the Southern Minnesota Area Assembly of Alcoholics Anonymous. An anonymized digital version is available on this website."
-        secondaryDescription="The Pigeon presents the experience and opinions of A.A. members and others interested in the A.A. program. Opinions expressed herein are not to be attributed to Alcoholics Anonymous as a whole, nor does publication of any article imply endorsement by either A.A. or the Southern MN Area Assembly."
+        title={t("header.title", "The Pigeon")}
+        description={t(
+          "header.description",
+          "The Pigeon is a General Service paper newsletter published four times a year by the Southern Minnesota Area Assembly of Alcoholics Anonymous. An anonymized digital version is available on this website.",
+        )}
+        secondaryDescription={t(
+          "header.secondaryDescription",
+          "The Pigeon presents the experience and opinions of A.A. members and others interested in the A.A. program. Opinions expressed herein are not to be attributed to Alcoholics Anonymous as a whole, nor does publication of any article imply endorsement by either A.A. or the Southern MN Area Assembly.",
+        )}
         secondaryDescriptionClassName="text-sm italic"
         maxWidth="2xl"
         ariaId="newsletter-heading"
@@ -43,16 +56,16 @@ export default function NewsletterPage() {
                   id="subscribe-heading"
                   className="text-xl font-bold text-foreground mb-4"
                 >
-                  Subscribe to The Pigeon
+                  {t("subscribe.title", "Subscribe to The Pigeon")}
                 </h2>
                 <p className="text-muted-foreground mb-4">
-                  There is no subscription fee; contributions from A.A. members,
-                  groups, and districts are welcome. Subscriptions are available,
-                  for free, in both snail mail and email format. The email version
-                  is anonymized.
+                  {t(
+                    "subscribe.paragraph1",
+                    "There is no subscription fee; contributions from A.A. members, groups, and districts are welcome. Subscriptions are available, for free, in both snail mail and email format. The email version is anonymized.",
+                  )}
                 </p>
                 <p className="text-sm text-muted-foreground mb-6">
-                  To subscribe to either format, please email both addresses below:
+                  {t("subscribe.paragraph2", "To subscribe to either format, please email both addresses below:")}
                 </p>
                 <div className="space-y-2">
                   <a
@@ -73,15 +86,19 @@ export default function NewsletterPage() {
               {/* Submit */}
               <div className="rounded-xl border border-border bg-card p-6 sm:p-8">
                 <h2 className="text-xl font-bold text-foreground mb-4">
-                  Submit an Article
+                  {t("submit.title", "Submit an Article")}
                 </h2>
                 <p className="text-muted-foreground mb-4">
-                  Articles and letters are invited, although no payment can be
-                  made, nor can contributed material be returned.
+                  {t(
+                    "submit.paragraph1",
+                    "Articles and letters are invited, although no payment can be made, nor can contributed material be returned.",
+                  )}
                 </p>
                 <p className="text-sm text-muted-foreground mb-6">
-                  All submissions may be emailed to the Newsletter Chair or sent
-                  via mail:
+                  {t(
+                    "submit.paragraph2",
+                    "All submissions may be emailed to the Newsletter Chair or sent via mail:",
+                  )}
                 </p>
                 <div className="space-y-3">
                   <a

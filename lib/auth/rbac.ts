@@ -27,6 +27,7 @@ export const ADMIN_PERMISSIONS = [
   "corrections:view",
   "corrections:edit",
   "corrections:match",
+  "corrections:delete",
   "access:read",
   "access:write",
 ] as const
@@ -47,7 +48,7 @@ const SEED_ASSIGNMENTS: Record<string, SeedAssignment> = {
   "altcorrections@area36.org": { roleKey: "chair", additionalPermissions: ["corrections:view"] },
   "ctcp@area36.org": {
     roleKey: "chair",
-    additionalPermissions: ["corrections:view", "corrections:edit", "corrections:match"],
+    additionalPermissions: ["corrections:view", "corrections:edit", "corrections:match", "corrections:delete"],
   },
 }
 
@@ -148,6 +149,11 @@ export async function getEffectivePermissions(session: SessionLike): Promise<Set
       return new Set(seed?.additionalPermissions ?? [])
     }
 
+    // Role-based admin users always retain full access.
+    if (accessRow.roleKey === "admin") {
+      return new Set<AppPermission>(ADMIN_PERMISSIONS)
+    }
+
     const roleRow = await db
       .select({ defaultPermissionsJson: appRoles.defaultPermissionsJson })
       .from(appRoles)
@@ -173,4 +179,10 @@ export async function requireCorrectionsWrite(session: SessionLike): Promise<boo
   if (!session?.user?.email) return false
   if (session.user.isAreaAdmin) return true
   return hasPermission(session, "corrections:edit")
+}
+
+export async function requireCorrectionsDelete(session: SessionLike): Promise<boolean> {
+  if (!session?.user?.email) return false
+  if (session.user.isAreaAdmin) return true
+  return hasPermission(session, "corrections:delete")
 }

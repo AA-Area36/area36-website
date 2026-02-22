@@ -3,7 +3,10 @@ import { z } from "zod"
 export const correctionsContactFormSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
-  gender: z.string().min(1, "Gender is required"),
+  gender: z
+    .string()
+    .min(1, "Gender is required")
+    .refine((value) => value === "Male" || value === "Female", "Gender must be Male or Female"),
   streetAddress: z.string().optional(),
   city: z.string().min(1, "City is required"),
   county: z.string().optional(),
@@ -19,7 +22,7 @@ export const correctionsContactFormSchema = z.object({
     .regex(/^\d{4}$/, "Birth year must be 4 digits"),
   isSpanishSpeaking: z.boolean(),
   otherLanguages: z.string().optional(),
-  homeGroup: z.string().min(1, "Home group is required"),
+  homeGroup: z.string().optional(),
   notes: z.string().optional(),
   recaptchaToken: z.string(),
 })
