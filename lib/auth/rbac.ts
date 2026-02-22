@@ -46,10 +46,14 @@ const SEED_ASSIGNMENTS: Record<string, SeedAssignment> = {
   "alttechnology@area36.org": { roleKey: "admin", additionalPermissions: [] },
   "corrections@area36.org": { roleKey: "chair", additionalPermissions: ["corrections:view"] },
   "altcorrections@area36.org": { roleKey: "chair", additionalPermissions: ["corrections:view"] },
+  "altchairperson@area36.org": { roleKey: "officer", additionalPermissions: [] },
+  "altdelegate@area36.org": { roleKey: "officer", additionalPermissions: [] },
   "ctcp@area36.org": {
     roleKey: "chair",
     additionalPermissions: ["corrections:view", "corrections:edit", "corrections:match", "corrections:delete"],
   },
+  "treatment@area36.org": { roleKey: "chair", additionalPermissions: [] },
+  "ttcc@area36.org": { roleKey: "chair", additionalPermissions: [] },
 }
 
 function normalizeEmail(email: string | null | undefined): string {
