@@ -1,7 +1,7 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare"
 import { getSession, type A36Session } from "@/lib/auth"
 import { isLocalAdminBypassEnabled } from "@/lib/auth/dev-bypass"
-import { hasPermission, requireCorrectionsDelete, requireCorrectionsWrite } from "@/lib/auth/rbac"
+import { hasPermission, isEffectivelyAreaAdmin, requireCorrectionsDelete, requireCorrectionsWrite } from "@/lib/auth/rbac"
 
 type DistrictSiteMode = "hosted" | "external_redirect"
 
@@ -29,7 +29,7 @@ export async function requireAreaAdminSession(): Promise<A36Session | null> {
 export async function requireCorrectionsReadSession(): Promise<A36Session | null> {
   const session = await getSession()
   if (!session) return null
-  if (session.user.isAreaAdmin) return session
+  if (await isEffectivelyAreaAdmin(session)) return session
 
   if (await hasPermission(session, "corrections:view")) {
     return session

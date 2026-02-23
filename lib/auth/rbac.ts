@@ -1,6 +1,8 @@
 import { eq } from "drizzle-orm"
 import { getDb } from "@/lib/db"
 import { appRoles, appUserAccess, users } from "@/lib/db/schema"
+import { getLocalViewAsProfileForSession } from "@/lib/auth/local-view-as"
+import { ADMIN_PERMISSIONS, type AppPermission } from "@/lib/auth/permissions"
 
 type SessionLike = {
   user?: {
@@ -10,29 +12,8 @@ type SessionLike = {
   }
 } | null
 
-export const ADMIN_PERMISSIONS = [
-  "events:read",
-  "events:write",
-  "recordings:read",
-  "recordings:write",
-  "files:read",
-  "files:write",
-  "subscription-drives:read",
-  "subscription-drives:write",
-  "reports:read",
-  "content:read",
-  "content:write",
-  "district-sites:read",
-  "district-sites:write",
-  "corrections:view",
-  "corrections:edit",
-  "corrections:match",
-  "corrections:delete",
-  "access:read",
-  "access:write",
-] as const
-
-export type AppPermission = (typeof ADMIN_PERMISSIONS)[number]
+export { ADMIN_PERMISSIONS }
+export type { AppPermission }
 
 export type SeedAssignment = {
   roleKey: "admin" | "officer" | "chair"
@@ -126,8 +107,25 @@ export async function hasAssignedAccessForEmail(email: string | null | undefined
   }
 }
 
+export async function isEffectivelyAreaAdmin(session: SessionLike): Promise<boolean> {
+  if (!session?.user?.email) return false
+  if (!session.user.isAreaAdmin) return false
+
+  const localViewAs = await getLocalViewAsProfileForSession(session)
+  if (localViewAs) {
+    return localViewAs.isAreaAdmin
+  }
+
+  return true
+}
+
 export async function getEffectivePermissions(session: SessionLike): Promise<Set<AppPermission>> {
   if (!session?.user?.email || !session.user.id) return new Set<AppPermission>()
+
+  const localViewAs = await getLocalViewAsProfileForSession(session)
+  if (localViewAs) {
+    return new Set<AppPermission>(localViewAs.permissions)
+  }
 
   if (session.user.isAreaAdmin) {
     return new Set<AppPermission>(ADMIN_PERMISSIONS)
@@ -181,12 +179,12 @@ export async function hasPermission(session: SessionLike, permission: AppPermiss
 
 export async function requireCorrectionsWrite(session: SessionLike): Promise<boolean> {
   if (!session?.user?.email) return false
-  if (session.user.isAreaAdmin) return true
+  if (await isEffectivelyAreaAdmin(session)) return true
   return hasPermission(session, "corrections:edit")
 }
 
 export async function requireCorrectionsDelete(session: SessionLike): Promise<boolean> {
   if (!session?.user?.email) return false
-  if (session.user.isAreaAdmin) return true
+  if (await isEffectivelyAreaAdmin(session)) return true
   return hasPermission(session, "corrections:delete")
 }

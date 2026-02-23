@@ -1,6 +1,6 @@
 import { asc, eq } from "drizzle-orm"
 import { getDb, schema } from "@/lib/db"
-import { ADMIN_PERMISSIONS } from "@/lib/auth/rbac"
+import { ADMIN_PERMISSIONS } from "@/lib/auth/permissions"
 import {
   createAppRole,
   updateAppRole,
