@@ -1,0 +1,23 @@
+export const ADMIN_PERMISSIONS = [
+  "events:read",
+  "events:write",
+  "recordings:read",
+  "recordings:write",
+  "files:read",
+  "files:write",
+  "subscription-drives:read",
+  "subscription-drives:write",
+  "reports:read",
+  "content:read",
+  "content:write",
+  "district-sites:read",
+  "district-sites:write",
+  "corrections:view",
+  "corrections:edit",
+  "corrections:match",
+  "corrections:delete",
+  "access:read",
+  "access:write",
+] as const
+
+export type AppPermission = (typeof ADMIN_PERMISSIONS)[number]

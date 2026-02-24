@@ -5,7 +5,7 @@ import { eq, sql } from "drizzle-orm"
 import { nanoid } from "nanoid"
 import { requireAreaAdminSession } from "@/lib/auth/guards"
 import { getDb, schema } from "@/lib/db"
-import { ADMIN_PERMISSIONS, type AppPermission } from "@/lib/auth/rbac"
+import { ADMIN_PERMISSIONS, type AppPermission } from "@/lib/auth/permissions"
 import type { AppRoleKey } from "@/lib/db/schema"
 
 const ADMIN_ROLE_KEY = "admin"

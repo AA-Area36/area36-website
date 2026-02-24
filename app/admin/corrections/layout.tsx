@@ -2,7 +2,8 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Shield } from "lucide-react"
 import { getSession, signOut } from "@/lib/auth"
-import { hasPermission } from "@/lib/auth/rbac"
+import { getLocalViewAsProfileForSession } from "@/lib/auth/local-view-as"
+import { getEffectivePermissions, hasPermission, isEffectivelyAreaAdmin } from "@/lib/auth/rbac"
 import { getDb } from "@/lib/db"
 import { events } from "@/lib/db/schema"
 import { eq, sql } from "drizzle-orm"
@@ -20,7 +21,8 @@ export default async function CorrectionsAdminLayout({
     redirect("/admin/login?callbackUrl=/admin/corrections")
   }
 
-  const canView = session.user.isAreaAdmin || (await hasPermission(session, "corrections:view"))
+  const isAreaAdmin = await isEffectivelyAreaAdmin(session)
+  const canView = isAreaAdmin || (await hasPermission(session, "corrections:view"))
   if (!canView) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-6">
@@ -49,6 +51,11 @@ export default async function CorrectionsAdminLayout({
     )
   }
 
+  const [effectivePermissions, localViewAs] = await Promise.all([
+    getEffectivePermissions(session),
+    getLocalViewAsProfileForSession(session),
+  ])
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card">
@@ -58,7 +65,12 @@ export default async function CorrectionsAdminLayout({
               <Shield className="h-5 w-5 text-primary" />
               <span>Area 36 Admin</span>
             </Link>
-            <HeaderNav userEmail={session.user.email ?? ""} />
+            <HeaderNav
+              userEmail={session.user.email ?? ""}
+              permissions={[...effectivePermissions]}
+              initialLocalViewAs={localViewAs?.key ?? null}
+              showLocalViewAs={!!localViewAs}
+            />
           </div>
         </div>
       </header>
@@ -67,7 +79,17 @@ export default async function CorrectionsAdminLayout({
   )
 }
 
-async function HeaderNav({ userEmail }: { userEmail: string }) {
+async function HeaderNav({
+  userEmail,
+  permissions,
+  initialLocalViewAs,
+  showLocalViewAs,
+}: {
+  userEmail: string
+  permissions: string[]
+  initialLocalViewAs: string | null
+  showLocalViewAs: boolean
+}) {
   let pendingEventsCount = 0
 
   try {
@@ -85,6 +107,9 @@ async function HeaderNav({ userEmail }: { userEmail: string }) {
     <AdminNav
       userEmail={userEmail}
       pendingEventsCount={pendingEventsCount}
+      permissions={permissions}
+      initialLocalViewAs={initialLocalViewAs}
+      showLocalViewAs={showLocalViewAs}
       signOutAction={async () => {
         "use server"
         await signOut({ redirectTo: "/" })

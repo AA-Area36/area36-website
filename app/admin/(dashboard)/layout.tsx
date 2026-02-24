@@ -3,6 +3,8 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 import { Shield } from "lucide-react"
 import { createRequestLogger } from "@/lib/logger"
+import { getLocalViewAsProfileForSession } from "@/lib/auth/local-view-as"
+import { getEffectivePermissions } from "@/lib/auth/rbac"
 import { getDb } from "@/lib/db"
 import { events } from "@/lib/db/schema"
 import { eq, sql } from "drizzle-orm"
@@ -54,6 +56,11 @@ export default async function DashboardLayout({
   }
   log.tracker.finish(200)
 
+  const [effectivePermissions, localViewAs] = await Promise.all([
+    getEffectivePermissions(session),
+    getLocalViewAsProfileForSession(session),
+  ])
+
   // Query pending events count
   const db = await getDb()
   const [result] = await db
@@ -76,6 +83,9 @@ export default async function DashboardLayout({
             <AdminNav
               userEmail={session.user.email ?? ""}
               pendingEventsCount={pendingEventsCount}
+              permissions={[...effectivePermissions]}
+              initialLocalViewAs={localViewAs?.key ?? null}
+              showLocalViewAs={!!localViewAs}
               signOutAction={async () => {
                 "use server"
                 await signOut({ redirectTo: "/" })

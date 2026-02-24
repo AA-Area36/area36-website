@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { asc, desc, eq } from "drizzle-orm"
 import { getSession } from "@/lib/auth"
-import { hasPermission } from "@/lib/auth/rbac"
+import { hasPermission, isEffectivelyAreaAdmin } from "@/lib/auth/rbac"
 import { requireCorrectionsWriteSession } from "@/lib/auth/guards"
 import { getDb } from "@/lib/db"
 import {
@@ -72,13 +72,14 @@ export default async function CorrectionsAdminPage({
     redirect("/admin/login?callbackUrl=/admin/corrections")
   }
 
-  const canView = session.user.isAreaAdmin || (await hasPermission(session, "corrections:view"))
+  const isAreaAdmin = await isEffectivelyAreaAdmin(session)
+  const canView = isAreaAdmin || (await hasPermission(session, "corrections:view"))
   if (!canView) {
     redirect("/admin/login?callbackUrl=/admin/corrections")
   }
 
   const canEdit = !!(await requireCorrectionsWriteSession())
-  const canDelete = session.user.isAreaAdmin || (await hasPermission(session, "corrections:delete"))
+  const canDelete = isAreaAdmin || (await hasPermission(session, "corrections:delete"))
   const resolvedSearchParams = (await searchParams) ?? {}
 
   const db = await getDb()

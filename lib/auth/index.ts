@@ -134,6 +134,9 @@ const nextAuth = NextAuth(async () => {
       Google({
         clientId: env.AUTH_GOOGLE_ID,
         clientSecret: env.AUTH_GOOGLE_SECRET,
+        // We pre-provision some users in `users` before first OAuth login.
+        // Allow Google to link by verified email to avoid OAuthAccountNotLinked.
+        allowDangerousEmailAccountLinking: true,
       }),
     ],
     pages: {
@@ -142,8 +145,15 @@ const nextAuth = NextAuth(async () => {
     },
     callbacks: {
       async signIn({ profile }) {
+        const email = profile?.email
+        if (!email) return false
+
+        // Google includes `email_verified`; reject explicitly unverified emails.
+        const emailVerified = (profile as { email_verified?: boolean } | undefined)?.email_verified
+        if (emailVerified === false) return false
+
         // Allow Area admins OR explicit district-admin allowlist emails (any Google workspace).
-        return await isAllowedSignInEmail(profile?.email, env)
+        return await isAllowedSignInEmail(email, env)
       },
       async session({ session, user }) {
         if (session.user) {
