@@ -28,6 +28,8 @@ export default async function LoginPage({
               <span>
                 {error === "AccessDenied"
                   ? "Access denied. Only approved Area 36 admin accounts are allowed."
+                  : error === "OAuthAccountNotLinked"
+                    ? "This email already exists in admin access records but is not linked yet. Please try signing in again. If it still fails, contact webmaster@area36.org."
                   : "An error occurred during sign in. Please try again."}
               </span>
             </div>

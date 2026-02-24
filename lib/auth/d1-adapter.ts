@@ -1,10 +1,16 @@
 import type { Adapter, AdapterUser, AdapterAccount, AdapterSession } from "next-auth/adapters"
 import { eq, and } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/d1"
+import { sql } from "drizzle-orm"
 import * as schema from "@/lib/db/schema"
 
 function generateId() {
   return crypto.randomUUID()
+}
+
+function normalizeEmail(email: string | null | undefined): string | null {
+  const value = email?.trim().toLowerCase()
+  return value || null
 }
 
 export function D1Adapter(d1: D1Database): Adapter {
@@ -13,16 +19,18 @@ export function D1Adapter(d1: D1Database): Adapter {
   return {
     async createUser(user) {
       const id = generateId()
+      const normalizedEmail = normalizeEmail(user.email)
+      if (!normalizedEmail) throw new Error("User email is required")
       await db.insert(schema.users).values({
         id,
-        email: user.email,
+        email: normalizedEmail,
         name: user.name ?? null,
         emailVerified: user.emailVerified?.toISOString() ?? null,
         image: user.image ?? null,
       })
       return {
         id,
-        email: user.email,
+        email: normalizedEmail,
         name: user.name ?? null,
         emailVerified: user.emailVerified ?? null,
         image: user.image ?? null,
@@ -46,10 +54,12 @@ export function D1Adapter(d1: D1Database): Adapter {
     },
 
     async getUserByEmail(email) {
+      const normalizedEmail = normalizeEmail(email)
+      if (!normalizedEmail) return null
       const result = await db
         .select()
         .from(schema.users)
-        .where(eq(schema.users.email, email))
+        .where(sql`lower(${schema.users.email}) = ${normalizedEmail}`)
         .get()
       if (!result) return null
       return {
@@ -92,11 +102,12 @@ export function D1Adapter(d1: D1Database): Adapter {
 
     async updateUser(user) {
       if (!user.id) throw new Error("User id is required")
+      const normalizedEmail = normalizeEmail(user.email)
       await db
         .update(schema.users)
         .set({
           name: user.name ?? undefined,
-          email: user.email ?? undefined,
+          email: normalizedEmail ?? undefined,
           emailVerified: user.emailVerified?.toISOString() ?? undefined,
           image: user.image ?? undefined,
         })
