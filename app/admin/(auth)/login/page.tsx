@@ -9,7 +9,7 @@ export default async function LoginPage({
   searchParams: Promise<{ callbackUrl?: string; error?: string }>
 }) {
   const params = await searchParams
-  const callbackUrl = params.callbackUrl ?? "/admin/events"
+  const callbackUrl = params.callbackUrl ?? "/admin"
   const error = params.error
 
   return (
@@ -18,7 +18,7 @@ export default async function LoginPage({
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Admin Sign In</CardTitle>
           <CardDescription>
-            Sign in with your approved Google account to access Area and District admin tools.
+            Sign in with your Area 36 Google account to access available admin tools.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -27,7 +27,7 @@ export default async function LoginPage({
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span>
                 {error === "AccessDenied"
-                  ? "Access denied. Only approved Area 36 admin accounts are allowed."
+                  ? "Access denied. Use an @area36.org account, or a district-admin email allowlisted by Area admins."
                   : error === "OAuthAccountNotLinked"
                     ? "This email already exists in admin access records but is not linked yet. Please try signing in again. If it still fails, contact webmaster@area36.org."
                   : "An error occurred during sign in. Please try again."}
@@ -63,7 +63,7 @@ export default async function LoginPage({
             </Button>
           </form>
           <p className="text-xs text-center text-muted-foreground">
-            Access is controlled by Area admins. Area admins are in the Area 36 internal group; district admins are allowlisted per district.
+            Any @area36.org email can sign in. Area admins, district admins, and role assignments determine which modules you can access.
           </p>
         </CardContent>
       </Card>

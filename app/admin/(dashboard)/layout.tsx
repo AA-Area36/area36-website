@@ -4,7 +4,7 @@ import Link from "next/link"
 import { Shield } from "lucide-react"
 import { createRequestLogger } from "@/lib/logger"
 import { getLocalViewAsProfileForSession } from "@/lib/auth/local-view-as"
-import { getEffectivePermissions } from "@/lib/auth/rbac"
+import { getEffectivePermissions, hasPermission } from "@/lib/auth/rbac"
 import { getDb } from "@/lib/db"
 import { events } from "@/lib/db/schema"
 import { eq, sql } from "drizzle-orm"
@@ -25,34 +25,15 @@ export default async function DashboardLayout({
     redirect("/admin/login")
   }
   if (!session.user.isAreaAdmin) {
-    log.warn("Admin access forbidden (not Area admin)")
-    log.tracker.finish(403)
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center px-6">
-        <div className="max-w-md w-full rounded-xl border border-border bg-card p-6">
-          <h1 className="text-lg font-semibold">Access denied</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Your account is signed in but does not have Area admin access. If you are a district admin, use your district subdomain
-            admin (for example: <span className="font-mono">https://d24.area36.org/admin</span>).
-          </p>
-          <div className="mt-4 flex gap-3">
-            <Link href="/" className="text-sm text-primary hover:underline">
-              Return to site
-            </Link>
-            <form
-              action={async () => {
-                "use server"
-                await signOut({ redirectTo: "/" })
-              }}
-            >
-              <button className="text-sm text-muted-foreground hover:text-foreground" type="submit">
-                Sign out
-              </button>
-            </form>
-          </div>
-        </div>
-      </div>
-    )
+    const canViewCorrections = await hasPermission(session, "corrections:view")
+    if (canViewCorrections) {
+      log.info("Redirecting non-Area admin user to Corrections")
+      log.tracker.finish(307)
+      redirect("/admin/corrections")
+    }
+    log.info("Redirecting non-Area admin user to /admin")
+    log.tracker.finish(307)
+    redirect("/admin")
   }
   log.tracker.finish(200)
 
