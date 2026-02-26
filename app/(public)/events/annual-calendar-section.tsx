@@ -13,6 +13,7 @@ import {
   getUnlockedUrls,
   markFileUnlocked,
 } from "@/lib/files/unlocked-store"
+import { supportsInlinePdfPreview } from "@/lib/files/preview"
 import type { CalendarFile } from "./calendar-file-actions"
 
 interface AnnualCalendarSectionProps {
@@ -42,6 +43,7 @@ export function AnnualCalendarSection({ files }: AnnualCalendarSectionProps) {
   }
 
   const handleView = (file: CalendarFile) => {
+    if (!supportsInlinePdfPreview(file.mimeType)) return
     if (file.isProtected && !isFileUnlockedClient(file.id)) {
       setPasswordFile(file)
       setPendingAction("view")
@@ -121,15 +123,17 @@ export function AnnualCalendarSection({ files }: AnnualCalendarSectionProps) {
               )}
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="hidden h-8 w-8 sm:inline-flex"
-                onClick={() => handleView(file)}
-                aria-label={`View ${file.displayName}`}
-              >
-                <Eye className="h-4 w-4" aria-hidden="true" />
-              </Button>
+              {supportsInlinePdfPreview(file.mimeType) && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="hidden h-8 w-8 sm:inline-flex"
+                  onClick={() => handleView(file)}
+                  aria-label={`View ${file.displayName}`}
+                >
+                  <Eye className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"

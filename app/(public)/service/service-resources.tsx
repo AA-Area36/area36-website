@@ -13,6 +13,7 @@ import {
   getUnlockedUrls,
   markFileUnlocked,
 } from "@/lib/files/unlocked-store"
+import { supportsInlinePdfPreview } from "@/lib/files/preview"
 import type { ServiceResource } from "@/lib/gdrive/service-resources"
 
 interface ServiceResourcesProps {
@@ -95,6 +96,7 @@ export function ServiceResources({ resources }: ServiceResourcesProps) {
   }
 
   const handleView = (file: ServiceResource) => {
+    if (!supportsInlinePdfPreview(file.mimeType)) return
     if (file.isProtected && !isFileUnlockedClient(file.id)) {
       setPasswordFile(file)
       setPendingAction("view")
@@ -236,7 +238,9 @@ function ResourceSection({ title, files, onView, onDownload }: ResourceSectionPr
     <div className="mt-6 first:mt-0">
       <h4 className="text-sm font-semibold text-foreground mb-3">{title}</h4>
       <div className="space-y-2">
-        {files.map((file) => (
+        {files.map((file) => {
+          const canPreview = supportsInlinePdfPreview(file.mimeType)
+          return (
           <div
             key={file.id}
             className="group flex items-center gap-3 rounded-lg border border-border bg-card p-3 transition-all hover:border-primary/30 hover:shadow-sm"
@@ -257,15 +261,17 @@ function ResourceSection({ title, files, onView, onDownload }: ResourceSectionPr
               )}
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="hidden h-8 w-8 sm:inline-flex"
-                onClick={() => onView(file)}
-                aria-label={`View ${file.name}`}
-              >
-                <Eye className="h-4 w-4" aria-hidden="true" />
-              </Button>
+              {canPreview && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="hidden h-8 w-8 sm:inline-flex"
+                  onClick={() => onView(file)}
+                  aria-label={`View ${file.name}`}
+                >
+                  <Eye className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
@@ -277,7 +283,8 @@ function ResourceSection({ title, files, onView, onDownload }: ResourceSectionPr
               </Button>
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

@@ -109,6 +109,7 @@ function driveFileToResource(
     title: file.name.replace(/\.[^.]+$/, ""), // Remove file extension
     description: cleanDescription(file.description),
     category,
+    mimeType: file.mimeType,
     date: extractDate(file),
     size: formatFileSize(file.size),
     downloadUrl: `/api/files/download/${file.id}`,

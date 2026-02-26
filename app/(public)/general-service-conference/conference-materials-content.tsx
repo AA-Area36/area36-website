@@ -13,6 +13,7 @@ import {
   getUnlockedUrls,
   markFileUnlocked,
 } from "@/lib/files/unlocked-store"
+import { supportsInlinePdfPreview } from "@/lib/files/preview"
 import type { BackgroundFile } from "@/lib/hooks/use-gdrive-files"
 
 interface ConferenceMaterialsContentProps {
@@ -51,6 +52,7 @@ export function ConferenceMaterialsContent({ materials }: ConferenceMaterialsCon
   }
 
   const handleView = (file: BackgroundFile) => {
+    if (!supportsInlinePdfPreview(file.mimeType)) return
     if (file.isProtected && !isFileUnlockedClient(file.id)) {
       setPasswordFile(file)
       setPendingAction("view")
@@ -124,15 +126,17 @@ export function ConferenceMaterialsContent({ materials }: ConferenceMaterialsCon
               )}
             </div>
             <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="hidden sm:inline-flex"
-                onClick={() => handleView(doc)}
-                aria-label={`View ${doc.displayName}`}
-              >
-                <Eye className="h-4 w-4" aria-hidden="true" />
-              </Button>
+              {supportsInlinePdfPreview(doc.mimeType) && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="hidden sm:inline-flex"
+                  onClick={() => handleView(doc)}
+                  aria-label={`View ${doc.displayName}`}
+                >
+                  <Eye className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"

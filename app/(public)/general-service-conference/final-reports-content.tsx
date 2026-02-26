@@ -6,6 +6,7 @@ import { FileText, ExternalLink, Download, Eye } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PDFViewer } from "@/components/pdf-viewer"
 import { downloadFile } from "@/lib/files/download"
+import { supportsInlinePdfPreview } from "@/lib/files/preview"
 import type { Resource } from "@/lib/gdrive/types"
 
 interface FinalReportsContentProps {
@@ -72,6 +73,7 @@ function DriveReportItem({
   const language = detectLanguage(report.title)
   const year = extractYear(report.title)
   const displayTitle = `${year} Final Report (${language})`
+  const canPreview = supportsInlinePdfPreview(report.mimeType)
 
   return (
     <div className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md">
@@ -87,15 +89,17 @@ function DriveReportItem({
         </p>
       </div>
       <div className="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="hidden sm:inline-flex"
-          onClick={() => onView(report)}
-          aria-label={`View ${displayTitle}`}
-        >
-          <Eye className="h-4 w-4" aria-hidden="true" />
-        </Button>
+        {canPreview && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="hidden sm:inline-flex"
+            onClick={() => onView(report)}
+            aria-label={`View ${displayTitle}`}
+          >
+            <Eye className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon"
@@ -114,6 +118,7 @@ export function FinalReportsContent({ oldReports }: FinalReportsContentProps) {
   const [selectedReport, setSelectedReport] = React.useState<Resource | null>(null)
 
   const handleView = (report: Resource) => {
+    if (!supportsInlinePdfPreview(report.mimeType)) return
     setSelectedReport(report)
     setViewerOpen(true)
   }

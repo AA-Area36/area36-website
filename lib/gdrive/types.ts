@@ -55,6 +55,7 @@ export interface Resource {
   title: string
   description?: string
   category: ResourceCategory
+  mimeType: string
   date?: string
   size?: string
   downloadUrl?: string
