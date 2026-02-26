@@ -474,7 +474,7 @@ async function fetchBackgroundMaterialsData(requestId: string) {
             previewUrl: `/api/files/preview/${r.driveId}`,
             downloadUrl: `/api/files/download/${r.driveId}`,
             size: r.size,
-            mimeType: "application/pdf", // Resources are typically PDFs
+            mimeType: r.mimeType,
             isProtected: r.isProtected || !!meta?.password,
           }
         })

@@ -13,6 +13,7 @@ import {
   getUnlockedUrls,
   markFileUnlocked,
 } from "@/lib/files/unlocked-store"
+import { supportsInlinePdfPreview } from "@/lib/files/preview"
 import { compareAlphaNumericWithRoman } from "@/lib/utils/alphanumeric-sort"
 import type { BackgroundFile } from "@/lib/hooks/use-gdrive-files"
 
@@ -51,15 +52,17 @@ function FileSection({ title, files, onView, onDownload }: FileSectionProps) {
               )}
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="hidden h-8 w-8 sm:inline-flex"
-                onClick={() => onView(file)}
-                aria-label={`View ${file.displayName}`}
-              >
-                <Eye className="h-4 w-4" aria-hidden="true" />
-              </Button>
+              {supportsInlinePdfPreview(file.mimeType) && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="hidden h-8 w-8 sm:inline-flex"
+                  onClick={() => onView(file)}
+                  aria-label={`View ${file.displayName}`}
+                >
+                  <Eye className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
@@ -156,6 +159,7 @@ export function BackgroundMaterialsContent({
   }
 
   const handleView = (file: BackgroundFile) => {
+    if (!supportsInlinePdfPreview(file.mimeType)) return
     if (file.isProtected && !isFileUnlockedClient(file.id)) {
       setPasswordFile(file)
       setPendingAction("view")

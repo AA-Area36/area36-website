@@ -14,6 +14,7 @@ import {
   getUnlockedUrls,
   markFileUnlocked,
 } from "@/lib/files/unlocked-store"
+import { supportsInlinePdfPreview } from "@/lib/files/preview"
 import type { Resource } from "@/lib/gdrive/types"
 
 interface ResourceViewerProps {
@@ -142,7 +143,11 @@ export function ResourceViewerWithPassword(props: ResourceViewerWithPasswordProp
       } else {
         // Can view directly — resolve URLs from shared store if needed
         const cached = getUnlockedUrls(resource.id)
-        if (cached) {
+        if (
+          cached &&
+          (resource.previewUrl !== cached.previewUrl ||
+            resource.downloadUrl !== cached.downloadUrl)
+        ) {
           onResourceChange({
             ...resource,
             previewUrl: cached.previewUrl,
@@ -154,7 +159,7 @@ export function ResourceViewerWithPassword(props: ResourceViewerWithPasswordProp
     } else {
       setViewerOpen(false)
     }
-  }, [open, resource, unlockedFiles])
+  }, [open, resource, unlockedFiles, onResourceChange])
 
   const handlePasswordSuccess = (result: { previewUrl?: string; downloadUrl?: string; unlockExpiresAt?: number }) => {
     if (pendingResource) {
@@ -295,6 +300,8 @@ export function ResourceItemWithViewer({
   icon: Icon,
   onView,
 }: ResourceItemWithViewerProps) {
+  const canPreview = supportsInlinePdfPreview(resource.mimeType)
+
   return (
     <div className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md">
       <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -323,15 +330,17 @@ export function ResourceItemWithViewer({
         </p>
       </div>
       <div className="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="hidden sm:inline-flex"
-          onClick={() => onView(resource)}
-          aria-label={`View ${resource.title}`}
-        >
-          <Eye className="h-4 w-4" aria-hidden="true" />
-        </Button>
+        {canPreview && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="hidden sm:inline-flex"
+            onClick={() => onView(resource)}
+            aria-label={`View ${resource.title}`}
+          >
+            <Eye className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon"
