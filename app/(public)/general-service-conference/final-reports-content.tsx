@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { FileText, ExternalLink, Download, Eye } from "lucide-react"
+import { FileText, ExternalLink, Download, Eye, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PDFViewer } from "@/components/pdf-viewer"
 import { downloadFile } from "@/lib/files/download"
@@ -66,17 +66,37 @@ function ExternalReportLink({
 function DriveReportItem({
   report,
   onView,
+  onDownload,
+  loadingAction,
 }: {
   report: Resource
   onView: (report: Resource) => void
+  onDownload: (report: Resource) => Promise<void>
+  loadingAction: { id: string; action: "view" | "download" } | null
 }) {
   const language = detectLanguage(report.title)
   const year = extractYear(report.title)
   const displayTitle = `${year} Final Report (${language})`
   const canPreview = supportsInlinePdfPreview(report.mimeType)
+  const isViewing = loadingAction?.id === report.id && loadingAction.action === "view"
+  const isDownloading = loadingAction?.id === report.id && loadingAction.action === "download"
+  const isBusy = loadingAction?.id === report.id
 
   return (
-    <div className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md">
+    <div
+      role="button"
+      tabIndex={0}
+      className="group flex cursor-pointer items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
+      onClick={() => {
+        void onDownload(report)
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          void onDownload(report)
+        }
+      }}
+    >
       <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
         <FileText className="h-6 w-6" aria-hidden="true" />
       </div>
@@ -94,19 +114,35 @@ function DriveReportItem({
             variant="ghost"
             size="icon"
             className="hidden sm:inline-flex"
-            onClick={() => onView(report)}
+            disabled={!!isBusy}
+            onClick={(e) => {
+              e.stopPropagation()
+              onView(report)
+            }}
             aria-label={`View ${displayTitle}`}
           >
-            <Eye className="h-4 w-4" aria-hidden="true" />
+            {isViewing ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Eye className="h-4 w-4" aria-hidden="true" />
+            )}
           </Button>
         )}
         <Button
           variant="ghost"
           size="icon"
+          disabled={!!isBusy}
           aria-label={`Download ${displayTitle}`}
-          onClick={() => downloadFile(report.downloadUrl || "", displayTitle)}
+          onClick={(e) => {
+            e.stopPropagation()
+            void onDownload(report)
+          }}
         >
-          <Download className="h-4 w-4" aria-hidden="true" />
+          {isDownloading ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <Download className="h-4 w-4" aria-hidden="true" />
+          )}
         </Button>
       </div>
     </div>
@@ -116,11 +152,26 @@ function DriveReportItem({
 export function FinalReportsContent({ oldReports }: FinalReportsContentProps) {
   const [viewerOpen, setViewerOpen] = React.useState(false)
   const [selectedReport, setSelectedReport] = React.useState<Resource | null>(null)
+  const [loadingAction, setLoadingAction] = React.useState<{
+    id: string
+    action: "view" | "download"
+  } | null>(null)
 
   const handleView = (report: Resource) => {
     if (!supportsInlinePdfPreview(report.mimeType)) return
+    setLoadingAction({ id: report.id, action: "view" })
     setSelectedReport(report)
     setViewerOpen(true)
+    setLoadingAction(null)
+  }
+
+  const handleDownload = async (report: Resource) => {
+    setLoadingAction({ id: report.id, action: "download" })
+    try {
+      await downloadFile(report.downloadUrl || "", `${extractYear(report.title)} Final Report (${detectLanguage(report.title)})`)
+    } finally {
+      setLoadingAction(null)
+    }
   }
 
   // Group old reports by year, with English files first
@@ -183,7 +234,13 @@ export function FinalReportsContent({ oldReports }: FinalReportsContentProps) {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {reports2022.length > 0 ? (
               reports2022.map((report) => (
-                <DriveReportItem key={report.id} report={report} onView={handleView} />
+                <DriveReportItem
+                  key={report.id}
+                  report={report}
+                  onView={handleView}
+                  onDownload={handleDownload}
+                  loadingAction={loadingAction}
+                />
               ))
             ) : (
               <>
@@ -210,7 +267,13 @@ export function FinalReportsContent({ oldReports }: FinalReportsContentProps) {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {reports2021.length > 0 ? (
               reports2021.map((report) => (
-                <DriveReportItem key={report.id} report={report} onView={handleView} />
+                <DriveReportItem
+                  key={report.id}
+                  report={report}
+                  onView={handleView}
+                  onDownload={handleDownload}
+                  loadingAction={loadingAction}
+                />
               ))
             ) : (
               <>

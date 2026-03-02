@@ -9,6 +9,7 @@ import {
   ZoomIn,
   ZoomOut,
   Download,
+  Loader2,
   Maximize2,
   Minimize2,
   X,
@@ -55,6 +56,7 @@ export function PDFViewer({
   const [isFullscreen, setIsFullscreen] = React.useState(false)
   const [resolvedUrl, setResolvedUrl] = React.useState<string | null>(null)
   const [previewError, setPreviewError] = React.useState<string | null>(null)
+  const [isDownloading, setIsDownloading] = React.useState(false)
 
   // Resolve preview URL.
   // For proxy routes (/api/files/preview/…), keep iframe pointed at the route
@@ -117,9 +119,14 @@ export function PDFViewer({
 
   const handleDownload = React.useCallback(async () => {
     if (!downloadUrl) return
-    const result = await downloadFile(downloadUrl, title)
-    if (result.requiresPassword) {
-      onAuthRequired?.()
+    setIsDownloading(true)
+    try {
+      const result = await downloadFile(downloadUrl, title)
+      if (result.requiresPassword) {
+        onAuthRequired?.()
+      }
+    } finally {
+      setIsDownloading(false)
     }
   }, [downloadUrl, title, onAuthRequired])
 
@@ -232,9 +239,16 @@ export function PDFViewer({
                   size="sm"
                   aria-label={`Download ${title}`}
                   onClick={handleDownload}
+                  disabled={isDownloading}
                 >
-                  <Download className="h-4 w-4 sm:mr-2" aria-hidden="true" />
-                  <span className="hidden sm:inline">Download</span>
+                  {isDownloading ? (
+                    <Loader2 className="h-4 w-4 sm:mr-2 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Download className="h-4 w-4 sm:mr-2" aria-hidden="true" />
+                  )}
+                  <span className="hidden sm:inline">
+                    {isDownloading ? "Downloading..." : "Download"}
+                  </span>
                 </Button>
               )}
               <Button
