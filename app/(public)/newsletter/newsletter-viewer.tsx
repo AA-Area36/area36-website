@@ -12,6 +12,7 @@ import {
   Download,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -47,6 +48,10 @@ export function NewsletterViewer({ newsletters, years }: NewsletterViewerProps) 
   const [yearFilter, setYearFilter] = React.useState(initialYear)
   const [currentPage, setCurrentPage] = React.useState(initialPage)
   const [selectedNewsletter, setSelectedNewsletter] = React.useState<Newsletter | null>(null)
+  const [loadingAction, setLoadingAction] = React.useState<{
+    id: string
+    action: "view" | "download"
+  } | null>(null)
 
   // Update URL when filters change
   const updateURL = React.useCallback(
@@ -143,6 +148,22 @@ export function NewsletterViewer({ newsletters, years }: NewsletterViewerProps) 
     }
   }
 
+  const handleView = (newsletter: Newsletter) => {
+    setLoadingAction({ id: newsletter.id, action: "view" })
+    setSelectedNewsletter(newsletter)
+    setLoadingAction(null)
+  }
+
+  const handleDownload = async (newsletter: Newsletter) => {
+    if (!newsletter.downloadUrl) return
+    setLoadingAction({ id: newsletter.id, action: "download" })
+    try {
+      await downloadFile(newsletter.downloadUrl, newsletter.issue)
+    } finally {
+      setLoadingAction(null)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Search and Filters */}
@@ -221,10 +242,24 @@ export function NewsletterViewer({ newsletters, years }: NewsletterViewerProps) 
             {paginatedNewsletters.map((newsletter, index) => {
               // Calculate actual index in full list for "Latest" badge
               const actualIndex = startIndex + index
+              const isViewing = loadingAction?.id === newsletter.id && loadingAction.action === "view"
+              const isDownloading = loadingAction?.id === newsletter.id && loadingAction.action === "download"
+              const isBusy = loadingAction?.id === newsletter.id
               return (
                 <div
                   key={newsletter.id}
-                  className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
+                  role="button"
+                  tabIndex={0}
+                  className="group flex cursor-pointer items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
+                  onClick={() => {
+                    void handleDownload(newsletter)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault()
+                      void handleDownload(newsletter)
+                    }
+                  }}
                 >
                   <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                     <FileText className="h-6 w-6" aria-hidden="true" />
@@ -265,19 +300,35 @@ export function NewsletterViewer({ newsletters, years }: NewsletterViewerProps) 
                       variant="ghost"
                       size="icon"
                       className="hidden sm:inline-flex"
-                      onClick={() => setSelectedNewsletter(newsletter)}
+                      disabled={!!isBusy}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleView(newsletter)
+                      }}
                       aria-label={`View ${newsletter.issue}`}
                     >
-                      <Eye className="h-4 w-4" aria-hidden="true" />
+                      {isViewing ? (
+                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                      ) : (
+                        <Eye className="h-4 w-4" aria-hidden="true" />
+                      )}
                     </Button>
                     {newsletter.downloadUrl && (
                       <Button
                         variant="ghost"
                         size="icon"
+                        disabled={!!isBusy}
                         aria-label={`Download ${newsletter.issue}`}
-                        onClick={() => downloadFile(newsletter.downloadUrl!, newsletter.issue)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void handleDownload(newsletter)
+                        }}
                       >
-                        <Download className="h-4 w-4" aria-hidden="true" />
+                        {isDownloading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                        ) : (
+                          <Download className="h-4 w-4" aria-hidden="true" />
+                        )}
                       </Button>
                     )}
                   </div>

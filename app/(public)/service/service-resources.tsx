@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { FileText, Download, Eye, Lock } from "lucide-react"
+import { FileText, Download, Eye, Lock, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PDFViewer } from "@/components/pdf-viewer"
 import { FilePasswordDialog } from "@/components/file-password-dialog"
@@ -70,6 +70,10 @@ export function ServiceResources({ resources }: ServiceResourcesProps) {
   const [viewingFile, setViewingFile] = React.useState<ServiceResource | null>(null)
   const [passwordFile, setPasswordFile] = React.useState<ServiceResource | null>(null)
   const [pendingAction, setPendingAction] = React.useState<"view" | "download" | null>(null)
+  const [loadingAction, setLoadingAction] = React.useState<{
+    fileId: string
+    action: "view" | "download"
+  } | null>(null)
 
   const { categorized, uncategorized, sortedCategories } = groupResourcesByCategory(resources)
 
@@ -97,26 +101,33 @@ export function ServiceResources({ resources }: ServiceResourcesProps) {
 
   const handleView = (file: ServiceResource) => {
     if (!supportsInlinePdfPreview(file.mimeType)) return
+    setLoadingAction({ fileId: file.id, action: "view" })
     if (file.isProtected && !isFileUnlockedClient(file.id)) {
       setPasswordFile(file)
       setPendingAction("view")
     } else {
       setViewingFile(resolveFile(file))
     }
+    setLoadingAction(null)
   }
 
   const handleDownload = async (file: ServiceResource) => {
-    if (file.isProtected && !isFileUnlockedClient(file.id)) {
-      setPasswordFile(file)
-      setPendingAction("download")
-    } else {
-      const resolved = resolveFile(file)
-      const result = await downloadFile(resolved.downloadUrl, resolved.name)
-      if (result.requiresPassword) {
-        clearFileUnlocked(file.id)
+    setLoadingAction({ fileId: file.id, action: "download" })
+    try {
+      if (file.isProtected && !isFileUnlockedClient(file.id)) {
         setPasswordFile(file)
         setPendingAction("download")
+      } else {
+        const resolved = resolveFile(file)
+        const result = await downloadFile(resolved.downloadUrl, resolved.name)
+        if (result.requiresPassword) {
+          clearFileUnlocked(file.id)
+          setPasswordFile(file)
+          setPendingAction("download")
+        }
       }
+    } finally {
+      setLoadingAction(null)
     }
   }
 
@@ -165,6 +176,7 @@ export function ServiceResources({ resources }: ServiceResourcesProps) {
           files={categorized[category]}
           onView={handleView}
           onDownload={handleDownload}
+          loadingAction={loadingAction}
         />
       ))}
 
@@ -175,6 +187,7 @@ export function ServiceResources({ resources }: ServiceResourcesProps) {
           files={uncategorized}
           onView={handleView}
           onDownload={handleDownload}
+          loadingAction={loadingAction}
         />
       )}
 
@@ -226,10 +239,11 @@ interface ResourceSectionProps {
   title: string
   files: ServiceResource[]
   onView: (file: ServiceResource) => void
-  onDownload: (file: ServiceResource) => void
+  onDownload: (file: ServiceResource) => Promise<void>
+  loadingAction: { fileId: string; action: "view" | "download" } | null
 }
 
-function ResourceSection({ title, files, onView, onDownload }: ResourceSectionProps) {
+function ResourceSection({ title, files, onView, onDownload, loadingAction }: ResourceSectionProps) {
   if (!files || files.length === 0) {
     return null
   }
@@ -240,10 +254,24 @@ function ResourceSection({ title, files, onView, onDownload }: ResourceSectionPr
       <div className="space-y-2">
         {files.map((file) => {
           const canPreview = supportsInlinePdfPreview(file.mimeType)
+          const isViewing = loadingAction?.fileId === file.id && loadingAction.action === "view"
+          const isDownloading = loadingAction?.fileId === file.id && loadingAction.action === "download"
+          const isBusy = loadingAction?.fileId === file.id
           return (
           <div
             key={file.id}
-            className="group flex items-center gap-3 rounded-lg border border-border bg-card p-3 transition-all hover:border-primary/30 hover:shadow-sm"
+            role="button"
+            tabIndex={0}
+            className="group flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-card p-3 transition-all hover:border-primary/30 hover:shadow-sm"
+            onClick={() => {
+              void onDownload(file)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault()
+                void onDownload(file)
+              }
+            }}
           >
             <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
               {file.isProtected ? (
@@ -266,20 +294,36 @@ function ResourceSection({ title, files, onView, onDownload }: ResourceSectionPr
                   variant="ghost"
                   size="icon"
                   className="hidden h-8 w-8 sm:inline-flex"
-                  onClick={() => onView(file)}
+                  disabled={!!isBusy}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onView(file)
+                  }}
                   aria-label={`View ${file.name}`}
                 >
-                  <Eye className="h-4 w-4" aria-hidden="true" />
+                  {isViewing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Eye className="h-4 w-4" aria-hidden="true" />
+                  )}
                 </Button>
               )}
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => onDownload(file)}
+                disabled={!!isBusy}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  void onDownload(file)
+                }}
                 aria-label={`Download ${file.name}`}
               >
-                <Download className="h-4 w-4" aria-hidden="true" />
+                {isDownloading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                )}
               </Button>
             </div>
           </div>

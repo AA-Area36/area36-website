@@ -4,6 +4,44 @@ export interface DownloadResult {
   error?: string
 }
 
+function createRequestId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function summarizeUrl(url: string): string {
+  try {
+    const u = new URL(url, window.location.origin)
+    const hasUnlock = u.searchParams.has("unlock")
+    return `${u.pathname}${hasUnlock ? "?unlock=***" : ""}`
+  } catch {
+    return url.split("?")[0] || url
+  }
+}
+
+function isApiDownloadUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url, window.location.origin)
+    return parsed.origin === window.location.origin && parsed.pathname.startsWith("/api/files/download/")
+  } catch {
+    return url.startsWith("/api/files/download/")
+  }
+}
+
+function triggerNativeDownload(url: string, filename?: string): void {
+  const a = document.createElement("a")
+  a.href = url
+  // Keep download attr only when caller provided an extension; let server
+  // Content-Disposition control the final filename otherwise.
+  if (filename && hasFileExtension(filename)) {
+    a.download = filename
+  }
+  a.rel = "noopener"
+  a.style.display = "none"
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+}
+
 function hasFileExtension(name: string): boolean {
   return /\.[a-z0-9]{1,10}$/i.test(name.trim())
 }
@@ -84,6 +122,15 @@ function resolveDownloadFilename(
  */
 export async function downloadFile(url: string, filename?: string): Promise<DownloadResult> {
   const maxRetries = 2
+  const requestId = createRequestId()
+  const useNativeDownload = isApiDownloadUrl(url)
+
+  console.info("[download] start", {
+    requestId,
+    url: summarizeUrl(url),
+    filename,
+    mode: useNativeDownload ? "native-navigation" : "blob-fetch",
+  })
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (attempt > 0) {
@@ -91,7 +138,69 @@ export async function downloadFile(url: string, filename?: string): Promise<Down
       await new Promise((resolve) => setTimeout(resolve, 500))
     }
 
-    const res = await fetch(url)
+    console.info("[download] attempt", {
+      requestId,
+      attempt: attempt + 1,
+      maxAttempts: maxRetries + 1,
+    })
+
+    if (useNativeDownload) {
+      try {
+        const head = await fetch(url, {
+          method: "HEAD",
+          cache: "no-store",
+        })
+
+        if (head.ok) {
+          triggerNativeDownload(url, filename)
+          console.info("[download] native download started", {
+            requestId,
+            status: head.status,
+          })
+          return { ok: true }
+        }
+
+        const requiresPassword = head.headers.get("x-requires-password") === "1"
+        if (requiresPassword && attempt < maxRetries) {
+          console.warn("[download] native preflight requires password, retrying", {
+            requestId,
+            attempt: attempt + 1,
+            status: head.status,
+          })
+          continue
+        }
+        if (requiresPassword) {
+          console.warn("[download] native preflight requires password", {
+            requestId,
+            status: head.status,
+          })
+          return { ok: false, requiresPassword: true }
+        }
+
+        console.warn("[download] native preflight failed; falling back to fetch", {
+          requestId,
+          status: head.status,
+        })
+      } catch (error) {
+        console.warn("[download] native preflight errored; falling back to fetch", {
+          requestId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
+
+    let res: Response
+    try {
+      res = await fetch(url)
+    } catch (error) {
+      console.error("[download] network failure", {
+        requestId,
+        attempt: attempt + 1,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      if (attempt < maxRetries) continue
+      return { ok: false, error: "Network error during download" }
+    }
 
     if (res.ok) {
       const blob = await res.blob()
@@ -103,7 +212,15 @@ export async function downloadFile(url: string, filename?: string): Promise<Down
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
-      URL.revokeObjectURL(blobUrl)
+      // Delay revoke for Safari/WebKit reliability.
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 30_000)
+      console.info("[download] success", {
+        requestId,
+        status: res.status,
+        bytes: blob.size,
+        contentType: res.headers.get("content-type"),
+        finalFilename,
+      })
       return { ok: true }
     }
 
@@ -111,16 +228,35 @@ export async function downloadFile(url: string, filename?: string): Promise<Down
     try {
       const json = await res.json() as { requiresPassword?: boolean; error?: string }
       if (json.requiresPassword && attempt < maxRetries) {
+        console.warn("[download] requires password, retrying", {
+          requestId,
+          attempt: attempt + 1,
+          status: res.status,
+        })
         continue // retry
       }
       if (json.requiresPassword) {
+        console.warn("[download] requires password", {
+          requestId,
+          status: res.status,
+        })
         return { ok: false, requiresPassword: true }
       }
+      console.error("[download] failed", {
+        requestId,
+        status: res.status,
+        error: json.error || null,
+      })
       return { ok: false, error: json.error || `Download failed: ${res.status}` }
     } catch {
+      console.error("[download] failed non-json response", {
+        requestId,
+        status: res.status,
+      })
       return { ok: false, error: `Download failed: ${res.status}` }
     }
   }
 
+  console.error("[download] failed after retries", { requestId })
   return { ok: false, error: "Download failed after retries" }
 }

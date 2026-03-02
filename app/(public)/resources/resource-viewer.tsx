@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { FileText, Lock, Download, Eye } from "lucide-react"
+import { FileText, Lock, Download, Eye, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { PDFViewer } from "@/components/pdf-viewer"
@@ -301,55 +301,136 @@ export function ResourceItemWithViewer({
   onView,
 }: ResourceItemWithViewerProps) {
   const canPreview = supportsInlinePdfPreview(resource.mimeType)
+  const [loadingAction, setLoadingAction] = React.useState<"view" | "download" | null>(null)
+  const [passwordDialogOpen, setPasswordDialogOpen] = React.useState(false)
+
+  const handleViewClick = () => {
+    if (!canPreview) return
+    setLoadingAction("view")
+    onView(resource)
+    setLoadingAction(null)
+  }
+
+  const handleDownload = async () => {
+    setLoadingAction("download")
+    try {
+      const result = await downloadFile(resource.downloadUrl || "", resource.title)
+      if (result.requiresPassword) {
+        setPasswordDialogOpen(true)
+      }
+    } finally {
+      setLoadingAction(null)
+    }
+  }
+
+  const handlePasswordSuccess = async (result: {
+    previewUrl?: string
+    downloadUrl?: string
+    unlockExpiresAt?: number
+  }) => {
+    if (result.previewUrl && result.downloadUrl) {
+      markFileUnlocked(resource.id, {
+        previewUrl: result.previewUrl,
+        downloadUrl: result.downloadUrl,
+        unlockExpiresAt: result.unlockExpiresAt,
+      })
+    }
+    await downloadFile(result.downloadUrl || resource.downloadUrl || "", resource.title)
+  }
+
+  const isViewing = loadingAction === "view"
+  const isDownloading = loadingAction === "download"
+  const isBusy = loadingAction !== null
 
   return (
-    <div className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md">
-      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-        {resource.isProtected ? (
-          <Lock className="h-6 w-6" aria-hidden="true" />
-        ) : (
-          <Icon className="h-6 w-6" aria-hidden="true" />
-        )}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <h3 className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
-            {resource.title}
-          </h3>
-          {resource.isProtected && (
-            <Badge variant="secondary" className="text-xs">
-              Protected
-            </Badge>
+    <>
+      <div
+        role="button"
+        tabIndex={0}
+        className="group flex cursor-pointer items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
+        onClick={() => {
+          void handleDownload()
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            void handleDownload()
+          }
+        }}
+      >
+        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          {resource.isProtected ? (
+            <Lock className="h-6 w-6" aria-hidden="true" />
+          ) : (
+            <Icon className="h-6 w-6" aria-hidden="true" />
           )}
         </div>
-        <p className="text-sm text-muted-foreground">
-          {resource.date && resource.size && `${resource.date} · ${resource.size}`}
-          {resource.date && !resource.size && resource.date}
-          {!resource.date && resource.size && resource.size}
-          {resource.description && !resource.date && !resource.size && resource.description}
-        </p>
-      </div>
-      <div className="flex items-center gap-1">
-        {canPreview && (
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h3 className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
+              {resource.title}
+            </h3>
+            {resource.isProtected && (
+              <Badge variant="secondary" className="text-xs">
+                Protected
+              </Badge>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {resource.date && resource.size && `${resource.date} · ${resource.size}`}
+            {resource.date && !resource.size && resource.date}
+            {!resource.date && resource.size && resource.size}
+            {resource.description && !resource.date && !resource.size && resource.description}
+          </p>
+        </div>
+        <div className="flex items-center gap-1">
+          {canPreview && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="hidden sm:inline-flex"
+              disabled={isBusy}
+              onClick={(e) => {
+                e.stopPropagation()
+                handleViewClick()
+              }}
+              aria-label={`View ${resource.title}`}
+            >
+              {isViewing ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Eye className="h-4 w-4" aria-hidden="true" />
+              )}
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
-            className="hidden sm:inline-flex"
-            onClick={() => onView(resource)}
-            aria-label={`View ${resource.title}`}
+            disabled={isBusy}
+            onClick={(e) => {
+              e.stopPropagation()
+              void handleDownload()
+            }}
+            aria-label={`Download ${resource.title}`}
           >
-            <Eye className="h-4 w-4" aria-hidden="true" />
+            {isDownloading ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Download className="h-4 w-4" aria-hidden="true" />
+            )}
           </Button>
-        )}
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={`Download ${resource.title}`}
-          onClick={() => downloadFile(resource.downloadUrl || "", resource.title)}
-        >
-          <Download className="h-4 w-4" aria-hidden="true" />
-        </Button>
+        </div>
       </div>
-    </div>
+      <FilePasswordDialog
+        fileId={resource.id}
+        fileName={resource.title}
+        open={passwordDialogOpen}
+        onOpenChange={setPasswordDialogOpen}
+        onVerify={verifyFilePassword}
+        onSuccess={(result) => {
+          void handlePasswordSuccess(result)
+        }}
+      />
+    </>
   )
 }

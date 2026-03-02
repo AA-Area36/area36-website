@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { FileText, Lock, FolderOpen, Download, Eye } from "lucide-react"
+import { FileText, Lock, FolderOpen, Download, Eye, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PDFViewer } from "@/components/pdf-viewer"
 import { FilePasswordDialog } from "@/components/file-password-dialog"
@@ -24,6 +24,10 @@ export function ConferenceMaterialsContent({ materials }: ConferenceMaterialsCon
   const [viewingFile, setViewingFile] = React.useState<BackgroundFile | null>(null)
   const [passwordFile, setPasswordFile] = React.useState<BackgroundFile | null>(null)
   const [pendingAction, setPendingAction] = React.useState<"view" | "download" | null>(null)
+  const [loadingAction, setLoadingAction] = React.useState<{
+    fileId: string
+    action: "view" | "download"
+  } | null>(null)
 
   // Navigation for viewer
   const currentIndex = viewingFile
@@ -53,26 +57,33 @@ export function ConferenceMaterialsContent({ materials }: ConferenceMaterialsCon
 
   const handleView = (file: BackgroundFile) => {
     if (!supportsInlinePdfPreview(file.mimeType)) return
+    setLoadingAction({ fileId: file.id, action: "view" })
     if (file.isProtected && !isFileUnlockedClient(file.id)) {
       setPasswordFile(file)
       setPendingAction("view")
     } else {
       setViewingFile(resolveFile(file))
     }
+    setLoadingAction(null)
   }
 
   const handleDownload = async (file: BackgroundFile) => {
-    if (file.isProtected && !isFileUnlockedClient(file.id)) {
-      setPasswordFile(file)
-      setPendingAction("download")
-    } else {
-      const resolved = resolveFile(file)
-      const result = await downloadFile(resolved.downloadUrl, resolved.displayName)
-      if (result.requiresPassword) {
-        clearFileUnlocked(file.id)
+    setLoadingAction({ fileId: file.id, action: "download" })
+    try {
+      if (file.isProtected && !isFileUnlockedClient(file.id)) {
         setPasswordFile(file)
         setPendingAction("download")
+      } else {
+        const resolved = resolveFile(file)
+        const result = await downloadFile(resolved.downloadUrl, resolved.displayName)
+        if (result.requiresPassword) {
+          clearFileUnlocked(file.id)
+          setPasswordFile(file)
+          setPendingAction("download")
+        }
       }
+    } finally {
+      setLoadingAction(null)
     }
   }
 
@@ -105,10 +116,25 @@ export function ConferenceMaterialsContent({ materials }: ConferenceMaterialsCon
   return (
     <>
       <div className="grid gap-4 sm:grid-cols-2">
-        {materials.map((doc) => (
+        {materials.map((doc) => {
+          const isViewing = loadingAction?.fileId === doc.id && loadingAction.action === "view"
+          const isDownloading = loadingAction?.fileId === doc.id && loadingAction.action === "download"
+          const isBusy = loadingAction?.fileId === doc.id
+          return (
           <div
             key={doc.id}
-            className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
+            role="button"
+            tabIndex={0}
+            className="group flex cursor-pointer items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
+            onClick={() => {
+              void handleDownload(doc)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault()
+                void handleDownload(doc)
+              }
+            }}
           >
             <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
               {doc.isProtected ? (
@@ -131,23 +157,40 @@ export function ConferenceMaterialsContent({ materials }: ConferenceMaterialsCon
                   variant="ghost"
                   size="icon"
                   className="hidden sm:inline-flex"
-                  onClick={() => handleView(doc)}
+                  disabled={!!isBusy}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleView(doc)
+                  }}
                   aria-label={`View ${doc.displayName}`}
                 >
-                  <Eye className="h-4 w-4" aria-hidden="true" />
+                  {isViewing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Eye className="h-4 w-4" aria-hidden="true" />
+                  )}
                 </Button>
               )}
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => handleDownload(doc)}
+                disabled={!!isBusy}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  void handleDownload(doc)
+                }}
                 aria-label={`Download ${doc.displayName}`}
               >
-                <Download className="h-4 w-4" aria-hidden="true" />
+                {isDownloading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                )}
               </Button>
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* PDF Viewer Modal */}
