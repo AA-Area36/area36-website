@@ -8,6 +8,9 @@ declare global {
       AUTH_GOOGLE_SECRET: string
       RECAPTCHA_SECRET_KEY: string
       NEXT_PUBLIC_RECAPTCHA_SITE_KEY: string
+      GDRIVE_SERVICE_ACCOUNT_EMAIL: string
+      GDRIVE_PRIVATE_KEY: string
+      GDRIVE_PRIVATE_KEY_ID: string
       NEXTAUTH_SECRET?: string
       UNLOCK_COOKIE_SECRET?: string
       UPLOAD_TOKEN_SECRET?: string
