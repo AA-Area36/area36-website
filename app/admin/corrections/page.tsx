@@ -79,6 +79,7 @@ export default async function CorrectionsAdminPage({
   }
 
   const canEdit = !!(await requireCorrectionsWriteSession())
+  const canExport = isAreaAdmin || (await hasPermission(session, "corrections:export"))
   const canDelete = isAreaAdmin || (await hasPermission(session, "corrections:delete"))
   const resolvedSearchParams = (await searchParams) ?? {}
 
@@ -215,6 +216,7 @@ export default async function CorrectionsAdminPage({
       activeMatches={matchSummaries}
       contactsMetrics={contactsMetrics}
       recipientMetrics={recipientMetrics}
+      canExport={canExport}
       canEdit={canEdit}
       canDelete={canDelete}
       initialSearchParams={resolvedSearchParams}

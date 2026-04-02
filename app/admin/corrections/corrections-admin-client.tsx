@@ -7,6 +7,8 @@ import {
   ArrowUpRight,
   Check,
   ChevronDown,
+  Download,
+  Loader2,
   Plus,
   Search,
   SlidersHorizontal,
@@ -79,6 +81,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
 type PageSearchParams = Record<string, string | string[] | undefined>
 
@@ -104,10 +107,16 @@ type CorrectionsAdminClientProps = {
   activeMatches: RecipientMatchSummary[]
   contactsMetrics: SummaryMetric[]
   recipientMetrics: SummaryMetric[]
+  canExport: boolean
   canEdit: boolean
   canDelete: boolean
   initialSearchParams: PageSearchParams
 }
+
+type ExportCellValue = string | number
+
+const YEAR_INPUT_PATTERN = "[0-9]{4}"
+const ZIP_INPUT_PATTERN = "[0-9]{5}(-[0-9]{4})?"
 
 type ContactFilterState = {
   q: string
@@ -374,6 +383,28 @@ function formatDetailValue(value: string | number | null | undefined): string {
   if (value == null) return "-"
   const parsed = String(value).trim()
   return parsed || "-"
+}
+
+function formatIsoTimestampSegment(value: Date): string {
+  return value
+    .toISOString()
+    .replace(/[:]/g, "-")
+    .replace(/\.\d{3}Z$/, "Z")
+}
+
+function toExportCellValue(value: unknown): ExportCellValue {
+  if (value == null) return ""
+  if (typeof value === "number") return value
+  if (typeof value === "boolean") return value ? "Yes" : "No"
+
+  const parsed = String(value)
+  if (!parsed) return ""
+
+  return /^[=+\-@]/.test(parsed) ? `'${parsed}` : parsed
+}
+
+function joinExportValues(values: Array<string | null | undefined>): string {
+  return values.map((value) => String(value ?? "").trim()).filter(Boolean).join("; ")
 }
 
 function parseContactFiltersFromParams(searchParams: URLSearchParams, initialSearchParams: PageSearchParams): ContactFilterState {
@@ -702,6 +733,7 @@ export function CorrectionsAdminClient({
   activeMatches,
   contactsMetrics,
   recipientMetrics,
+  canExport,
   canEdit,
   canDelete,
   initialSearchParams,
@@ -749,6 +781,7 @@ export function CorrectionsAdminClient({
   const [recipientFilterDrafts, setRecipientFilterDrafts] = useState<RecipientFilterState>(EMPTY_RECIPIENT_FILTERS)
   const [contactSearchInput, setContactSearchInput] = useState("")
   const [recipientSearchInput, setRecipientSearchInput] = useState("")
+  const [exportingDataset, setExportingDataset] = useState<"contacts" | "recipients" | null>(null)
   const [contactFilterField, setContactFilterField] = useState<keyof ContactFilterState>("active")
   const [recipientFilterField, setRecipientFilterField] = useState<keyof RecipientFilterState>("status")
   const initializedContactDrafts = useRef(false)
@@ -758,6 +791,27 @@ export function CorrectionsAdminClient({
     const map = new Map<string, RecipientMatchSummary>()
     for (const match of activeMatches) {
       map.set(match.recipientId, match)
+    }
+    return map
+  }, [activeMatches])
+
+  const recipientNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const recipient of recipients) {
+      map.set(recipient.id, `${recipient.firstName} ${recipient.lastName}`)
+    }
+    return map
+  }, [recipients])
+
+  const contactMatchesMap = useMemo(() => {
+    const map = new Map<string, RecipientMatchSummary[]>()
+    for (const match of activeMatches) {
+      const existing = map.get(match.contactId)
+      if (existing) {
+        existing.push(match)
+      } else {
+        map.set(match.contactId, [match])
+      }
     }
     return map
   }, [activeMatches])
@@ -1214,6 +1268,109 @@ export function CorrectionsAdminClient({
     setRecipientFilters(next)
   }
 
+  async function exportRows(sheetName: string, filenamePrefix: string, rows: Record<string, ExportCellValue>[]) {
+    const XLSX = await import("xlsx")
+    const workbook = XLSX.utils.book_new()
+    const worksheet = XLSX.utils.json_to_sheet(rows)
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
+    XLSX.writeFileXLSX(workbook, `${filenamePrefix}-${formatIsoTimestampSegment(new Date())}.xlsx`)
+  }
+
+  async function handleExportContacts() {
+    if (!canExport || filteredContacts.length === 0) return
+
+    setExportingDataset("contacts")
+    try {
+      const rows = filteredContacts.map((contact) => {
+        const activeMatchesForContact = contactMatchesMap.get(contact.id) ?? []
+        return {
+          "Contact ID": toExportCellValue(contact.id),
+          "First Name": toExportCellValue(contact.firstName),
+          "Last Name": toExportCellValue(contact.lastName),
+          Gender: toExportCellValue(normalizeGender(contact.gender) ?? contact.gender),
+          "Birth Year": toExportCellValue(contact.birthYear),
+          "Street Address": toExportCellValue(contact.streetAddress),
+          City: toExportCellValue(contact.city),
+          County: toExportCellValue(contact.county),
+          State: toExportCellValue(contact.state),
+          ZIP: toExportCellValue(contact.zipCode),
+          Email: toExportCellValue(contact.email),
+          "Email Normalized": toExportCellValue(contact.emailNormalized),
+          "Sobriety Date": toExportCellValue(contact.sobrietyDate),
+          "Phone 1": toExportCellValue(contact.phonePrimary),
+          "Phone 2": toExportCellValue(contact.phoneSecondary),
+          "Spanish Speaking": toExportCellValue(contact.isSpanishSpeaking),
+          "Other Languages": toExportCellValue(contact.otherLanguages),
+          "Home Group": toExportCellValue(contact.homeGroup),
+          Notes: toExportCellValue(contact.notes),
+          Active: toExportCellValue(contact.active),
+          "Legacy Source Page": toExportCellValue(contact.legacySourcePage),
+          "Legacy Internal ID": toExportCellValue(contact.legacyInternalId),
+          "Created At": toExportCellValue(contact.createdAt),
+          "Updated At": toExportCellValue(contact.updatedAt),
+          "Active Match Count": toExportCellValue(activeMatchesForContact.length),
+          "Active Match Recipient Names": toExportCellValue(
+            joinExportValues(activeMatchesForContact.map((match) => recipientNameById.get(match.recipientId)))
+          ),
+          "Active Match Recipient IDs": toExportCellValue(
+            joinExportValues(activeMatchesForContact.map((match) => match.recipientId))
+          ),
+          "Active Match Dates": toExportCellValue(joinExportValues(activeMatchesForContact.map((match) => match.matchedAt))),
+        }
+      })
+
+      await exportRows("Contacts", "corrections-contacts", rows)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to export contacts")
+    } finally {
+      setExportingDataset(null)
+    }
+  }
+
+  async function handleExportRecipients() {
+    if (!canExport || filteredRecipients.length === 0) return
+
+    setExportingDataset("recipients")
+    try {
+      const rows = filteredRecipients.map((recipient) => {
+        const activeMatch = contactMatchMap.get(recipient.id)
+        return {
+          "Recipient ID": toExportCellValue(recipient.id),
+          "First Name": toExportCellValue(recipient.firstName),
+          "Last Name": toExportCellValue(recipient.lastName),
+          "ID Number": toExportCellValue(recipient.idNumber),
+          Gender: toExportCellValue(normalizeGender(recipient.gender) ?? recipient.gender),
+          "Birth Year": toExportCellValue(recipient.birthYear),
+          "Discharge Date": toExportCellValue(recipient.dischargeDate),
+          Phone: toExportCellValue(recipient.phone),
+          Facility: toExportCellValue(recipient.facilityName),
+          Source: toExportCellValue(recipient.source),
+          "Contact Email": toExportCellValue(recipient.contactEmail),
+          "Release Address": toExportCellValue(recipient.releaseAddress),
+          "Release City": toExportCellValue(recipient.releaseCity),
+          "Release County": toExportCellValue(recipient.releaseCounty),
+          "Release State": toExportCellValue(recipient.releaseState),
+          "Release ZIP": toExportCellValue(recipient.releaseZip),
+          Notes: toExportCellValue(recipient.notes),
+          Status: toExportCellValue(formatStatusLabel(recipient.status)),
+          "Legacy Source Page": toExportCellValue(recipient.legacySourcePage),
+          "Legacy Internal ID": toExportCellValue(recipient.legacyInternalId),
+          "Created At": toExportCellValue(recipient.createdAt),
+          "Updated At": toExportCellValue(recipient.updatedAt),
+          "Active Match Contact ID": toExportCellValue(activeMatch?.contactId),
+          "Active Match Contact Name": toExportCellValue(activeMatch?.contactName),
+          "Active Match Date": toExportCellValue(activeMatch?.matchedAt),
+        }
+      })
+
+      await exportRows("Recipients", "corrections-recipients", rows)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to export recipients")
+    } finally {
+      setExportingDataset(null)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -1375,6 +1532,22 @@ export function CorrectionsAdminClient({
                     <Button variant="outline" onClick={clearContactFilters}>
                       Clear
                     </Button>
+                    {canExport && (
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          void handleExportContacts()
+                        }}
+                        disabled={filteredContacts.length === 0 || exportingDataset !== null}
+                      >
+                        {exportingDataset === "contacts" ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Download className="mr-2 h-4 w-4" />
+                        )}
+                        Export Contacts
+                      </Button>
+                    )}
                     {canEdit && (
                       <Button onClick={() => setIsAddContactOpen(true)}>
                         <Plus className="mr-2 h-4 w-4" />
@@ -1728,6 +1901,22 @@ export function CorrectionsAdminClient({
                     <Button variant="outline" onClick={clearRecipientFilters}>
                       Clear
                     </Button>
+                    {canExport && (
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          void handleExportRecipients()
+                        }}
+                        disabled={filteredRecipients.length === 0 || exportingDataset !== null}
+                      >
+                        {exportingDataset === "recipients" ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Download className="mr-2 h-4 w-4" />
+                        )}
+                        Export Recipients
+                      </Button>
+                    )}
                     {canEdit && (
                       <Button onClick={() => setIsAddRecipientOpen(true)}>
                         <Plus className="mr-2 h-4 w-4" />
@@ -2146,7 +2335,7 @@ export function CorrectionsAdminClient({
                     id="new-contact-birthYear"
                     name="birthYear"
                     inputMode="numeric"
-                    pattern="\\d{4}"
+                    pattern={YEAR_INPUT_PATTERN}
                     maxLength={4}
                     placeholder="YYYY"
                     required
@@ -2179,7 +2368,7 @@ export function CorrectionsAdminClient({
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="new-contact-zipCode">ZIP</Label>
-                  <Input id="new-contact-zipCode" name="zipCode" inputMode="numeric" pattern="\\d{5}(-\\d{4})?" />
+                  <Input id="new-contact-zipCode" name="zipCode" inputMode="numeric" pattern={ZIP_INPUT_PATTERN} />
                 </div>
               </div>
 
@@ -2320,7 +2509,7 @@ export function CorrectionsAdminClient({
                       name="birthYear"
                       defaultValue={editingContact.birthYear ? String(editingContact.birthYear) : ""}
                       inputMode="numeric"
-                      pattern="\\d{4}"
+                      pattern={YEAR_INPUT_PATTERN}
                       maxLength={4}
                       placeholder="YYYY"
                       required
@@ -2358,7 +2547,7 @@ export function CorrectionsAdminClient({
                       name="zipCode"
                       defaultValue={editingContact.zipCode ?? ""}
                       inputMode="numeric"
-                      pattern="\\d{5}(-\\d{4})?"
+                      pattern={ZIP_INPUT_PATTERN}
                     />
                   </div>
                 </div>
@@ -2514,7 +2703,7 @@ export function CorrectionsAdminClient({
                     id="new-recipient-birthYear"
                     name="birthYear"
                     inputMode="numeric"
-                    pattern="\\d{4}"
+                    pattern={YEAR_INPUT_PATTERN}
                     maxLength={4}
                     placeholder="YYYY"
                   />
@@ -2594,7 +2783,7 @@ export function CorrectionsAdminClient({
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="new-recipient-releaseZip">Release ZIP</Label>
-                  <Input id="new-recipient-releaseZip" name="releaseZip" inputMode="numeric" pattern="\\d{5}(-\\d{4})?" />
+                  <Input id="new-recipient-releaseZip" name="releaseZip" inputMode="numeric" pattern={ZIP_INPUT_PATTERN} />
                 </div>
               </div>
 
@@ -2699,7 +2888,7 @@ export function CorrectionsAdminClient({
                       name="birthYear"
                       defaultValue={editingRecipient.birthYear ? String(editingRecipient.birthYear) : ""}
                       inputMode="numeric"
-                      pattern="\\d{4}"
+                      pattern={YEAR_INPUT_PATTERN}
                       maxLength={4}
                       placeholder="YYYY"
                     />
@@ -2811,7 +3000,7 @@ export function CorrectionsAdminClient({
                       name="releaseZip"
                       defaultValue={editingRecipient.releaseZip ?? ""}
                       inputMode="numeric"
-                      pattern="\\d{5}(-\\d{4})?"
+                      pattern={ZIP_INPUT_PATTERN}
                     />
                   </div>
                 </div>

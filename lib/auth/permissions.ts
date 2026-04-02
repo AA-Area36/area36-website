@@ -13,6 +13,7 @@ export const ADMIN_PERMISSIONS = [
   "district-sites:read",
   "district-sites:write",
   "corrections:view",
+  "corrections:export",
   "corrections:edit",
   "corrections:match",
   "corrections:delete",

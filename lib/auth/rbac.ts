@@ -31,7 +31,13 @@ const SEED_ASSIGNMENTS: Record<string, SeedAssignment> = {
   "altdelegate@area36.org": { roleKey: "officer", additionalPermissions: [] },
   "ctcp@area36.org": {
     roleKey: "chair",
-    additionalPermissions: ["corrections:view", "corrections:edit", "corrections:match", "corrections:delete"],
+    additionalPermissions: [
+      "corrections:view",
+      "corrections:export",
+      "corrections:edit",
+      "corrections:match",
+      "corrections:delete",
+    ],
   },
   "treatment@area36.org": { roleKey: "chair", additionalPermissions: [] },
   "ttcc@area36.org": { roleKey: "chair", additionalPermissions: [] },
