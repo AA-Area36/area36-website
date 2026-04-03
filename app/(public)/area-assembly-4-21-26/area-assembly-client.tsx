@@ -4,7 +4,7 @@ import { useCallback, useState, useTransition } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useGoogleReCaptcha } from "react-google-recaptcha-v3"
-import { BookOpen, CalendarDays, CheckCircle, ExternalLink, Loader2, MapPin, Shield, TriangleAlert } from "lucide-react"
+import { BookOpen, CalendarDays, CheckCircle, ExternalLink, Loader2, Shield, TriangleAlert } from "lucide-react"
 import Link from "next/link"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
@@ -116,26 +116,6 @@ export function AreaAssemblyClient() {
                 </div>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-                  <div className="flex items-center gap-3 text-foreground">
-                    <CalendarDays className="h-5 w-5 text-primary" aria-hidden="true" />
-                    <h3 className="font-semibold">Bring the flyer details here</h3>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                    This page is ready to be linked from a QR code once the flyer time and location details are finalized.
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-                  <div className="flex items-center gap-3 text-foreground">
-                    <MapPin className="h-5 w-5 text-primary" aria-hidden="true" />
-                    <h3 className="font-semibold">Simple RSVP only</h3>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                    The form keeps the ask minimal so members can register quickly while still giving the workshop team a food headcount.
-                  </p>
-                </div>
-              </div>
             </div>
 
             <Card className="border-primary/20 shadow-lg shadow-primary/5">
