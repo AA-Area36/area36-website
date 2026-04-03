@@ -23,9 +23,9 @@ export const LOCAL_VIEW_AS_PRESETS: Record<LocalViewAsKey, LocalViewAsPreset> = 
   },
   chair: {
     label: "Corrections Chair",
-    description: "View, edit, match, and delete in Corrections",
+    description: "View, export, edit, match, and delete in Corrections",
     isAreaAdmin: false,
-    permissions: ["corrections:view", "corrections:edit", "corrections:match", "corrections:delete"],
+    permissions: ["corrections:view", "corrections:export", "corrections:edit", "corrections:match", "corrections:delete"],
   },
   officer: {
     label: "Officer",
