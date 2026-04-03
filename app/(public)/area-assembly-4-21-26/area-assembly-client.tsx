@@ -96,7 +96,7 @@ export function AreaAssemblyClient() {
             <div className="space-y-6">
               <div className="rounded-2xl border border-primary/15 bg-primary/5 p-6 shadow-sm">
                 <div className="flex items-start gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
                     <BookOpen className="h-6 w-6" aria-hidden="true" />
                   </div>
                   <div className="space-y-3">
