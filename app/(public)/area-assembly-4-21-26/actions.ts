@@ -109,9 +109,24 @@ export async function submitAreaAssemblyRegistration(data: AreaAssemblyRegistrat
   const timestamp = new Date().toISOString()
   const firstName = result.data.firstName.trim()
   const lastInitial = result.data.lastInitial.trim().toUpperCase()
+  const attendingApril18 = result.data.attendingApril18 ? "Yes" : "No"
+  const attendingApril18InPerson = result.data.attendingApril18
+    ? result.data.attendingApril18InPerson
+      ? "Yes"
+      : "No"
+    : ""
+  const attendingApril21 = result.data.attendingApril21 ? "Yes" : "No"
 
   try {
-    await appendAreaAssemblyRegistration([timestamp, firstName, lastInitial, "/area-assembly-4-21-26"])
+    await appendAreaAssemblyRegistration([
+      timestamp,
+      firstName,
+      lastInitial,
+      attendingApril18,
+      attendingApril18InPerson,
+      attendingApril21,
+      "/area-assembly-april-26",
+    ])
 
     return {
       success: true,
