@@ -119,6 +119,14 @@ export async function submitAreaAssemblyRegistration(data: AreaAssemblyRegistrat
     }
   } catch (error) {
     console.error("Area assembly registration error:", error)
+
+    if (error instanceof Error && error.message.includes("Google Sheets API has not been used")) {
+      return {
+        success: false,
+        error: "Registration is temporarily unavailable while Google Sheets access is being enabled. Please try again shortly.",
+      }
+    }
+
     return {
       success: false,
       error: "We could not save your registration just now. Please try again in a moment.",
