@@ -195,7 +195,7 @@ async function getAccessToken(): Promise<string> {
 
 export async function appendAreaAssemblyRegistration(values: string[]): Promise<void> {
   const accessToken = await getAccessToken()
-  const range = encodeURIComponent("Sheet1!A:D")
+  const range = encodeURIComponent("Sheet1!A:G")
 
   const response = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${DEFAULT_AREA_ASSEMBLY_SHEET_ID}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
