@@ -4,7 +4,7 @@ interface Env {
   UPTIME_ENDPOINTS?: string
 }
 
-const DEFAULT_ENDPOINTS = ["/", "/api/healthz", "/api/gdrive/newsletters"]
+const DEFAULT_ENDPOINTS = ["/", "/api/healthz", "/api/gdrive"]
 const TIMEOUT_MS = 10_000
 
 function parseEndpoints(env: Env): string[] {

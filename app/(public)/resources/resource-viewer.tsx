@@ -132,6 +132,7 @@ export function ResourceViewerWithPassword(props: ResourceViewerWithPasswordProp
   const [passwordDialogOpen, setPasswordDialogOpen] = React.useState(false)
   const [pendingResource, setPendingResource] = React.useState<Resource | null>(null)
   const [viewerOpen, setViewerOpen] = React.useState(false)
+  const justUnlockedRef = React.useRef(false)
 
   // Handle opening the viewer
   React.useEffect(() => {
@@ -163,6 +164,7 @@ export function ResourceViewerWithPassword(props: ResourceViewerWithPasswordProp
 
   const handlePasswordSuccess = (result: { previewUrl?: string; downloadUrl?: string; unlockExpiresAt?: number }) => {
     if (pendingResource) {
+      justUnlockedRef.current = true
       setUnlockedFiles((prev) => new Set(prev).add(pendingResource.id))
 
       if (result.previewUrl && result.downloadUrl) {
@@ -276,8 +278,12 @@ export function ResourceViewerWithPassword(props: ResourceViewerWithPasswordProp
           onOpenChange={(open) => {
             setPasswordDialogOpen(open)
             if (!open) {
+              const closedAfterUnlock = justUnlockedRef.current
+              justUnlockedRef.current = false
               setPendingResource(null)
-              onOpenChange(false)
+              if (!closedAfterUnlock) {
+                onOpenChange(false)
+              }
             }
           }}
           onVerify={verifyFilePassword}
@@ -312,9 +318,16 @@ export function ResourceItemWithViewer({
   }
 
   const handleDownload = async () => {
+    if (resource.isProtected && !isFileUnlockedClient(resource.id)) {
+      setPasswordDialogOpen(true)
+      return
+    }
+
     setLoadingAction("download")
     try {
-      const result = await downloadFile(resource.downloadUrl || "", resource.title)
+      const resolved = getUnlockedUrls(resource.id)
+      const url = resolved?.downloadUrl || resource.downloadUrl || ""
+      const result = await downloadFile(url, resource.title)
       if (result.requiresPassword) {
         setPasswordDialogOpen(true)
       }
@@ -335,6 +348,7 @@ export function ResourceItemWithViewer({
         unlockExpiresAt: result.unlockExpiresAt,
       })
     }
+
     await downloadFile(result.downloadUrl || resource.downloadUrl || "", resource.title)
   }
 
