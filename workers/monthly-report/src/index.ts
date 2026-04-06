@@ -482,11 +482,11 @@ async function fetchDriveFilesWithMetadata(
 }
 
 async function fetchDriveDeltas(env: Env, start: Date, end: Date): Promise<DriveDelta[]> {
-  // Resources folder excluded - it only contains folders, no direct files
   const folders: { name: string; id?: string }[] = [
     { name: "Newsletters", id: env.GDRIVE_NEWSLETTERS_FOLDER_ID },
     { name: "Recordings", id: env.GDRIVE_RECORDINGS_FOLDER_ID },
     { name: "Committees", id: env.GDRIVE_COMMITTEES_FOLDER_ID },
+    { name: "Resources", id: env.GDRIVE_RESOURCES_FOLDER_ID },
     { name: "Service Resources", id: env.GDRIVE_SERVICE_RESOURCES_FOLDER_ID },
   ]
 
@@ -580,6 +580,7 @@ async function fetchEventDetails(env: Env, start: Date, end: Date): Promise<Even
     FROM events e
     LEFT JOIN event_to_types et ON e.id = et.event_id
     WHERE e.created_at >= ? AND e.created_at < ?
+      AND e.status = 'approved'
     GROUP BY e.id
     ORDER BY e.date ASC
   `)
@@ -1315,10 +1316,10 @@ function renderTextReport(data: ReportData) {
 
   // Section 6: Errors
   lines.push("")
-  lines.push("ERRORS")
+  lines.push("APPLICATION ERRORS")
   lines.push("-".repeat(50))
   if (data.errors.byKind.length === 0) {
-    lines.push("No errors recorded this month.")
+    lines.push("No application errors recorded this month.")
   } else {
     for (const row of data.errors.byKind) {
       lines.push(`${row.errorKind}: ${row.count}`)

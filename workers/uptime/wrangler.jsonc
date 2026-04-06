@@ -8,7 +8,7 @@
   },
   "vars": {
     "SITE_BASE_URL": "https://area36.org",
-    "UPTIME_ENDPOINTS": "[\"/\",\"/api/healthz\",\"/api/gdrive/newsletters\"]"
+    "UPTIME_ENDPOINTS": "[\"/\",\"/api/healthz\",\"/api/gdrive\"]"
   },
   "d1_databases": [
     {

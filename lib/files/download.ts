@@ -42,6 +42,10 @@ function triggerNativeDownload(url: string, filename?: string): void {
   document.body.removeChild(a)
 }
 
+function shouldRetryStatus(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504
+}
+
 function hasFileExtension(name: string): boolean {
   return /\.[a-z0-9]{1,10}$/i.test(name.trim())
 }
@@ -114,8 +118,10 @@ function resolveDownloadFilename(
  * browser download.  All files are served through `/api/files/download/…`.
  *
  * For password-protected files the proxy may return 403 with
- * `{ requiresPassword: true }`.  In that case a short retry loop gives the
- * httpOnly unlock cookie time to propagate after a server action.
+ * `{ requiresPassword: true }` (or `x-requires-password: 1` on HEAD preflight).
+ * Those responses are surfaced immediately (no retry).
+ *
+ * Transient failures (network errors and retryable 4xx/5xx) are retried.
  *
  * Returns a result object so the caller can decide whether to show a
  * password dialog.
@@ -161,20 +167,29 @@ export async function downloadFile(url: string, filename?: string): Promise<Down
         }
 
         const requiresPassword = head.headers.get("x-requires-password") === "1"
-        if (requiresPassword && attempt < maxRetries) {
-          console.warn("[download] native preflight requires password, retrying", {
-            requestId,
-            attempt: attempt + 1,
-            status: head.status,
-          })
-          continue
-        }
         if (requiresPassword) {
           console.warn("[download] native preflight requires password", {
             requestId,
             status: head.status,
           })
           return { ok: false, requiresPassword: true }
+        }
+
+        if (head.status === 403) {
+          console.warn("[download] native preflight forbidden", {
+            requestId,
+            status: head.status,
+          })
+          return { ok: false, error: "Access denied (403)" }
+        }
+
+        if (shouldRetryStatus(head.status) && attempt < maxRetries) {
+          console.warn("[download] native preflight retryable status", {
+            requestId,
+            attempt: attempt + 1,
+            status: head.status,
+          })
+          continue
         }
 
         console.warn("[download] native preflight failed; falling back to fetch", {
@@ -227,14 +242,6 @@ export async function downloadFile(url: string, filename?: string): Promise<Down
     // Check if it's a password-required retry scenario
     try {
       const json = await res.json() as { requiresPassword?: boolean; error?: string }
-      if (json.requiresPassword && attempt < maxRetries) {
-        console.warn("[download] requires password, retrying", {
-          requestId,
-          attempt: attempt + 1,
-          status: res.status,
-        })
-        continue // retry
-      }
       if (json.requiresPassword) {
         console.warn("[download] requires password", {
           requestId,
@@ -242,6 +249,26 @@ export async function downloadFile(url: string, filename?: string): Promise<Down
         })
         return { ok: false, requiresPassword: true }
       }
+
+      if (res.status === 403) {
+        console.warn("[download] forbidden", {
+          requestId,
+          status: res.status,
+          error: json.error || null,
+        })
+        return { ok: false, error: json.error || "Access denied (403)" }
+      }
+
+      if (shouldRetryStatus(res.status) && attempt < maxRetries) {
+        console.warn("[download] retryable failure", {
+          requestId,
+          attempt: attempt + 1,
+          status: res.status,
+          error: json.error || null,
+        })
+        continue
+      }
+
       console.error("[download] failed", {
         requestId,
         status: res.status,
