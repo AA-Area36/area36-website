@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useCallback, useEffect, useMemo } from "react"
+import { useState, useTransition, useCallback, useMemo } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useGoogleReCaptcha } from "react-google-recaptcha-v3"
@@ -96,14 +96,6 @@ function ContactForm({ content, header }: { content?: ContentDoc; header?: Conta
     () => recipients.filter((recipient) => selectedRecipients.includes(recipient.value)),
     [selectedRecipients]
   )
-
-  useEffect(() => {
-    if (executeRecaptcha) {
-      executeRecaptcha("page_load").catch(() => {
-        // reCAPTCHA preload failed silently
-      })
-    }
-  }, [executeRecaptcha])
 
   const onSubmit = useCallback(async (data: ContactFormData) => {
     setSubmitError(null)
