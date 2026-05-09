@@ -14,6 +14,7 @@ interface ReCaptchaResponse {
 }
 
 const RECAPTCHA_SCORE_THRESHOLD = 0.5
+const RECAPTCHA_EXPECTED_ACTION = "contact_form"
 
 /**
  * Get reCAPTCHA secret key from Cloudflare context or process.env
@@ -92,7 +93,6 @@ export async function submitContactForm(data: ContactFormData) {
       })
 
       const verifyResult: ReCaptchaResponse = await verifyResponse.json()
-      console.log("reCAPTCHA verify result:", verifyResult)
 
       if (!verifyResult.success) {
         console.error("reCAPTCHA verification failed:", verifyResult["error-codes"])
@@ -102,8 +102,24 @@ export async function submitContactForm(data: ContactFormData) {
         }
       }
 
+      if (verifyResult.action !== RECAPTCHA_EXPECTED_ACTION) {
+        console.warn("reCAPTCHA action mismatch:", verifyResult.action)
+        return {
+          success: false,
+          error: "reCAPTCHA verification failed. Please refresh and try again.",
+        }
+      }
+
+      if (verifyResult.score === undefined) {
+        console.error("reCAPTCHA verification did not return a score")
+        return {
+          success: false,
+          error: "reCAPTCHA is not configured for score verification. Please contact the webmaster.",
+        }
+      }
+
       // Check the score (v3 returns a score from 0.0 to 1.0)
-      if (verifyResult.score !== undefined && verifyResult.score < RECAPTCHA_SCORE_THRESHOLD) {
+      if (verifyResult.score < RECAPTCHA_SCORE_THRESHOLD) {
         console.warn("reCAPTCHA score too low:", verifyResult.score)
         return {
           success: false,

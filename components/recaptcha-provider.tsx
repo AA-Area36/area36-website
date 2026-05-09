@@ -3,10 +3,9 @@
 import { GoogleReCaptchaProvider } from "react-google-recaptcha-v3"
 
 export function ReCaptchaProvider({ children }: { children: React.ReactNode }) {
-  const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY
+  const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY?.trim()
 
-  if (!siteKey) {
-    // In development, if no key is set, just render children without the provider
+  if (!siteKey || siteKey === "undefined" || siteKey === "null") {
     console.warn("NEXT_PUBLIC_RECAPTCHA_SITE_KEY is not configured")
     return <>{children}</>
   }
