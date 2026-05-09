@@ -67,17 +67,15 @@ export default function HomePage() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold uppercase tracking-wide text-primary">Temporary Notice</p>
-                  <h2 className="mt-1 text-lg font-semibold text-foreground">
-                    Area Assembly / Delegates Workshop registration is open
-                  </h2>
+                  <h2 className="mt-1 text-lg font-semibold text-foreground">Conference Manual counts due June 1</h2>
                   <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                    Register for the April workshop, review background material, and get the Zoom details in one place.
+                    Tell us how many Conference Manuals you want to purchase this year so Area 36 can plan the order.
                   </p>
                 </div>
               </div>
               <Button asChild className="sm:self-start">
-                <Link href="/area-assembly-april-26">
-                  Go to registration
+                <Link href="/conference-manual-count">
+                  Submit manual count
                   <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
                 </Link>
               </Button>

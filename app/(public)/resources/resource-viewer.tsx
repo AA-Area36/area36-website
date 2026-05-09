@@ -124,7 +124,7 @@ export function ResourceViewer({
 }
 
 // Wrapper component that manages password dialog state
-interface ResourceViewerWithPasswordProps extends ResourceViewerProps {}
+type ResourceViewerWithPasswordProps = ResourceViewerProps
 
 export function ResourceViewerWithPassword(props: ResourceViewerWithPasswordProps) {
   const { resource, resources, open, onOpenChange, onResourceChange } = props

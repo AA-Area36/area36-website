@@ -7,6 +7,7 @@ The Area 36 site is a custom Next.js application deployed to Cloudflare Workers 
 - Cloudflare D1 for relational data.
 - Cloudflare R2 for selected binary assets (images/flyers/reports).
 - Google Drive as the primary source for many document libraries.
+- Google Sheets for lightweight temporary public form submission counts.
 - Google-based admin authentication and email integration.
 
 ## 2. Runtime Components
@@ -49,6 +50,9 @@ D1 stores auth, events, district config/content, metadata overlays, reporting me
 
 ### Google Drive: source of many documents
 Drive folders are used for newsletters, resources, recordings, committee docs, and service resources. App APIs fetch Drive files and enrich them with local metadata from D1.
+
+### Google Sheets: lightweight form submission storage
+Temporary public forms can append rows to designated Google Sheets using the Google service account. These forms use reCAPTCHA before appending and should remain limited to low-volume planning workflows.
 
 ### R2: selected object storage
 R2 is used for app-owned binary artifacts (submission images, flyers/images, monthly report output), not as the primary source for all document libraries.
@@ -177,6 +181,7 @@ flowchart LR
   App --> D1["Cloudflare D1 (app data)"]
   App --> R2["Cloudflare R2 (images/flyers/reports)"]
   App --> GDrive["Google Drive APIs"]
+  App --> GSheets["Google Sheets API"]
   App --> Gmail["Gmail API"]
   Uptime["Uptime Worker (hourly)"] --> D1
   Monthly["Monthly Report Worker (monthly)"] --> D1

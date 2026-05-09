@@ -239,7 +239,7 @@ export default async function DistrictAdminDashboard({
               className="h-4 w-4 rounded border border-border"
             />
             <Label htmlFor="meeting-contact-for-details" className="cursor-pointer font-normal">
-              Show "Contact DCM" in public card and hide online link, meeting ID, and passcode (in-person location still shows)
+              Show &ldquo;Contact DCM&rdquo; in public card and hide online link, meeting ID, and passcode (in-person location still shows)
             </Label>
           </div>
 
