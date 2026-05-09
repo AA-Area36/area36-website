@@ -15,6 +15,7 @@ const routeLabels: Record<string, string> = {
   "/service": "Service Basics",
   "/service-basics": "Service Basics",
   "/general-service-conference": "General Service Conference",
+  "/conference-manual-count": "Conference Manual Count",
   "/grapevine": "Grapevine",
   "/ypaa": "YPAA",
   "/professionals": "For Professionals",

@@ -16,6 +16,7 @@ const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
 const TOKEN_CACHE_KEY = "https://cache.internal/google-sheets-token"
 const SHEETS_CACHE_NAME = "google-sheets-auth"
 const DEFAULT_AREA_ASSEMBLY_SHEET_ID = "1fVowzQNlRbqnqqKhvrky9oNbtEHbK3YflD-JnILbUuk"
+const CONFERENCE_MANUAL_COUNTS_SHEET_ID = "1fHsLspjOyhgevM0JqNcwVUHcCxW0UXzX1A328XNbRaU"
 
 let memoryTokenCache: TokenCache | null = null
 
@@ -193,12 +194,16 @@ async function getAccessToken(): Promise<string> {
   return data.access_token
 }
 
-export async function appendAreaAssemblyRegistration(values: string[]): Promise<void> {
+async function appendSpreadsheetRow(
+  spreadsheetId: string,
+  rangeName: string,
+  values: Array<string | number>,
+): Promise<void> {
   const accessToken = await getAccessToken()
-  const range = encodeURIComponent("Sheet1!A:G")
+  const range = encodeURIComponent(rangeName)
 
   const response = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${DEFAULT_AREA_ASSEMBLY_SHEET_ID}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
     {
       method: "POST",
       headers: {
@@ -210,6 +215,14 @@ export async function appendAreaAssemblyRegistration(values: string[]): Promise<
   )
 
   if (!response.ok) {
-    throw new Error(`Failed to append registration row: ${response.status} ${await response.text()}`)
+    throw new Error(`Failed to append spreadsheet row: ${response.status} ${await response.text()}`)
   }
+}
+
+export async function appendAreaAssemblyRegistration(values: string[]): Promise<void> {
+  await appendSpreadsheetRow(DEFAULT_AREA_ASSEMBLY_SHEET_ID, "Sheet1!A:G", values)
+}
+
+export async function appendConferenceManualCount(values: Array<string | number>): Promise<void> {
+  await appendSpreadsheetRow(CONFERENCE_MANUAL_COUNTS_SHEET_ID, "A:F", values)
 }
