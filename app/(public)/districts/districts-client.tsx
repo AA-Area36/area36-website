@@ -62,7 +62,8 @@ export function DistrictsClient({ content }: { content: ContentDoc }) {
       district.counties.some((c) => c.toLowerCase().includes(query)) ||
       district.cities?.some((c) => c.toLowerCase().includes(query)) ||
       district.dcmName?.toLowerCase().includes(query) ||
-      district.description?.toLowerCase().includes(query)
+      district.description?.toLowerCase().includes(query) ||
+      district.contributionAddress?.toLowerCase().includes(query)
     )
   })
 
@@ -223,6 +224,15 @@ export function DistrictsClient({ content }: { content: ContentDoc }) {
                               {district.meetingNote && (
                                 <p className="text-sm text-muted-foreground mt-2 italic">{district.meetingNote}</p>
                               )}
+                            </div>
+                          )}
+
+                          {district.contributionAddress && (
+                            <div className="border-t border-border/60 pt-3">
+                              <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                {t("page.labels.contributions", "Contributions")}
+                              </h4>
+                              <p className="mt-1 text-sm text-muted-foreground">{district.contributionAddress}</p>
                             </div>
                           )}
 
