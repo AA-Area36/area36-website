@@ -15,6 +15,7 @@ export type DistrictDirectoryEntry = {
   meetingLocation?: string
   meetingAddress?: string
   meetingNote?: string
+  contributionAddress?: string
 }
 
 export const districtDirectory: DistrictDirectoryEntry[] = [
@@ -322,4 +323,3 @@ export const districtDirectory: DistrictDirectoryEntry[] = [
     meetingNote: "Spanish speaking, LGBTQ+ friendly, child friendly, wheelchair accessible",
   },
 ]
-
