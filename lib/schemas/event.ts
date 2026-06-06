@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { eventTypes, locationTypes, recurrenceTypes, type EventType } from "@/lib/db/schema"
+import { eventTypes, locationTypes, recurrenceTypes } from "@/lib/db/schema"
 
 const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/
 const dateRegex = /^\d{4}-\d{2}-\d{2}$/

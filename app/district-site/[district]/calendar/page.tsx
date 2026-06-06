@@ -2,6 +2,7 @@ import Link from "next/link"
 import { ArrowRight, CalendarDays, Clock, MapPin } from "lucide-react"
 import { notFound } from "next/navigation"
 import { getDistrictPublicEvents } from "@/lib/district/queries"
+import { formatTimeRange } from "@/lib/timezone"
 import { coerceDistrict, districtHref, getDistrictBasePath, resolveDistrictSiteForRender } from "../district-utils"
 
 export const dynamic = "force-dynamic"
@@ -100,10 +101,10 @@ export default async function DistrictCalendarPage({
                         </div>
 
                         {/* Time badge */}
-                        {event.startTime && (
+                        {(event.startTime || event.timeTBD) && (
                           <span className="inline-flex items-center gap-1.5 rounded-full bg-muted/60 px-3 py-1 text-xs font-medium text-muted-foreground">
                             <Clock className="h-3 w-3" />
-                            {event.startTime}{event.endTime && ` - ${event.endTime}`}
+                            {event.timeTBD ? "Time TBD" : formatTimeRange(event.startTime, event.endTime)}
                           </span>
                         )}
                       </div>

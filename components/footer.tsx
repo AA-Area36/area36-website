@@ -42,6 +42,7 @@ export async function Footer() {
     t("footer.bottom.copyright", "© {year} Southern Minnesota Area 36 of Alcoholics Anonymous. All rights reserved."),
     { year: new Date().getFullYear() },
   )
+  const opensNewTabText = t("footer.bottom.opensNewTab", "(opens in new tab)")
 
   return (
     <footer className="border-t border-border bg-card" role="contentinfo">
@@ -78,7 +79,10 @@ export async function Footer() {
                   >
                     {link.name}
                     {link.external && (
-                      <ExternalLink className="h-3 w-3" aria-label={t("footer.bottom.opensNewTab", "(opens in new tab)")} />
+                      <>
+                        <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                        <span className="sr-only"> {opensNewTabText}</span>
+                      </>
                     )}
                   </Link>
                 </li>

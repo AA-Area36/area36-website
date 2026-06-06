@@ -757,9 +757,9 @@ const pagesDefaultsEn = {
       description:
         "After meeting expenses, many groups use the following suggested split for their Seventh Tradition contributions:",
       split: {
-        district: { percent: "50%", recipient: "District", description: "Local service" },
+        district: { percent: "10%", recipient: "District", description: "Local service" },
         area: { percent: "30%", recipient: "Area 36", description: "Regional service" },
-        intergroup: { percent: "10%", recipient: "Intergroup", description: "Local coordination" },
+        intergroup: { percent: "50%", recipient: "Intergroup", description: "Local coordination" },
         gso: { percent: "10%", recipient: "GSO", description: "A.A. World Services" },
       },
       note:

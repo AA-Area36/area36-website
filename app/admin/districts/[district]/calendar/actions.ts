@@ -5,6 +5,7 @@ import { getDb, schema } from "@/lib/db"
 import { and, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import type { EventType } from "@/lib/db/schema"
+import { invalidateEventCaches } from "@/lib/utils/event-cache"
 import {
   parseDate,
   parseEventTypes,
@@ -21,6 +22,14 @@ function coerceDistrict(value: unknown): number | null {
   const n = Number(value)
   if (!Number.isFinite(n) || n < 1 || n > 27 || n === 10) return null
   return n
+}
+
+function revalidateDistrictEventPaths(districtNumber: number) {
+  revalidatePath("/events")
+  revalidatePath("/admin/events")
+  revalidatePath(`/admin/districts/${districtNumber}/calendar`)
+  revalidatePath(`/district-site/${districtNumber}`)
+  revalidatePath(`/district-site/${districtNumber}/calendar`)
 }
 
 export async function createDistrictEvent(formData: FormData) {
@@ -77,7 +86,8 @@ export async function createDistrictEvent(formData: FormData) {
     }))
   )
 
-  revalidatePath("/admin/calendar")
+  revalidateDistrictEventPaths(districtNumber)
+  await invalidateEventCaches(districtNumber)
 }
 
 export async function updateDistrictEvent(formData: FormData) {
@@ -135,7 +145,8 @@ export async function updateDistrictEvent(formData: FormData) {
   await db.delete(schema.eventToTypes).where(eq(schema.eventToTypes.eventId, eventId))
   await db.insert(schema.eventToTypes).values(types.map((t) => ({ eventId, type: t as EventType })))
 
-  revalidatePath("/admin/calendar")
+  revalidateDistrictEventPaths(districtNumber)
+  await invalidateEventCaches(districtNumber)
 }
 
 export async function deleteDistrictEvent(formData: FormData) {
@@ -153,5 +164,6 @@ export async function deleteDistrictEvent(formData: FormData) {
     .delete(schema.events)
     .where(and(eq(schema.events.id, eventId), eq(schema.events.districtNumber, districtNumber)))
 
-  revalidatePath("/admin/calendar")
+  revalidateDistrictEventPaths(districtNumber)
+  await invalidateEventCaches(districtNumber)
 }

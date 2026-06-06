@@ -8,9 +8,7 @@ import { revalidatePath } from "next/cache"
 import { sendDenialEmailToSubmitter, sendDenialEmailToChair } from "@/lib/email"
 import { serializeWeeklyPattern, serializeMonthlyPatternValue } from "@/lib/utils/recurrence"
 import type { WeeklyPattern, MonthlyPattern } from "@/lib/types/recurrence"
-import { invalidateEdgeCache } from "@/lib/cache/edge-cache"
-
-const APPROVED_EVENTS_CACHE_KEY = "events:approved"
+import { invalidateEventCaches } from "@/lib/utils/event-cache"
 
 export interface UpdateEventData {
   title: string
@@ -63,7 +61,7 @@ export async function approveEvent(eventId: string): Promise<void> {
 
   revalidatePath("/admin/events")
   revalidatePath("/events")
-  await invalidateEdgeCache(APPROVED_EVENTS_CACHE_KEY)
+  await invalidateEventCaches()
 }
 
 export async function denyEvent(eventId: string, reason: string): Promise<void> {
@@ -116,7 +114,7 @@ export async function denyEvent(eventId: string, reason: string): Promise<void> 
 
   revalidatePath("/admin/events")
   revalidatePath("/events")
-  await invalidateEdgeCache(APPROVED_EVENTS_CACHE_KEY)
+  await invalidateEventCaches()
 }
 
 export async function deleteEvent(eventId: string): Promise<void> {
@@ -131,7 +129,7 @@ export async function deleteEvent(eventId: string): Promise<void> {
 
   revalidatePath("/admin/events")
   revalidatePath("/events")
-  await invalidateEdgeCache(APPROVED_EVENTS_CACHE_KEY)
+  await invalidateEventCaches()
 }
 
 export async function updateEvent(eventId: string, data: UpdateEventData): Promise<{ success: boolean; error?: string }> {
@@ -185,7 +183,7 @@ export async function updateEvent(eventId: string, data: UpdateEventData): Promi
 
     revalidatePath("/admin/events")
     revalidatePath("/events")
-    await invalidateEdgeCache(APPROVED_EVENTS_CACHE_KEY)
+    await invalidateEventCaches()
 
     return { success: true }
   } catch (error) {
@@ -269,7 +267,7 @@ export async function updateRecurringEvent(
 
       revalidatePath("/admin/events")
       revalidatePath("/events")
-      await invalidateEdgeCache(APPROVED_EVENTS_CACHE_KEY)
+      await invalidateEventCaches()
 
       return { success: true }
     }
@@ -324,7 +322,7 @@ export async function updateRecurringEvent(
 
     revalidatePath("/admin/events")
     revalidatePath("/events")
-    await invalidateEdgeCache(APPROVED_EVENTS_CACHE_KEY)
+    await invalidateEventCaches()
 
     return { success: true }
   } catch (error) {
@@ -379,7 +377,7 @@ export async function cancelOccurrence(
 
     revalidatePath("/admin/events")
     revalidatePath("/events")
-    await invalidateEdgeCache(APPROVED_EVENTS_CACHE_KEY)
+    await invalidateEventCaches()
 
     return { success: true }
   } catch (error) {
@@ -417,7 +415,7 @@ export async function restoreOccurrence(
 
     revalidatePath("/admin/events")
     revalidatePath("/events")
-    await invalidateEdgeCache(APPROVED_EVENTS_CACHE_KEY)
+    await invalidateEventCaches()
 
     return { success: true }
   } catch (error) {
@@ -454,7 +452,7 @@ export async function revertOccurrence(
 
     revalidatePath("/admin/events")
     revalidatePath("/events")
-    await invalidateEdgeCache(APPROVED_EVENTS_CACHE_KEY)
+    await invalidateEventCaches()
 
     return { success: true }
   } catch (error) {

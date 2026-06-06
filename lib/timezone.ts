@@ -1,5 +1,3 @@
-import { formatInTimeZone } from "date-fns-tz"
-
 export const TIMEZONES = [
   { value: "America/Chicago", label: "Central Time (CT)" },
   { value: "America/New_York", label: "Eastern Time (ET)" },
@@ -9,39 +7,35 @@ export const TIMEZONES = [
 
 export const DEFAULT_TIMEZONE = "America/Chicago"
 
-export function formatTimeForDisplay(time: string, timezone: string): string {
-  // time is stored as "HH:mm" in 24-hour format
-  // Create a date object for today with the given time in the stored timezone
-  const today = new Date()
-  const [hours, minutes] = time.split(":").map(Number)
+const timeRegex = /^([01]?[0-9]|2[0-3]):([0-5][0-9])$/
 
-  // Create a date string that date-fns-tz can parse
-  const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}T${time}:00`
-
-  try {
-    // Format the time in the target timezone
-    return formatInTimeZone(new Date(dateStr), timezone, "h:mm a")
-  } catch {
-    // Fallback to simple formatting if timezone conversion fails
-    const period = hours >= 12 ? "PM" : "AM"
-    const displayHours = hours % 12 || 12
-    return `${displayHours}:${String(minutes).padStart(2, "0")} ${period}`
+export function formatTimeForDisplay(time: string): string {
+  // Event times are stored as local wall-clock HH:mm values, not UTC instants.
+  const match = timeRegex.exec(time.trim())
+  if (!match) {
+    return time
   }
+
+  const hours = Number(match[1])
+  const minutes = Number(match[2])
+  const period = hours >= 12 ? "PM" : "AM"
+  const displayHours = hours % 12 || 12
+
+  return `${displayHours}:${String(minutes).padStart(2, "0")} ${period}`
 }
 
 export function formatTimeRange(
   startTime: string | null | undefined,
-  endTime: string | null | undefined,
-  timezone: string
+  endTime: string | null | undefined
 ): string {
   if (!startTime) {
     return "Time TBD"
   }
-  const start = formatTimeForDisplay(startTime, timezone)
+  const start = formatTimeForDisplay(startTime)
   if (!endTime) {
     return start
   }
-  const end = formatTimeForDisplay(endTime, timezone)
+  const end = formatTimeForDisplay(endTime)
   return `${start} - ${end}`
 }
 

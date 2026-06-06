@@ -39,8 +39,8 @@ export interface EventWithTypes extends Event {
   types: EventType[]
   flyers: EventFlyer[]
 }
-import { locationTypes } from "@/lib/db/schema"
-import { formatTimeRange, getUserTimezone, TIMEZONES, DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { eventTypes as configuredEventTypes, locationTypes } from "@/lib/db/schema"
+import { formatTimeRange, TIMEZONES, DEFAULT_TIMEZONE } from "@/lib/timezone"
 
 const locationTypeLabels: Record<LocationType, string> = {
   "in-person": "In Person",
@@ -48,7 +48,7 @@ const locationTypeLabels: Record<LocationType, string> = {
   "online": "Online",
 }
 
-const eventTypes = ["All", "Assembly", "Regional", "Workshop", "Meeting", "Committee", "District"]
+const eventTypes = ["All", ...configuredEventTypes]
 
 const eventTypeColors: Record<string, string> = {
   Regional: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
@@ -57,6 +57,7 @@ const eventTypeColors: Record<string, string> = {
   Meeting: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
   Committee: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
   District: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
+  "District Report": "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
 }
 
 const locationTypeBadgeClasses: Record<LocationType, string> = {
@@ -370,7 +371,6 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [submitMessage, setSubmitMessage] = React.useState<{ type: "success" | "error"; text: string } | null>(null)
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({})
-  const [userTimezone, setUserTimezone] = React.useState(DEFAULT_TIMEZONE)
   const [selectedTimezone, setSelectedTimezone] = React.useState(DEFAULT_TIMEZONE)
   const [locationType, setLocationType] = React.useState<LocationType>("in-person")
   // TBD flags
@@ -452,11 +452,6 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
     setFlyerFiles([])
     setRecurrenceConfig({ isRecurring: false, recurrenceType: "none" })
     setFormStartDate("")
-  }, [])
-
-  // Detect user timezone
-  React.useEffect(() => {
-    setUserTimezone(getUserTimezone())
   }, [])
 
   // Update URL when filters change
@@ -876,7 +871,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
         locationType: locationType,
         address: formData.get("eventAddress") as string,
         meetingLink: formData.get("eventMeetingLink") as string,
-        types: submissionEventTypes as ("Assembly" | "Regional" | "Workshop" | "Meeting" | "Committee" | "District")[],
+        types: submissionEventTypes as EventType[],
         description: formData.get("eventDescription") as string,
         submitterEmail: formData.get("submitterEmail") as string,
         flyerUrl: "", // Deprecated - now using flyer uploads
@@ -1650,7 +1645,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                               </div>
                               <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
                                 <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                                <span>{event.timeTBD ? "Time TBD" : formatTimeRange(event.startTime, event.endTime, userTimezone)}</span>
+                                <span>{event.timeTBD ? "Time TBD" : formatTimeRange(event.startTime, event.endTime)}</span>
                               </div>
                               {event.address ? (
                                 <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
@@ -1766,7 +1761,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                 </div>
                                 <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
                                   <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                                  <span>{firstOccurrence.timeTBD ? "Time TBD" : formatTimeRange(firstOccurrence.startTime, firstOccurrence.endTime, userTimezone)}</span>
+                                  <span>{firstOccurrence.timeTBD ? "Time TBD" : formatTimeRange(firstOccurrence.startTime, firstOccurrence.endTime)}</span>
                                 </div>
                                 {firstOccurrence.address ? (
                                   <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
@@ -1860,7 +1855,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                           <Calendar className="h-4 w-4 text-primary flex-shrink-0" aria-hidden="true" />
                                           <span className="font-medium text-sm">{formatDateRange(occurrence.date, occurrence.endDate)}</span>
                                           <span className="text-sm text-muted-foreground">
-                                            {occurrence.timeTBD ? "Time TBD" : formatTimeRange(occurrence.startTime, occurrence.endTime, userTimezone)}
+                                            {occurrence.timeTBD ? "Time TBD" : formatTimeRange(occurrence.startTime, occurrence.endTime)}
                                           </span>
                                           {occurrence.isModified && (
                                             <Badge variant="outline" className="text-xs">Modified</Badge>
@@ -1944,7 +1939,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                               </div>
                               <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
                                 <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                                <span>{event.timeTBD ? "Time TBD" : formatTimeRange(event.startTime, event.endTime, userTimezone)}</span>
+                                <span>{event.timeTBD ? "Time TBD" : formatTimeRange(event.startTime, event.endTime)}</span>
                               </div>
                               {event.address ? (
                                 <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
@@ -2060,7 +2055,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                 </div>
                                 <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
                                   <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                                  <span>{firstOccurrence.timeTBD ? "Time TBD" : formatTimeRange(firstOccurrence.startTime, firstOccurrence.endTime, userTimezone)}</span>
+                                  <span>{firstOccurrence.timeTBD ? "Time TBD" : formatTimeRange(firstOccurrence.startTime, firstOccurrence.endTime)}</span>
                                 </div>
                                 {firstOccurrence.address ? (
                                   <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
@@ -2154,7 +2149,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                           <Calendar className="h-4 w-4 text-primary flex-shrink-0" aria-hidden="true" />
                                           <span className="font-medium text-sm">{formatDateRange(occurrence.date, occurrence.endDate)}</span>
                                           <span className="text-sm text-muted-foreground">
-                                            {occurrence.timeTBD ? "Time TBD" : formatTimeRange(occurrence.startTime, occurrence.endTime, userTimezone)}
+                                            {occurrence.timeTBD ? "Time TBD" : formatTimeRange(occurrence.startTime, occurrence.endTime)}
                                           </span>
                                           {occurrence.isModified && (
                                             <Badge variant="outline" className="text-xs">Modified</Badge>
@@ -2248,7 +2243,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                               </div>
                               <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
                                 <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                                <span>{event.timeTBD ? "Time TBD" : formatTimeRange(event.startTime, event.endTime, userTimezone)}</span>
+                                <span>{event.timeTBD ? "Time TBD" : formatTimeRange(event.startTime, event.endTime)}</span>
                               </div>
                               {event.address ? (
                                 <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
@@ -2334,7 +2329,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                 </div>
                                 <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
                                   <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                                  <span>{firstOccurrence.timeTBD ? "Time TBD" : formatTimeRange(firstOccurrence.startTime, firstOccurrence.endTime, userTimezone)}</span>
+                                  <span>{firstOccurrence.timeTBD ? "Time TBD" : formatTimeRange(firstOccurrence.startTime, firstOccurrence.endTime)}</span>
                                 </div>
                                 {firstOccurrence.address ? (
                                   <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
@@ -2399,7 +2394,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                           <Calendar className="h-4 w-4 text-primary flex-shrink-0" aria-hidden="true" />
                                           <span className="font-medium text-sm">{formatDateRange(occurrence.date, occurrence.endDate)}</span>
                                           <span className="text-sm text-muted-foreground">
-                                            {occurrence.timeTBD ? "Time TBD" : formatTimeRange(occurrence.startTime, occurrence.endTime, userTimezone)}
+                                            {occurrence.timeTBD ? "Time TBD" : formatTimeRange(occurrence.startTime, occurrence.endTime)}
                                           </span>
                                         </div>
                                         <Button variant="ghost" size="sm" asChild>
@@ -2602,7 +2597,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                     </div>
                                     <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
                                       <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                                      <span>{event.timeTBD ? "Time TBD" : formatTimeRange(event.startTime, event.endTime, userTimezone)}</span>
+                                      <span>{event.timeTBD ? "Time TBD" : formatTimeRange(event.startTime, event.endTime)}</span>
                                     </div>
                                     {event.address ? (
                                       <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
@@ -2699,7 +2694,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                       </div>
                                       <div className="flex items-center gap-2 text-sm text-muted-foreground lg:justify-end">
                                         <Clock className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                                        <span>{firstOccurrence.timeTBD ? "Time TBD" : formatTimeRange(firstOccurrence.startTime, firstOccurrence.endTime, userTimezone)}</span>
+                                        <span>{firstOccurrence.timeTBD ? "Time TBD" : formatTimeRange(firstOccurrence.startTime, firstOccurrence.endTime)}</span>
                                       </div>
                                       {firstOccurrence.address ? (
                                         <div className="flex items-start gap-2 text-sm text-muted-foreground lg:justify-end">
@@ -2775,7 +2770,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                                 <Calendar className="h-4 w-4 text-primary flex-shrink-0" aria-hidden="true" />
                                                 <span className="font-medium text-sm">{formatDateRange(occurrence.date, occurrence.endDate)}</span>
                                                 <span className="text-sm text-muted-foreground">
-                                                  {occurrence.timeTBD ? "Time TBD" : formatTimeRange(occurrence.startTime, occurrence.endTime, userTimezone)}
+                                                  {occurrence.timeTBD ? "Time TBD" : formatTimeRange(occurrence.startTime, occurrence.endTime)}
                                                 </span>
                                                 {occurrence.isModified && (
                                                   <Badge variant="outline" className="text-xs">Modified</Badge>

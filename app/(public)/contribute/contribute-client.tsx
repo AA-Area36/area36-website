@@ -334,9 +334,9 @@ export function ContributeClient({
             <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
               {[
                 {
-                  percent: t("groupContributions.split.district.percent", "50%"),
-                  recipient: t("groupContributions.split.district.recipient", "District"),
-                  description: t("groupContributions.split.district.description", "Local service"),
+                  percent: t("groupContributions.split.intergroup.percent", "50%"),
+                  recipient: t("groupContributions.split.intergroup.recipient", "Intergroup"),
+                  description: t("groupContributions.split.intergroup.description", "Local coordination"),
                 },
                 {
                   percent: t("groupContributions.split.area.percent", "30%"),
@@ -344,9 +344,9 @@ export function ContributeClient({
                   description: t("groupContributions.split.area.description", "Regional service"),
                 },
                 {
-                  percent: t("groupContributions.split.intergroup.percent", "10%"),
-                  recipient: t("groupContributions.split.intergroup.recipient", "Intergroup"),
-                  description: t("groupContributions.split.intergroup.description", "Local coordination"),
+                  percent: t("groupContributions.split.district.percent", "10%"),
+                  recipient: t("groupContributions.split.district.recipient", "District"),
+                  description: t("groupContributions.split.district.description", "Local service"),
                 },
                 {
                   percent: t("groupContributions.split.gso.percent", "10%"),

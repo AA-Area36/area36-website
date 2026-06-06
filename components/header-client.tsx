@@ -34,6 +34,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Logo } from "@/components/logo"
 
+const OPEN_IN_NEW_TAB_TEXT = " (opens in new tab)"
+
 export type HeaderNavItem = {
   name: string
   href: string
@@ -274,6 +276,7 @@ export function HeaderClient({
                 <DropdownMenu key={item.name}>
                   <DropdownMenuTrigger asChild>
                     <button
+                      type="button"
                       className={cn(
                         "flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md transition-colors",
                         pathname.startsWith(item.href) ||
@@ -281,9 +284,7 @@ export function HeaderClient({
                           ? "bg-primary/10 text-primary"
                           : "text-muted-foreground hover:text-foreground hover:bg-muted",
                       )}
-                      aria-current={
-                        isChildActive(item.children) ? "true" : undefined
-                      }
+                      aria-current={isChildActive(item.children) ? "page" : undefined}
                     >
                       {item.name}
                       <ChevronDown className="h-4 w-4" aria-hidden="true" />
@@ -296,6 +297,7 @@ export function HeaderClient({
               ) : (
                 // Render a placeholder during SSR to prevent hydration mismatch
                 <button
+                  type="button"
                   key={item.name}
                   className={cn(
                     "flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md transition-colors",
@@ -318,6 +320,7 @@ export function HeaderClient({
                 className="px-3 py-2 text-sm font-medium rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
               >
                 {item.name}
+                <span className="sr-only">{OPEN_IN_NEW_TAB_TEXT}</span>
               </a>
             ) : (
               <Link
@@ -388,6 +391,7 @@ export function HeaderClient({
               <div key={item.name}>
                 {itemIndex > 0 && <div className="border-t border-border/50 my-2" />}
                 <button
+                  type="button"
                   data-mobile-group
                   onClick={() => toggleGroup(item.name)}
                   className={cn(
@@ -445,6 +449,7 @@ export function HeaderClient({
                     className="block px-4 py-3 text-base font-medium rounded-md transition-colors text-muted-foreground hover:text-foreground hover:bg-muted"
                   >
                     {item.name}
+                    <span className="sr-only">{OPEN_IN_NEW_TAB_TEXT}</span>
                   </a>
                 ) : (
                   <Link
