@@ -54,6 +54,7 @@ export const eventTypes = [
   "Meeting",
   "Committee",
   "District",
+  "District Report",
 ] as const
 
 export const eventStatuses = ["pending", "approved", "denied"] as const

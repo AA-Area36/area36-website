@@ -45,6 +45,7 @@ const eventTypeColors: Record<string, string> = {
   Meeting: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
   Committee: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
   District: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
+  "District Report": "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
 }
 
 const eventTypeOptions = eventTypes.map((type) => ({

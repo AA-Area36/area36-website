@@ -1,6 +1,6 @@
 import { getDb } from "@/lib/db"
 import { events, eventToTypes, eventFlyers, eventExceptions, type EventStatus, type EventType, type EventFlyer, type EventException } from "@/lib/db/schema"
-import { desc, eq } from "drizzle-orm"
+import { desc } from "drizzle-orm"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -74,6 +74,7 @@ const eventTypeColors: Record<string, string> = {
   Meeting: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
   Committee: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
   District: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
+  "District Report": "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
 }
 
 function formatDate(dateString: string) {
@@ -283,7 +284,7 @@ function EventCard({
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Clock className="h-4 w-4" />
-                <span>{formatTimeRange(event.startTime, event.endTime, event.timezone)}</span>
+                <span>{formatTimeRange(event.startTime, event.endTime)}</span>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <MapPin className="h-4 w-4" />

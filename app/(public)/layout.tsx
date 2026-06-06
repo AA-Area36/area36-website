@@ -12,7 +12,7 @@ export default function PublicLayout({
     <div className="flex min-h-screen flex-col">
       <AnnouncementBanner />
       <Header />
-      <main id="main-content" className="flex-1">
+      <main id="main-content" tabIndex={-1} className="flex-1">
         <Breadcrumbs />
         {children}
       </main>
