@@ -26,7 +26,7 @@ import { FlyerUpload, type FlyerFile } from "@/components/flyer-upload"
 import { RecurrenceOptions } from "@/components/recurrence-options"
 import { Pencil, Loader2 } from "lucide-react"
 import { updateEvent, updateRecurringEvent, type UpdateEventData } from "./actions"
-import { uploadEventFlyer, deleteEventFlyer } from "@/app/(public)/events/flyer-actions"
+import { deleteEventFlyer } from "@/app/(public)/events/flyer-actions"
 import { eventTypes, locationTypes, type Event, type LocationType, type EventType, type EventFlyer, type EventException } from "@/lib/db/schema"
 import { TIMEZONES } from "@/lib/timezone"
 import type { RecurrenceConfig } from "@/lib/types/recurrence"
@@ -409,20 +409,26 @@ export function EditEventDialog({ event }: EditEventDialogProps) {
               onUpload={async (file) => {
                 const formData = new FormData()
                 formData.append("file", file)
-                const result = await uploadEventFlyer(event.id, formData)
-                if (result.success) {
-                  return {
-                    success: true,
-                    flyer: {
-                      id: result.flyer.id,
-                      fileKey: result.flyer.fileKey,
-                      fileName: result.flyer.fileName,
-                      fileType: result.flyer.fileType,
-                      fileSize: result.flyer.fileSize,
-                    },
+
+                try {
+                  const response = await fetch(`/api/admin/events/${encodeURIComponent(event.id)}/flyers`, {
+                    method: "POST",
+                    body: formData,
+                  })
+                  const result = (await response.json()) as {
+                    success: boolean
+                    flyer?: FlyerFile
+                    error?: string
                   }
+
+                  if (!response.ok || !result.success || !result.flyer) {
+                    return { success: false, error: result.error || "Failed to upload file" }
+                  }
+
+                  return { success: true, flyer: result.flyer }
+                } catch {
+                  return { success: false, error: "Failed to upload file" }
                 }
-                return { success: false, error: result.error }
               }}
               onDelete={async (flyerId) => {
                 const result = await deleteEventFlyer(flyerId)
