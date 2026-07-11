@@ -37,3 +37,10 @@ export async function uploadSelectedFlyers(
 
   return { failed, errors }
 }
+
+export function shouldResetEventSubmissionOnOpen(
+  open: boolean,
+  pendingUpload: { eventId: string } | null
+): boolean {
+  return open && pendingUpload === null
+}

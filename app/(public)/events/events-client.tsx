@@ -27,7 +27,7 @@ import { RecurrenceOptions } from "@/components/recurrence-options"
 import { DateRange } from "react-day-picker"
 import type { RecurrenceConfig } from "@/lib/types/recurrence"
 import { submitEvent } from "./actions"
-import { uploadSelectedFlyers } from "./upload-selected-flyers"
+import { shouldResetEventSubmissionOnOpen, uploadSelectedFlyers } from "./upload-selected-flyers"
 import { uploadEventFlyer } from "./flyer-actions"
 import { AnnualCalendarSection } from "./annual-calendar-section"
 import type { CalendarFile } from "./calendar-file-actions"
@@ -1053,7 +1053,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
 
                 {/* Submit Event Dialog */}
                 <Dialog open={submitDialogOpen} onOpenChange={(open) => {
-                  if (open) {
+                  if (shouldResetEventSubmissionOnOpen(open, pendingFlyerUpload)) {
                     // Reset form when opening to clear any previous state
                     resetForm()
                   }

@@ -19,6 +19,9 @@ export type RateLimitResult = {
 }
 
 const RATE_LIMIT_STORE_KEY = "__rate_limit_store__"
+const RATE_LIMIT_CLEANUP_KEY = "__rate_limit_cleanup_at__"
+const RATE_LIMIT_CLEANUP_INTERVAL_MS = 15 * 60 * 1000
+const RATE_LIMIT_CLEANUP_BATCH_SIZE = 250
 
 function getStore(): Map<string, RateLimitState> {
   const globalStore = globalThis as unknown as {
@@ -28,6 +31,32 @@ function getStore(): Map<string, RateLimitState> {
     globalStore[RATE_LIMIT_STORE_KEY] = new Map()
   }
   return globalStore[RATE_LIMIT_STORE_KEY]!
+}
+
+function scheduleExpiredRowCleanup(
+  db: D1Database,
+  waitUntil: ((promise: Promise<unknown>) => void) | undefined,
+  now: number
+): void {
+  if (!waitUntil) return
+  const scope = globalThis as unknown as { [RATE_LIMIT_CLEANUP_KEY]?: number }
+  if ((scope[RATE_LIMIT_CLEANUP_KEY] ?? 0) + RATE_LIMIT_CLEANUP_INTERVAL_MS > now) return
+  scope[RATE_LIMIT_CLEANUP_KEY] = now
+
+  const cleanup = db
+    .prepare(
+      `DELETE FROM rate_limits
+       WHERE key_hash IN (
+         SELECT key_hash FROM rate_limits
+         WHERE reset_at < ?
+         ORDER BY reset_at
+         LIMIT ?
+       )`
+    )
+    .bind(now, RATE_LIMIT_CLEANUP_BATCH_SIZE)
+    .run()
+    .catch((error) => console.error("Expired rate-limit cleanup failed", error))
+  waitUntil(cleanup)
 }
 
 async function hashRateLimitKey(key: string): Promise<string> {
@@ -89,7 +118,7 @@ export async function checkRateLimit(
   const nextResetAt = now + windowMs
 
   try {
-    const { env } = await getCloudflareContext({ async: true })
+    const { env, ctx } = await getCloudflareContext({ async: true })
     if (!env.DB) throw new Error("D1 binding unavailable")
 
     const keyHash = await hashRateLimitKey(key)
@@ -112,6 +141,7 @@ export async function checkRateLimit(
       .first<{ count: number; resetAt: number }>()
 
     if (!row) throw new Error("D1 rate-limit update returned no row")
+    scheduleExpiredRowCleanup(env.DB, ctx?.waitUntil?.bind(ctx), now)
     return {
       ok: row.count <= limit,
       remaining: Math.max(0, limit - row.count),

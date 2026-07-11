@@ -13,7 +13,8 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare build && wrangler deploy",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "deploy": "opennextjs-cloudflare build && pnpm db:migrate:remote && wrangler deploy",
     "deploy:uptime": "wrangler deploy -c workers/uptime/wrangler.jsonc",
     "deploy:monthly-report": "wrangler deploy -c workers/monthly-report/wrangler.jsonc"
   },

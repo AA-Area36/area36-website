@@ -1,9 +1,10 @@
 // Committee files fetching from Google Drive
 
 import { listFolders, listAllFiles, getGDriveCredentials } from "./client"
-import { getFromCache, setInCache } from "./cache"
+import { withCache } from "./cache"
 import type { DriveFile, GDriveCredentials } from "./types"
 import { filterArchivedFolders } from "./archive"
+import { createConcurrencyLimiter } from "@/lib/utils/concurrency"
 
 export interface CommitteeFile {
   id: string
@@ -61,49 +62,41 @@ export async function getCommitteeFiles(
   committeesFolderId: string
 ): Promise<CommitteeFiles> {
   const cacheKey = `committee-files-${committeesFolderId}`
-  
-  // Try cache first
-  const cached = await getFromCache<CommitteeFiles>(cacheKey)
-  if (cached) {
-    return cached
-  }
 
-  const result: CommitteeFiles = {}
+  return withCache(cacheKey, async () => {
+    const result: CommitteeFiles = {}
+    const driveCall = createConcurrencyLimiter(4)
 
-  try {
-    // Get all subfolders (each represents a committee)
-    const folders = filterArchivedFolders(await listFolders(credentials, committeesFolderId))
+    try {
+      const folders = filterArchivedFolders(
+        await driveCall(() => listFolders(credentials, committeesFolderId))
+      )
 
-    // Fetch files from each folder in parallel
-    await Promise.all(
-      folders.map(async (folder) => {
-        const slug = slugifyCommitteeName(folder.name)
-        const files = await listAllFiles(credentials, folder.id, {
-          orderBy: "name",
+      await Promise.all(
+        folders.map(async (folder) => {
+          const slug = slugifyCommitteeName(folder.name)
+          const files = await driveCall(() => listAllFiles(credentials, folder.id, {
+            orderBy: "name",
+          }))
+
+          const documentFiles = files.filter(
+            (f) =>
+              f.mimeType === "application/pdf" ||
+              f.mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+              f.mimeType === "application/msword" ||
+              f.mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+              f.mimeType === "application/vnd.ms-excel"
+          )
+
+          result[slug] = documentFiles.map(mapDriveFileToCommitteeFile)
         })
-        
-        // Filter to only include PDF and document files
-        const documentFiles = files.filter(
-          (f) =>
-            f.mimeType === "application/pdf" ||
-            f.mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-            f.mimeType === "application/msword" ||
-            f.mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-            f.mimeType === "application/vnd.ms-excel"
-        )
+      )
+    } catch (error) {
+      console.error("Error fetching committee files:", error)
+    }
 
-        result[slug] = documentFiles.map(mapDriveFileToCommitteeFile)
-      })
-    )
-
-    // Cache for 5 minutes
-    await setInCache(cacheKey, result, { ttl: 300 })
-  } catch (error) {
-    console.error("Error fetching committee files:", error)
-    // Return empty result on error
-  }
-
-  return result
+    return result
+  }, { ttl: 300 })
 }
 
 /**

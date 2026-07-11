@@ -1,6 +1,6 @@
 // Caching utilities for Google Drive data
 // Uses Cloudflare Cache API for edge caching
-import { registerBackgroundWork, runSingleFlight } from "@/lib/cache/single-flight"
+import { registerBackgroundWork, runSharedSingleFlight } from "@/lib/cache/single-flight"
 
 const CACHE_PREFIX = "gdrive:"
 const DEFAULT_TTL = 60 * 60 // 1 hour in seconds (increased from 5 min)
@@ -110,10 +110,8 @@ export async function withCache<T>(
     if (staleData !== null) {
       // Return stale data immediately, refresh in background
       // Use waitUntil if available (Cloudflare Workers)
-      const refreshPromise = runSingleFlight(`gdrive:${key}`, async () => {
+      const refreshPromise = runSharedSingleFlight(`gdrive:${key}`, () => getFromCache<T>(key), async () => {
         try {
-          const newlyCached = await getFromCache<T>(key)
-          if (newlyCached !== null) return newlyCached
           const freshData = await fetcher()
           await Promise.all([
             setInCache(key, freshData, options),
@@ -124,7 +122,7 @@ export async function withCache<T>(
           console.error(`Background refresh failed for ${key}:`, error)
           return staleData
         }
-      })
+      }, { fallback: () => staleData })
       
       // Try to use waitUntil for background execution
       if (!(await registerBackgroundWork(refreshPromise))) {
@@ -136,10 +134,7 @@ export async function withCache<T>(
   }
 
   // No cache at all - must fetch
-  return runSingleFlight(`gdrive:${key}`, async () => {
-    const newlyCached = await getFromCache<T>(key)
-    if (newlyCached !== null) return newlyCached
-
+  return runSharedSingleFlight(`gdrive:${key}`, () => getFromCache<T>(key), async () => {
     const data = await fetcher()
     await Promise.all([
       setInCache(key, data, options),

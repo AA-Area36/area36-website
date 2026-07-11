@@ -93,7 +93,7 @@ function generateOccurrenceUID(eventId: string, occurrenceDate: string, domain: 
 /**
  * Generate iCal RRULE for recurring events
  */
-function generateRRule(event: Event): string | null {
+export function generateRRule(event: Event): string | null {
   if (!event.isRecurring || event.recurrenceType === "none") {
     return null
   }
@@ -144,7 +144,7 @@ function generateRRule(event: Event): string | null {
 /**
  * Generate EXDATE entries for cancelled occurrences
  */
-function generateExDates(
+export function generateExDates(
   event: Event,
   exceptions: EventException[]
 ): string[] {

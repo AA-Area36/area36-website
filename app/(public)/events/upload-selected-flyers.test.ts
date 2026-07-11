@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import type { FlyerFile } from "@/components/flyer-upload"
-import { uploadSelectedFlyers } from "./upload-selected-flyers"
+import { shouldResetEventSubmissionOnOpen, uploadSelectedFlyers } from "./upload-selected-flyers"
 
 function flyer(name: string): FlyerFile {
   const file = new File(["data"], name, { type: "application/pdf" })
@@ -23,5 +23,11 @@ describe("uploadSelectedFlyers", () => {
       "network.pdf: upload failed",
     ])
     expect(uploader).toHaveBeenCalledTimes(3)
+  })
+
+  it("preserves a pending retry when the submission dialog reopens", () => {
+    expect(shouldResetEventSubmissionOnOpen(true, { eventId: "event-1" })).toBe(false)
+    expect(shouldResetEventSubmissionOnOpen(true, null)).toBe(true)
+    expect(shouldResetEventSubmissionOnOpen(false, null)).toBe(false)
   })
 })

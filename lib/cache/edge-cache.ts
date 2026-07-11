@@ -1,5 +1,5 @@
 // Generic edge cache utilities using Cloudflare Cache API
-import { registerBackgroundWork, runSingleFlight } from "@/lib/cache/single-flight"
+import { registerBackgroundWork, runSharedSingleFlight } from "@/lib/cache/single-flight"
 
 const CACHE_PREFIX = "edge:"
 const DEFAULT_TTL = 60 * 5 // 5 minutes
@@ -81,10 +81,8 @@ export async function withEdgeCache<T>(
   if (staleWhileRevalidate) {
     const staleData = await getFromCache<T>(`${key}:stale`)
     if (staleData !== null) {
-      const refreshPromise = runSingleFlight(`edge:${key}`, async () => {
+      const refreshPromise = runSharedSingleFlight(`edge:${key}`, () => getFromCache<T>(key), async () => {
         try {
-          const newlyCached = await getFromCache<T>(key)
-          if (newlyCached !== null) return newlyCached
           const freshData = await fetcher()
           await Promise.all([
             setInCache(key, freshData, options),
@@ -95,7 +93,7 @@ export async function withEdgeCache<T>(
           console.error(`Edge cache background refresh failed for ${key}:`, error)
           return staleData
         }
-      })
+      }, { fallback: () => staleData })
 
       if (!(await registerBackgroundWork(refreshPromise))) {
         void refreshPromise.catch(() => undefined)
@@ -105,15 +103,15 @@ export async function withEdgeCache<T>(
     }
   }
 
-  return runSingleFlight(`edge:${key}`, async () => {
-    const newlyCached = await getFromCache<T>(key)
-    if (newlyCached !== null) return { data: newlyCached, status: "hit" as const }
-
+  const newlyCached = await getFromCache<T>(key)
+  if (newlyCached !== null) return { data: newlyCached, status: "hit" }
+  return runSharedSingleFlight(`edge:${key}`, () => getFromCache<T>(key), async () => {
     const data = await fetcher()
     await Promise.all([
       setInCache(key, data, options),
       setInCache(`${key}:stale`, data, { ttl: STALE_TTL }),
     ])
-    return { data, status: "miss" as const }
+    return data
   })
+    .then((data) => ({ data, status: "miss" as const }))
 }

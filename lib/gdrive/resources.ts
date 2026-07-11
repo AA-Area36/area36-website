@@ -7,6 +7,7 @@ import {
 import { withCache, CACHE_KEYS } from "./cache"
 import { filterArchivedFolders } from "./archive"
 import { isFolderRestricted } from "./restricted"
+import { createConcurrencyLimiter } from "@/lib/utils/concurrency"
 import type {
   Resource,
   ResourceCategory,
@@ -144,6 +145,7 @@ export async function getResources(
   return withCache(
     CACHE_KEYS.resources,
     async () => {
+      const driveCall = createConcurrencyLimiter(4)
       const result: ResourcesByCategory = {
         delegateReports: [],
         areaDocuments: [],
@@ -153,8 +155,8 @@ export async function getResources(
 
       // Get category subfolders and root files in parallel
       const [categoryFolders, rootFiles] = await Promise.all([
-        listFolders(credentials, resourcesFolderId),
-        listAllFiles(credentials, resourcesFolderId, { orderBy: "modifiedTime desc" }),
+        driveCall(() => listFolders(credentials, resourcesFolderId)),
+        driveCall(() => listAllFiles(credentials, resourcesFolderId, { orderBy: "modifiedTime desc" })),
       ])
       const visibleCategoryFolders = filterArchivedFolders(categoryFolders)
 
@@ -169,10 +171,10 @@ export async function getResources(
           }
 
           const [files, restricted] = await Promise.all([
-            listAllFiles(credentials, folder.id, {
+            driveCall(() => listAllFiles(credentials, folder.id, {
               orderBy: "modifiedTime desc",
-            }),
-            isFolderRestricted(credentials, folder.id),
+            })),
+            driveCall(() => isFolderRestricted(credentials, folder.id)),
           ])
 
           // Filter to only include actual files (not folders)

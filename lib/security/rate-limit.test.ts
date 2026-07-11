@@ -35,4 +35,21 @@ describe("shared rate limiting", () => {
     })
     vi.unstubAllEnvs()
   })
+
+  it("schedules bounded cleanup of expired shared counters", async () => {
+    const waitUntil = vi.fn()
+    const cleanupRun = vi.fn().mockResolvedValue({ success: true })
+    const prepare = vi.fn((sql: string) => ({
+      bind: (...args: unknown[]) => sql.includes("INSERT INTO rate_limits")
+        ? { first: vi.fn().mockResolvedValue({ count: 1, resetAt: 12345 }) }
+        : { run: cleanupRun, args },
+    }))
+    getCloudflareContext.mockResolvedValue({ env: { DB: { prepare } }, ctx: { waitUntil } })
+    const { checkRateLimit } = await import("./rate-limit")
+
+    await checkRateLimit("contact:cleanup", { limit: 3, windowMs: 60_000 })
+
+    expect(prepare.mock.calls.some(([sql]) => String(sql).includes("DELETE FROM rate_limits"))).toBe(true)
+    expect(waitUntil).toHaveBeenCalledTimes(1)
+  })
 })

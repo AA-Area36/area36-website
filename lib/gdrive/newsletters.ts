@@ -8,6 +8,7 @@ import {
 import { withCache, CACHE_KEYS } from "./cache"
 import type { Newsletter, DriveFile, GDriveCredentials } from "./types"
 import { filterArchivedFolders } from "./archive"
+import { createConcurrencyLimiter } from "@/lib/utils/concurrency"
 
 // Month name to number mapping
 const MONTH_MAP: Record<string, number> = {
@@ -183,13 +184,14 @@ export async function getNewsletters(
   return withCache(
     CACHE_KEYS.newsletters,
     async () => {
+      const driveCall = createConcurrencyLimiter(4)
       // Get year subfolders and root files in parallel
       const [yearFolders, rootFiles] = await Promise.all([
-        listFolders(credentials, newslettersFolderId),
-        listAllFiles(credentials, newslettersFolderId, {
+        driveCall(() => listFolders(credentials, newslettersFolderId)),
+        driveCall(() => listAllFiles(credentials, newslettersFolderId, {
           mimeType: "application/pdf",
           orderBy: "name desc",
-        }),
+        })),
       ])
       const visibleYearFolders = filterArchivedFolders(yearFolders)
 
@@ -199,10 +201,10 @@ export async function getNewsletters(
           .filter((folder) => /^20\d{2}$/.test(folder.name.trim()))
           .map(async (folder) => {
             const folderYear = parseInt(folder.name, 10)
-            const files = await listAllFiles(credentials, folder.id, {
+            const files = await driveCall(() => listAllFiles(credentials, folder.id, {
               mimeType: "application/pdf",
               orderBy: "name desc",
-            })
+            }))
             return { files, folderYear }
           })
       )
