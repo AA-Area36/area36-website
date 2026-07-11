@@ -85,7 +85,7 @@ export async function submitNewcomerForm(data: NewcomerFormData) {
   }
 
   const ip = await getClientIp()
-  const rateLimit = checkRateLimit(`treatment:newcomer:${ip}`, {
+  const rateLimit = await checkRateLimit(`treatment:newcomer:${ip}`, {
     limit: 5,
     windowMs: 10 * 60 * 1000,
   })
@@ -153,7 +153,7 @@ export async function submitVolunteerForm(data: VolunteerFormData) {
   }
 
   const ip = await getClientIp()
-  const rateLimit = checkRateLimit(`treatment:volunteer:${ip}`, {
+  const rateLimit = await checkRateLimit(`treatment:volunteer:${ip}`, {
     limit: 5,
     windowMs: 10 * 60 * 1000,
   })

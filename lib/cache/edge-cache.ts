@@ -1,4 +1,5 @@
 // Generic edge cache utilities using Cloudflare Cache API
+import { registerBackgroundWork, runSingleFlight } from "@/lib/cache/single-flight"
 
 const CACHE_PREFIX = "edge:"
 const DEFAULT_TTL = 60 * 5 // 5 minutes
@@ -80,39 +81,39 @@ export async function withEdgeCache<T>(
   if (staleWhileRevalidate) {
     const staleData = await getFromCache<T>(`${key}:stale`)
     if (staleData !== null) {
-      const refreshPromise = (async () => {
+      const refreshPromise = runSingleFlight(`edge:${key}`, async () => {
         try {
+          const newlyCached = await getFromCache<T>(key)
+          if (newlyCached !== null) return newlyCached
           const freshData = await fetcher()
           await Promise.all([
             setInCache(key, freshData, options),
             setInCache(`${key}:stale`, freshData, { ttl: STALE_TTL }),
           ])
+          return freshData
         } catch (error) {
           console.error(`Edge cache background refresh failed for ${key}:`, error)
+          return staleData
         }
-      })()
+      })
 
-      try {
-        const { getCloudflareContext } = await import("@opennextjs/cloudflare")
-        const ctx = await getCloudflareContext({ async: true })
-        if (ctx.ctx?.waitUntil) {
-          ctx.ctx.waitUntil(refreshPromise)
-        }
-      } catch {
-        // Not in Cloudflare context, ignore
+      if (!(await registerBackgroundWork(refreshPromise))) {
+        void refreshPromise.catch(() => undefined)
       }
 
       return { data: staleData, status: "stale" }
     }
   }
 
-  const data = await fetcher()
-  Promise.all([
-    setInCache(key, data, options),
-    setInCache(`${key}:stale`, data, { ttl: STALE_TTL }),
-  ]).catch(() => {
-    // Ignore cache errors
-  })
+  return runSingleFlight(`edge:${key}`, async () => {
+    const newlyCached = await getFromCache<T>(key)
+    if (newlyCached !== null) return { data: newlyCached, status: "hit" as const }
 
-  return { data, status: "miss" }
+    const data = await fetcher()
+    await Promise.all([
+      setInCache(key, data, options),
+      setInCache(`${key}:stale`, data, { ttl: STALE_TTL }),
+    ])
+    return { data, status: "miss" as const }
+  })
 }

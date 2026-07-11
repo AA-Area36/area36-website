@@ -17,12 +17,16 @@ interface MultiSelectOption {
   color?: string
 }
 
-interface MultiSelectProps {
+interface MultiSelectProps extends Pick<
+  React.AriaAttributes,
+  "aria-label" | "aria-labelledby" | "aria-describedby" | "aria-invalid"
+> {
   options: MultiSelectOption[]
   value: string[]
   onChange: (value: string[]) => void
   placeholder?: string
   className?: string
+  id?: string
 }
 
 export function MultiSelect({
@@ -31,10 +35,16 @@ export function MultiSelect({
   onChange,
   placeholder = "Select...",
   className,
+  id,
+  "aria-label": ariaLabel,
+  "aria-labelledby": ariaLabelledBy,
+  "aria-describedby": ariaDescribedBy,
+  "aria-invalid": ariaInvalid,
 }: MultiSelectProps) {
   const [open, setOpen] = React.useState(false)
   const triggerId = React.useId()
   const listboxId = React.useId()
+  const resolvedTriggerId = id ?? triggerId
   const [activeIndex, setActiveIndex] = React.useState(0)
   const selectAllRef = React.useRef<HTMLDivElement | null>(null)
   const optionRefs = React.useRef<Array<HTMLDivElement | null>>([])
@@ -140,12 +150,16 @@ export function MultiSelect({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
-          id={triggerId}
+          id={resolvedTriggerId}
           variant="outline"
           role="combobox"
           aria-expanded={open}
           aria-controls={listboxId}
           aria-haspopup="listbox"
+          aria-label={ariaLabel}
+          aria-labelledby={ariaLabelledBy}
+          aria-describedby={ariaDescribedBy}
+          aria-invalid={ariaInvalid}
           className={cn(
             "h-9 justify-between font-normal",
             !value.length && "text-muted-foreground",
@@ -162,7 +176,7 @@ export function MultiSelect({
         id={listboxId}
         role="listbox"
         aria-multiselectable="true"
-        aria-labelledby={triggerId}
+        aria-labelledby={ariaLabelledBy ?? resolvedTriggerId}
         onKeyDown={handleListKeyDown}
       >
         <div className="max-h-[300px] overflow-auto">

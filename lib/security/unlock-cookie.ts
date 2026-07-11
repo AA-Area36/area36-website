@@ -94,6 +94,8 @@ export async function signUnlockCookie(ids: string[]): Promise<string | null> {
 type UnlockTokenPayload = { v: 2 | 3; id: string; iat: number }
 
 export const FILE_UNLOCK_TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+export const UNLOCK_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000
 
 /**
  * Create a signed, short-lived token granting access to a single file.
@@ -178,9 +180,17 @@ export async function verifyUnlockCookie(
   try {
     const payloadJson = textDecoder.decode(base64UrlDecode(payloadB64))
     const payload = JSON.parse(payloadJson) as UnlockCookiePayload
-    if (!payload || payload.v !== 1 || !Array.isArray(payload.ids)) {
+    if (
+      !payload ||
+      payload.v !== 1 ||
+      !Array.isArray(payload.ids) ||
+      typeof payload.iat !== "number" ||
+      !Number.isFinite(payload.iat)
+    ) {
       return null
     }
+    const age = Date.now() - payload.iat
+    if (age < -MAX_CLOCK_SKEW_MS || age > UNLOCK_COOKIE_MAX_AGE_MS) return null
     return payload
   } catch {
     return null

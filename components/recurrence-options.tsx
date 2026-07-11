@@ -224,13 +224,17 @@ export function RecurrenceOptions({
 
       {/* Recurrence Type */}
       <div className="space-y-2">
-        <Label>Repeat</Label>
+        <Label htmlFor="recurrenceType">Repeat</Label>
         <Select
           value={value.recurrenceType}
           onValueChange={(v) => handleTypeChange(v as "weekly" | "monthly")}
           disabled={disabled}
         >
-          <SelectTrigger>
+          <SelectTrigger
+            id="recurrenceType"
+            aria-invalid={errors.recurrenceType ? true : undefined}
+            aria-describedby={errors.recurrenceType ? "recurrenceType-error" : undefined}
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -239,7 +243,7 @@ export function RecurrenceOptions({
           </SelectContent>
         </Select>
         {errors.recurrenceType && (
-          <p className="text-sm text-destructive">{errors.recurrenceType}</p>
+          <p id="recurrenceType-error" className="text-sm text-destructive">{errors.recurrenceType}</p>
         )}
       </div>
 
@@ -262,8 +266,13 @@ export function RecurrenceOptions({
 
       {/* Monthly Pattern - Two options based on start date */}
       {value.recurrenceType === "monthly" && (
-        <div className="space-y-3">
-          <Label>Monthly pattern</Label>
+        <div
+          className="space-y-3"
+          role="group"
+          aria-labelledby="monthlyPattern-label"
+          aria-describedby={errors.monthlyPattern ? "monthlyPattern-error" : undefined}
+        >
+          <Label id="monthlyPattern-label">Monthly pattern</Label>
           <div className="space-y-2">
             {/* Day of Month Option */}
             <label className="flex items-center gap-3 cursor-pointer p-3 rounded-md border bg-background hover:bg-muted/50 transition-colors">
@@ -273,6 +282,7 @@ export function RecurrenceOptions({
                 checked={value.monthlyPattern?.type === "dayOfMonth"}
                 onChange={() => handleMonthlyPatternTypeChange("dayOfMonth")}
                 disabled={disabled}
+                aria-describedby={errors.monthlyPattern ? "monthlyPattern-error" : undefined}
                 className="h-4 w-4 text-primary focus:ring-primary"
               />
               <span className="text-sm">{dayOfMonthLabel}</span>
@@ -286,6 +296,7 @@ export function RecurrenceOptions({
                 checked={value.monthlyPattern?.type === "dayOfWeek"}
                 onChange={() => handleMonthlyPatternTypeChange("dayOfWeek")}
                 disabled={disabled}
+                aria-describedby={errors.monthlyPattern ? "monthlyPattern-error" : undefined}
                 className="h-4 w-4 text-primary focus:ring-primary"
               />
               <span className="text-sm">{dayOfWeekLabel}</span>
@@ -295,7 +306,7 @@ export function RecurrenceOptions({
             Based on your selected start date
           </p>
           {errors.monthlyPattern && (
-            <p className="text-sm text-destructive">{errors.monthlyPattern}</p>
+            <p id="monthlyPattern-error" className="text-sm text-destructive">{errors.monthlyPattern}</p>
           )}
         </div>
       )}
@@ -311,11 +322,13 @@ export function RecurrenceOptions({
           min={minRecurUntil}
           max={maxRecurUntil}
           disabled={disabled}
+          aria-invalid={errors.recurUntil ? true : undefined}
+          aria-describedby={errors.recurUntil ? "recurUntil-error" : "recurUntil-help"}
         />
         {errors.recurUntil ? (
-          <p className="text-sm text-destructive">{errors.recurUntil}</p>
+          <p id="recurUntil-error" className="text-sm text-destructive">{errors.recurUntil}</p>
         ) : (
-          <p className="text-xs text-muted-foreground">
+          <p id="recurUntil-help" className="text-xs text-muted-foreground">
             Maximum 2 years from start date
           </p>
         )}

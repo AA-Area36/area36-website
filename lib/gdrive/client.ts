@@ -5,6 +5,7 @@ import type { DriveFile, DriveListResponse, GDriveCredentials } from "./types"
 import { logger, PerformanceTracker } from "@/lib/logger"
 
 const DRIVE_API_BASE = "https://www.googleapis.com/drive/v3"
+const DRIVE_REQUEST_TIMEOUT_MS = 10_000
 
 // Track API call counts for resource limit debugging
 let globalApiCallCount = 0
@@ -59,6 +60,7 @@ async function driveRequest<T>(
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
+      signal: AbortSignal.timeout(DRIVE_REQUEST_TIMEOUT_MS),
     })
 
     // Handle 401 by clearing cache and retrying once

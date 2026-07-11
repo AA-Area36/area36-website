@@ -58,7 +58,7 @@ export async function submitEvent(data: EventSubmissionWithRecurrenceData) {
   }
 
   const ip = await getClientIp()
-  const rateLimit = checkRateLimit(`event:${ip}`, {
+  const rateLimit = await checkRateLimit(`event:${ip}`, {
     limit: 3,
     windowMs: 10 * 60 * 1000,
   })

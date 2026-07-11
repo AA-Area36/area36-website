@@ -27,6 +27,7 @@ import { RecurrenceOptions } from "@/components/recurrence-options"
 import { DateRange } from "react-day-picker"
 import type { RecurrenceConfig } from "@/lib/types/recurrence"
 import { submitEvent } from "./actions"
+import { uploadSelectedFlyers } from "./upload-selected-flyers"
 import { uploadEventFlyer } from "./flyer-actions"
 import { AnnualCalendarSection } from "./annual-calendar-section"
 import type { CalendarFile } from "./calendar-file-actions"
@@ -371,6 +372,10 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [submitMessage, setSubmitMessage] = React.useState<{ type: "success" | "error"; text: string } | null>(null)
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({})
+  const [pendingFlyerUpload, setPendingFlyerUpload] = React.useState<{
+    eventId: string
+    uploadToken?: string
+  } | null>(null)
   const [selectedTimezone, setSelectedTimezone] = React.useState(DEFAULT_TIMEZONE)
   const [locationType, setLocationType] = React.useState<LocationType>("in-person")
   // TBD flags
@@ -388,6 +393,10 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
   })
   // Track the start date for recurrence options
   const [formStartDate, setFormStartDate] = React.useState("")
+  const getFieldErrorProps = (field: string) => ({
+    "aria-invalid": fieldErrors[field] ? true : undefined,
+    "aria-describedby": fieldErrors[field] ? `${field}-error` : undefined,
+  })
   // Track which recurring event groups are expanded
   const [expandedGroups, setExpandedGroups] = React.useState<Set<string>>(new Set())
   const [expandedPastGroups, setExpandedPastGroups] = React.useState<Set<string>>(new Set())
@@ -450,6 +459,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
     setMeetingLinkTBD(false)
     setSubmissionEventTypes([])
     setFlyerFiles([])
+    setPendingFlyerUpload(null)
     setRecurrenceConfig({ isRecurring: false, recurrenceType: "none" })
     setFormStartDate("")
   }, [])
@@ -853,6 +863,26 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
     setFieldErrors({})
 
     try {
+      if (pendingFlyerUpload) {
+        const retryResult = await uploadSelectedFlyers(
+          pendingFlyerUpload.eventId,
+          pendingFlyerUpload.uploadToken,
+          flyerFiles,
+          uploadEventFlyer
+        )
+        if (retryResult.failed.length > 0) {
+          setFlyerFiles(retryResult.failed)
+          setSubmitMessage({
+            type: "error",
+            text: `The event is submitted, but ${retryResult.failed.length} flyer upload${retryResult.failed.length === 1 ? "" : "s"} still failed: ${retryResult.errors.join("; ")}`,
+          })
+        } else {
+          resetForm()
+          setSubmitMessage({ type: "success", text: "Your event and flyers were submitted for review." })
+        }
+        return
+      }
+
       if (!executeRecaptcha) {
         setSubmitMessage({ type: "error", text: "reCAPTCHA not loaded. Please refresh and try again." })
         setIsSubmitting(false)
@@ -890,32 +920,24 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
       const result = await submitEvent(data)
 
       if (result.success && result.eventId) {
-        // Upload flyers if any were selected
-        if (flyerFiles.length > 0) {
-          for (const flyer of flyerFiles) {
-            if (flyer.file) {
-              const flyerFormData = new FormData()
-              flyerFormData.append("file", flyer.file)
-              if (result.uploadToken) {
-                flyerFormData.append("uploadToken", result.uploadToken)
-              }
-              await uploadEventFlyer(result.eventId, flyerFormData)
-            }
-          }
+        const uploadResult = await uploadSelectedFlyers(
+          result.eventId,
+          result.uploadToken,
+          flyerFiles,
+          uploadEventFlyer
+        )
+        if (uploadResult.failed.length > 0) {
+          setPendingFlyerUpload({ eventId: result.eventId, uploadToken: result.uploadToken })
+          setFlyerFiles(uploadResult.failed)
+          setSubmitMessage({
+            type: "error",
+            text: `Your event was submitted, but ${uploadResult.failed.length} flyer upload${uploadResult.failed.length === 1 ? "" : "s"} failed: ${uploadResult.errors.join("; ")}. Use “Retry flyer uploads” below; do not submit the event again.`,
+          })
+          return
         }
 
         // Reset form but keep the success message visible
-        formRef.current?.reset()
-        setFieldErrors({})
-        setSelectedTimezone(DEFAULT_TIMEZONE)
-        setLocationType("in-person")
-        setTimeTBD(false)
-        setAddressTBD(false)
-        setMeetingLinkTBD(false)
-        setSubmissionEventTypes([])
-        setFlyerFiles([])
-        setRecurrenceConfig({ isRecurring: false, recurrenceType: "none" })
-        setFormStartDate("")
+        resetForm()
         setSubmitMessage({ type: "success", text: result.message! })
       } else {
         setSubmitMessage({ type: "error", text: result.error! })
@@ -926,9 +948,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
     } catch (error) {
       console.error("Event submission error:", error)
       setSubmitMessage({ type: "error", text: `Error: ${error instanceof Error ? error.message : "Unknown error"}` })
+    } finally {
+      setIsSubmitting(false)
     }
-
-    setIsSubmitting(false)
   }
 
   return (
@@ -1051,7 +1073,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                       </DialogDescription>
                     </DialogHeader>
                     {submitMessage?.type === "success" ? (
-                      <div className="py-6 text-center">
+                      <div className="py-6 text-center" role="status" aria-live="polite">
                         <div className="mx-auto w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-4">
                           <svg className="w-6 h-6 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -1066,7 +1088,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                     ) : (
                       <form ref={formRef} onSubmit={handleSubmit} className="space-y-4 mt-4">
                         {submitMessage?.type === "error" && (
-                          <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+                          <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm" role="alert" aria-live="assertive">
                             {submitMessage.text}
                           </div>
                         )}
@@ -1077,10 +1099,10 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                             name="eventTitle"
                             placeholder="e.g., District 5 Workshop"
                             required
-                            aria-invalid={!!fieldErrors.title}
+                            {...getFieldErrorProps("title")}
                           />
                           {fieldErrors.title && (
-                            <p className="text-sm text-destructive">{fieldErrors.title}</p>
+                            <p id="title-error" className="text-sm text-destructive">{fieldErrors.title}</p>
                           )}
                         </div>
                         <div className="grid grid-cols-2 gap-4">
@@ -1091,11 +1113,11 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                               name="eventDate"
                               type="date"
                               required
-                              aria-invalid={!!fieldErrors.date}
+                              {...getFieldErrorProps("date")}
                               onChange={(e) => setFormStartDate(e.target.value)}
                             />
                             {fieldErrors.date && (
-                              <p className="text-sm text-destructive">{fieldErrors.date}</p>
+                              <p id="date-error" className="text-sm text-destructive">{fieldErrors.date}</p>
                             )}
                           </div>
                           <div className="space-y-2">
@@ -1104,10 +1126,10 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                               id="eventEndDate"
                               name="eventEndDate"
                               type="date"
-                              aria-invalid={!!fieldErrors.endDate}
+                              {...getFieldErrorProps("endDate")}
                             />
                             {fieldErrors.endDate && (
-                              <p className="text-sm text-destructive">{fieldErrors.endDate}</p>
+                              <p id="endDate-error" className="text-sm text-destructive">{fieldErrors.endDate}</p>
                             )}
                           </div>
                         </div>
@@ -1130,10 +1152,10 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                               name="startTime"
                               disabled={timeTBD}
                               required={!timeTBD}
-                              aria-invalid={!!fieldErrors.startTime}
+                              {...getFieldErrorProps("startTime")}
                             />
                             {fieldErrors.startTime && (
-                              <p className="text-sm text-destructive">{fieldErrors.startTime}</p>
+                              <p id="startTime-error" className="text-sm text-destructive">{fieldErrors.startTime}</p>
                             )}
                           </div>
                           <div className="space-y-2">
@@ -1145,17 +1167,17 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                               id="endTime"
                               name="endTime"
                               disabled={timeTBD}
-                              aria-invalid={!!fieldErrors.endTime}
+                              {...getFieldErrorProps("endTime")}
                             />
                             {fieldErrors.endTime && (
-                              <p className="text-sm text-destructive">{fieldErrors.endTime}</p>
+                              <p id="endTime-error" className="text-sm text-destructive">{fieldErrors.endTime}</p>
                             )}
                           </div>
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="eventTimezone">Timezone *</Label>
                           <Select value={selectedTimezone} onValueChange={setSelectedTimezone}>
-                            <SelectTrigger id="eventTimezone" aria-invalid={!!fieldErrors.timezone}>
+                            <SelectTrigger id="eventTimezone" {...getFieldErrorProps("timezone")}>
                               <SelectValue placeholder="Select timezone" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1167,13 +1189,13 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                             </SelectContent>
                           </Select>
                           {fieldErrors.timezone && (
-                            <p className="text-sm text-destructive">{fieldErrors.timezone}</p>
+                            <p id="timezone-error" className="text-sm text-destructive">{fieldErrors.timezone}</p>
                           )}
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="locationType">Location Type *</Label>
                           <Select value={locationType} onValueChange={(value) => setLocationType(value as LocationType)}>
-                            <SelectTrigger id="locationType" aria-invalid={!!fieldErrors.locationType}>
+                            <SelectTrigger id="locationType" {...getFieldErrorProps("locationType")}>
                               <SelectValue placeholder="Select location type" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1185,7 +1207,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                             </SelectContent>
                           </Select>
                           {fieldErrors.locationType && (
-                            <p className="text-sm text-destructive">{fieldErrors.locationType}</p>
+                            <p id="locationType-error" className="text-sm text-destructive">{fieldErrors.locationType}</p>
                           )}
                         </div>
                         {(locationType === "in-person" || locationType === "hybrid") && (
@@ -1206,10 +1228,10 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                               name="eventAddress"
                               placeholder="e.g., 123 Main St, City, MN 55555"
                               disabled={addressTBD}
-                              aria-invalid={!!fieldErrors.address}
+                              {...getFieldErrorProps("address")}
                             />
                             {fieldErrors.address ? (
-                              <p className="text-sm text-destructive">{fieldErrors.address}</p>
+                              <p id="address-error" className="text-sm text-destructive">{fieldErrors.address}</p>
                             ) : (
                               <p className="text-xs text-muted-foreground">
                                 Full street address including city, state, and zip
@@ -1236,10 +1258,10 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                               type="url"
                               placeholder="https://zoom.us/j/..."
                               disabled={meetingLinkTBD}
-                              aria-invalid={!!fieldErrors.meetingLink}
+                              {...getFieldErrorProps("meetingLink")}
                             />
                             {fieldErrors.meetingLink ? (
-                              <p className="text-sm text-destructive">{fieldErrors.meetingLink}</p>
+                              <p id="meetingLink-error" className="text-sm text-destructive">{fieldErrors.meetingLink}</p>
                             ) : (
                               <p className="text-xs text-muted-foreground">
                                 Zoom, Google Meet, or other video conference link
@@ -1248,16 +1270,17 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                           </div>
                         )}
                         <div className="space-y-2">
-                          <Label>Event Type(s) *</Label>
+                          <Label htmlFor="eventTypes">Event Type(s) *</Label>
                           <MultiSelect
+                            id="eventTypes"
                             options={eventTypeOptions}
                             value={submissionEventTypes}
                             onChange={setSubmissionEventTypes}
                             placeholder="Select event type(s)"
-                            aria-invalid={!!fieldErrors.types}
+                            {...getFieldErrorProps("types")}
                           />
                           {fieldErrors.types && (
-                            <p className="text-sm text-destructive">{fieldErrors.types}</p>
+                            <p id="types-error" className="text-sm text-destructive">{fieldErrors.types}</p>
                           )}
                           <p className="text-xs text-muted-foreground">
                             Select one or more event types
@@ -1271,10 +1294,10 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                             placeholder="Describe the event..."
                             rows={3}
                             required
-                            aria-invalid={!!fieldErrors.description}
+                            {...getFieldErrorProps("description")}
                           />
                           {fieldErrors.description && (
-                            <p className="text-sm text-destructive">{fieldErrors.description}</p>
+                            <p id="description-error" className="text-sm text-destructive">{fieldErrors.description}</p>
                           )}
                         </div>
                         <div className="space-y-2">
@@ -1294,10 +1317,10 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                             type="email"
                             placeholder="For follow-up questions"
                             required
-                            aria-invalid={!!fieldErrors.submitterEmail}
+                            {...getFieldErrorProps("submitterEmail")}
                           />
                           {fieldErrors.submitterEmail && (
-                            <p className="text-sm text-destructive">{fieldErrors.submitterEmail}</p>
+                            <p id="submitterEmail-error" className="text-sm text-destructive">{fieldErrors.submitterEmail}</p>
                           )}
                         </div>
                         <div className="space-y-2">
@@ -1323,7 +1346,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                             Cancel
                           </Button>
                           <Button type="submit" disabled={isSubmitting}>
-                            {isSubmitting ? "Submitting..." : "Submit for Review"}
+                            {isSubmitting
+                              ? pendingFlyerUpload ? "Retrying..." : "Submitting..."
+                              : pendingFlyerUpload ? "Retry flyer uploads" : "Submit for Review"}
                           </Button>
                         </div>
                       </form>

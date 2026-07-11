@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { createPortal } from "react-dom"
+import * as DialogPrimitive from "@radix-ui/react-dialog"
 import {
   FileText,
   ChevronLeft,
@@ -133,13 +133,7 @@ export function PDFViewer({
   // Handle keyboard navigation
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (isFullscreen) {
-          setIsFullscreen(false)
-        } else {
-          onClose()
-        }
-      } else if (e.key === "ArrowLeft" && canGoPrevious && onPrevious) {
+      if (e.key === "ArrowLeft" && canGoPrevious && onPrevious) {
         onPrevious()
       } else if (e.key === "ArrowRight" && canGoNext && onNext) {
         onNext()
@@ -148,7 +142,7 @@ export function PDFViewer({
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isFullscreen, canGoPrevious, canGoNext, onPrevious, onNext, onClose])
+  }, [canGoPrevious, canGoNext, onPrevious, onNext])
 
   // Lock body scroll while viewer is open
   React.useEffect(() => {
@@ -159,22 +153,28 @@ export function PDFViewer({
     }
   }, [])
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50"
-        onClick={() => !isFullscreen && onClose()}
-      />
-
-      {/* Dialog */}
-      <div
-        className={`relative flex flex-col bg-background border shadow-lg ${
-          isFullscreen
-            ? "fixed inset-0 rounded-none z-[51]"
-            : "w-[95vw] max-w-[1000px] h-[90vh] rounded-lg"
-        }`}
-      >
+  return (
+    <DialogPrimitive.Root open onOpenChange={(open) => !open && onClose()}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50" />
+        <DialogPrimitive.Content
+          className={`fixed z-[51] flex flex-col bg-background border shadow-lg outline-none ${
+            isFullscreen
+              ? "inset-0 rounded-none"
+              : "left-1/2 top-1/2 h-[90vh] w-[95vw] max-w-[1000px] -translate-x-1/2 -translate-y-1/2 rounded-lg"
+          }`}
+          onEscapeKeyDown={(event) => {
+            if (isFullscreen) {
+              event.preventDefault()
+              setIsFullscreen(false)
+            }
+          }}
+          onPointerDownOutside={(event) => {
+            if (isFullscreen) event.preventDefault()
+          }}
+          aria-describedby={subtitle ? "pdf-viewer-description" : undefined}
+          aria-modal="true"
+        >
         {/* Header */}
         <div className="flex-shrink-0 px-4 py-3 border-b border-border bg-muted/30">
           <div className="flex items-center justify-between gap-4">
@@ -183,13 +183,13 @@ export function PDFViewer({
                 {icon || <FileText className="h-5 w-5" aria-hidden="true" />}
               </div>
               <div className="min-w-0 flex-1">
-                <h2 className="text-base font-semibold truncate text-foreground">
+                <DialogPrimitive.Title className="text-base font-semibold truncate text-foreground">
                   {title}
-                </h2>
+                </DialogPrimitive.Title>
                 {subtitle && (
-                  <p className="text-xs text-muted-foreground truncate">
+                  <DialogPrimitive.Description id="pdf-viewer-description" className="text-xs text-muted-foreground truncate">
                     {subtitle}
-                  </p>
+                  </DialogPrimitive.Description>
                 )}
               </div>
             </div>
@@ -251,15 +251,16 @@ export function PDFViewer({
                   </span>
                 </Button>
               )}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onClose}
-                aria-label="Close"
-                className="h-8 w-8 ml-2"
-              >
-                <X className="h-4 w-4" aria-hidden="true" />
-              </Button>
+              <DialogPrimitive.Close asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Close"
+                  className="h-8 w-8 ml-2"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </DialogPrimitive.Close>
             </div>
           </div>
         </div>
@@ -318,8 +319,8 @@ export function PDFViewer({
             </Button>
           </div>
         )}
-      </div>
-    </div>,
-    document.body
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   )
 }

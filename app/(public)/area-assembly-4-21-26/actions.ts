@@ -87,7 +87,7 @@ export async function submitAreaAssemblyRegistration(data: AreaAssemblyRegistrat
   }
 
   const ip = await getClientIp()
-  const rateLimit = checkRateLimit(`area-assembly-registration:${ip}`, {
+  const rateLimit = await checkRateLimit(`area-assembly-registration:${ip}`, {
     limit: 5,
     windowMs: 10 * 60 * 1000,
   })

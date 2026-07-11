@@ -119,6 +119,8 @@ export function DistrictShell({ districtNumber, title, previewMode = false, chil
 
           <nav
             id="district-mobile-nav"
+            aria-hidden={!mobileOpen}
+            inert={!mobileOpen}
             className={cn(
               "overflow-hidden transition-all duration-300 md:hidden",
               mobileOpen ? "mt-4 max-h-[420px] opacity-100" : "max-h-0 opacity-0",

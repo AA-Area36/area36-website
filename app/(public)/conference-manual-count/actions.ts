@@ -87,7 +87,7 @@ export async function submitConferenceManualCount(data: ConferenceManualCountDat
   }
 
   const ip = await getClientIp()
-  const rateLimit = checkRateLimit(`conference-manual-count:${ip}`, {
+  const rateLimit = await checkRateLimit(`conference-manual-count:${ip}`, {
     limit: 5,
     windowMs: 10 * 60 * 1000,
   })

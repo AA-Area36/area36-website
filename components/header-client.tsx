@@ -380,6 +380,8 @@ export function HeaderClient({
         id="mobile-menu"
         ref={mobileMenuRef}
         aria-label="Mobile navigation"
+        aria-hidden={!mobileMenuOpen}
+        inert={!mobileMenuOpen}
         className={cn(
           "lg:hidden overflow-hidden transition-all duration-300 ease-in-out",
           mobileMenuOpen ? "max-h-[80vh] opacity-100" : "max-h-0 opacity-0",
@@ -412,6 +414,8 @@ export function HeaderClient({
                 </button>
                 <div
                   id={`mobile-group-${itemIndex}`}
+                  aria-hidden={!expandedGroups[item.name]}
+                  inert={!expandedGroups[item.name]}
                   className={cn(
                     "overflow-hidden transition-all duration-200 ease-in-out",
                     expandedGroups[item.name] ? "max-h-[50vh] opacity-100" : "max-h-0 opacity-0",

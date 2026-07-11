@@ -130,7 +130,7 @@ export async function submitDriveConfirmation(formData: FormData) {
   }
 
   const ip = await getClientIp()
-  const rateLimit = checkRateLimit(`grapevine:${ip}`, {
+  const rateLimit = await checkRateLimit(`grapevine:${ip}`, {
     limit: 5,
     windowMs: 10 * 60 * 1000,
   })

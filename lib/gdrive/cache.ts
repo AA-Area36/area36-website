@@ -1,5 +1,6 @@
 // Caching utilities for Google Drive data
 // Uses Cloudflare Cache API for edge caching
+import { registerBackgroundWork, runSingleFlight } from "@/lib/cache/single-flight"
 
 const CACHE_PREFIX = "gdrive:"
 const DEFAULT_TTL = 60 * 60 // 1 hour in seconds (increased from 5 min)
@@ -109,27 +110,25 @@ export async function withCache<T>(
     if (staleData !== null) {
       // Return stale data immediately, refresh in background
       // Use waitUntil if available (Cloudflare Workers)
-      const refreshPromise = (async () => {
+      const refreshPromise = runSingleFlight(`gdrive:${key}`, async () => {
         try {
+          const newlyCached = await getFromCache<T>(key)
+          if (newlyCached !== null) return newlyCached
           const freshData = await fetcher()
           await Promise.all([
             setInCache(key, freshData, options),
             setInCache(`${key}:stale`, freshData, { ttl: STALE_TTL }),
           ])
+          return freshData
         } catch (error) {
           console.error(`Background refresh failed for ${key}:`, error)
+          return staleData
         }
-      })()
+      })
       
       // Try to use waitUntil for background execution
-      try {
-        const { getCloudflareContext } = await import("@opennextjs/cloudflare")
-        const ctx = await getCloudflareContext({ async: true })
-        if (ctx.ctx?.waitUntil) {
-          ctx.ctx.waitUntil(refreshPromise)
-        }
-      } catch {
-        // Not in Cloudflare context, fire and forget
+      if (!(await registerBackgroundWork(refreshPromise))) {
+        void refreshPromise.catch(() => undefined)
       }
       
       return staleData
@@ -137,17 +136,17 @@ export async function withCache<T>(
   }
 
   // No cache at all - must fetch
-  const data = await fetcher()
+  return runSingleFlight(`gdrive:${key}`, async () => {
+    const newlyCached = await getFromCache<T>(key)
+    if (newlyCached !== null) return newlyCached
 
-  // Store in both regular and stale cache
-  Promise.all([
-    setInCache(key, data, options),
-    setInCache(`${key}:stale`, data, { ttl: STALE_TTL }),
-  ]).catch(() => {
-    // Ignore cache errors
+    const data = await fetcher()
+    await Promise.all([
+      setInCache(key, data, options),
+      setInCache(`${key}:stale`, data, { ttl: STALE_TTL }),
+    ])
+    return data
   })
-
-  return data
 }
 
 // Pre-defined cache keys

@@ -829,6 +829,11 @@ function escapeHtml(text: string): string {
     .replace(/"/g, "&quot;")
 }
 
+export function renderCommitAuthor(authorName: string, authorDate: string): string {
+  const date = new Date(authorDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  return `${escapeHtml(authorName)} - ${date}`
+}
+
 function renderHtmlReport(data: ReportData) {
   const { monthKey, github, cloudflare, events, drive, uptime, errors, generatedAt } = data
   const monthName = formatMonthName(monthKey)
@@ -1012,7 +1017,7 @@ function renderHtmlReport(data: ReportData) {
               <td style="padding: 6px 0; border-bottom: 1px solid #e5e7eb;">
                 <div style="font-weight: 600; color: #111827;">${escapeHtml(c.commit.message.split("\n")[0])}</div>
                 <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">
-                  ${c.commit.author.name} - ${new Date(c.commit.author.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  ${renderCommitAuthor(c.commit.author.name, c.commit.author.date)}
                 </div>
               </td>
             </tr>
