@@ -2,19 +2,14 @@ import { NextResponse } from "next/server"
 import { getDb } from "@/lib/db"
 import {
   events,
-  eventToTypes,
-  eventFlyers,
-  eventExceptions,
-  type EventType,
-  type EventFlyer,
-  type EventException,
 } from "@/lib/db/schema"
-import { eq, asc, gt, gte, and, or, isNull, inArray } from "drizzle-orm"
+import { eq, asc, gt, gte, and, or, isNull } from "drizzle-orm"
 import { getEventsForDateRange } from "@/lib/utils/event-queries"
-import type { EventWithRelations, DisplayEvent } from "@/lib/types/recurrence"
+import type { DisplayEvent } from "@/lib/types/recurrence"
 import { withEdgeCache } from "@/lib/cache/edge-cache"
 import { createRequestLogger } from "@/lib/logger"
 import { recordError } from "@/lib/monitoring/errors"
+import { loadEventRelations } from "@/lib/events/load-event-relations"
 
 const CACHE_KEY_BASE = "events:approved"
 const CACHE_TTL = 60 * 5 // 5 minutes
@@ -67,51 +62,8 @@ async function buildApprovedEvents(
       .orderBy(asc(events.date))
   )
 
-  const eventTypesData = await log.tracker.time("db.eventTypes", () =>
-    db.select().from(eventToTypes)
-  )
-
-  const typesMap = new Map<string, EventType[]>()
-  for (const row of eventTypesData) {
-    const existing = typesMap.get(row.eventId) || []
-    existing.push(row.type)
-    typesMap.set(row.eventId, existing)
-  }
-
-  const flyersData = await log.tracker.time("db.flyers", () =>
-    db.select().from(eventFlyers).orderBy(eventFlyers.order)
-  )
-
-  const flyersMap = new Map<string, EventFlyer[]>()
-  for (const row of flyersData) {
-    const existing = flyersMap.get(row.eventId) || []
-    existing.push(row)
-    flyersMap.set(row.eventId, existing)
-  }
-
   const recurringEventIds = eventsData.filter((e) => e.isRecurring).map((e) => e.id)
-  const exceptionsMap = new Map<string, EventException[]>()
-  if (recurringEventIds.length > 0) {
-    const exceptionsData = await log.tracker.time("db.exceptions", () =>
-      db
-        .select()
-        .from(eventExceptions)
-        .where(inArray(eventExceptions.eventId, recurringEventIds))
-    )
-
-    for (const row of exceptionsData) {
-      const existing = exceptionsMap.get(row.eventId) || []
-      existing.push(row)
-      exceptionsMap.set(row.eventId, existing)
-    }
-  }
-
-  const eventsWithRelations: EventWithRelations[] = eventsData.map((event) => ({
-    ...event,
-    types: typesMap.get(event.id) || (event.type ? [event.type] : []),
-    flyers: flyersMap.get(event.id) || [],
-    exceptions: exceptionsMap.get(event.id) || [],
-  }))
+  const eventsWithRelations = await loadEventRelations(db, eventsData, log)
 
   const rangeStart = new Date(todayStr)
   rangeStart.setDate(rangeStart.getDate() - 1)
