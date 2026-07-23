@@ -1,13 +1,25 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { Event } from "@/lib/db/schema"
 
-const { getDb } = vi.hoisted(() => ({ getDb: vi.fn() }))
+const { getDb, recordError } = vi.hoisted(() => ({
+  getDb: vi.fn(),
+  recordError: vi.fn().mockResolvedValue(undefined),
+}))
 vi.mock("@/lib/db", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/db")>()),
   getDb,
 }))
+vi.mock("@/lib/monitoring/errors", () => ({ recordError }))
 
-import { getDistrictPublicEvents } from "./queries"
+import {
+  DistrictDataUnavailableError,
+  getDistrictAllUpdates,
+  getDistrictContacts,
+  getDistrictPositions,
+  getDistrictPublicEvents,
+  getDistrictPublishedUpdates,
+  getDistrictSiteConfig,
+} from "./queries"
 
 function weeklyEvent(): Event {
   return {
@@ -27,6 +39,7 @@ describe("getDistrictPublicEvents", () => {
   afterEach(() => {
     vi.useRealTimers()
     getDb.mockReset()
+    recordError.mockClear()
   })
 
   it("queries relations and expands upcoming occurrences while applying exceptions", async () => {
@@ -50,5 +63,29 @@ describe("getDistrictPublicEvents", () => {
     expect(events.map((event) => event.date)).toEqual(["2026-07-13", "2026-07-27"])
     expect(events.some((event) => event.date === "2026-07-20")).toBe(false)
     expect(select).toHaveBeenCalledTimes(4)
+  })
+
+  it("throws a typed unavailable error instead of returning empty content on D1 failure", async () => {
+    getDb.mockRejectedValue(new Error("D1 unavailable"))
+    const queries = [
+      getDistrictPublicEvents,
+      getDistrictContacts,
+      getDistrictPositions,
+      getDistrictPublishedUpdates,
+      getDistrictAllUpdates,
+      getDistrictSiteConfig,
+    ]
+
+    for (const query of queries) {
+      await expect(query(24)).rejects.toBeInstanceOf(DistrictDataUnavailableError)
+    }
+
+    expect(recordError).toHaveBeenCalledTimes(queries.length)
+    for (const [entry] of recordError.mock.calls) {
+      expect(entry).toMatchObject({
+        kind: "D1_QUERY_FAILED",
+      })
+      expect(entry.messageOverride).not.toContain("D1 unavailable")
+    }
   })
 })

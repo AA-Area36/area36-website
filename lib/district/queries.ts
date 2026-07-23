@@ -3,6 +3,28 @@ import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, or } from "dri
 import type { EventException, EventFlyer, EventType } from "@/lib/db/schema"
 import type { EventWithRelations } from "@/lib/types/recurrence"
 import { getEventsForDateRange } from "@/lib/utils/event-queries"
+import { recordError } from "@/lib/monitoring/errors"
+
+export class DistrictDataUnavailableError extends Error {
+  constructor() {
+    super("District information is temporarily unavailable")
+    this.name = "DistrictDataUnavailableError"
+  }
+}
+
+function throwDistrictDataUnavailable(
+  resource: string,
+  districtNumber: number,
+  cause: unknown
+): never {
+  void recordError({
+    kind: "D1_QUERY_FAILED",
+    route: `/district-site/${districtNumber}/${resource}`,
+    error: cause,
+    messageOverride: `District ${resource} query failed`,
+  })
+  throw new DistrictDataUnavailableError()
+}
 
 export async function getDistrictPublicEvents(districtNumber: number) {
   try {
@@ -83,8 +105,8 @@ export async function getDistrictPublicEvents(districtNumber: number) {
     const rangeEnd = new Date(todayStr)
     rangeEnd.setFullYear(rangeEnd.getFullYear() + 1)
     return getEventsForDateRange(eventsWithRelations, rangeStart, rangeEnd)
-  } catch {
-    return []
+  } catch (error) {
+    throwDistrictDataUnavailable("events", districtNumber, error)
   }
 }
 
@@ -97,8 +119,8 @@ export async function getDistrictContacts(districtNumber: number) {
       .where(eq(schema.districtContacts.districtNumber, districtNumber))
       .orderBy(asc(schema.districtContacts.sortOrder), asc(schema.districtContacts.role))
       .all()
-  } catch {
-    return []
+  } catch (error) {
+    throwDistrictDataUnavailable("contacts", districtNumber, error)
   }
 }
 
@@ -111,8 +133,8 @@ export async function getDistrictPositions(districtNumber: number) {
       .where(eq(schema.districtPositions.districtNumber, districtNumber))
       .orderBy(asc(schema.districtPositions.sortOrder), asc(schema.districtPositions.title))
       .all()
-  } catch {
-    return []
+  } catch (error) {
+    throwDistrictDataUnavailable("positions", districtNumber, error)
   }
 }
 
@@ -125,8 +147,8 @@ export async function getDistrictPublishedUpdates(districtNumber: number) {
       .where(and(eq(schema.districtUpdates.districtNumber, districtNumber), isNotNull(schema.districtUpdates.publishedAt)))
       .orderBy(desc(schema.districtUpdates.publishedAt))
       .all()
-  } catch {
-    return []
+  } catch (error) {
+    throwDistrictDataUnavailable("updates", districtNumber, error)
   }
 }
 
@@ -139,8 +161,8 @@ export async function getDistrictAllUpdates(districtNumber: number) {
       .where(eq(schema.districtUpdates.districtNumber, districtNumber))
       .orderBy(desc(schema.districtUpdates.updatedAt))
       .all()
-  } catch {
-    return []
+  } catch (error) {
+    throwDistrictDataUnavailable("all-updates", districtNumber, error)
   }
 }
 
@@ -207,8 +229,8 @@ export async function getDistrictSiteConfig(districtNumber: number) {
         meetingPasscode: null,
         meetingContactForDetails: false,
       }
-    } catch {
-      return null
+    } catch (error) {
+      throwDistrictDataUnavailable("configuration", districtNumber, error)
     }
   }
 }
