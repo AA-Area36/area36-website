@@ -114,20 +114,9 @@ export function CommitteeFilesSection({ title, files }: CommitteeFilesSectionPro
           const isDownloading = loadingAction?.fileId === file.id && loadingAction.action === "download"
           const isBusy = loadingAction?.fileId === file.id
           return (
-          <div
+          <article
             key={file.id}
-            role="button"
-            tabIndex={0}
-            className="group flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-card p-3 transition-all hover:border-primary/30 hover:shadow-sm"
-            onClick={() => {
-              void handleDownload(file)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault()
-                void handleDownload(file)
-              }
-            }}
+            className="group flex items-center gap-3 rounded-lg border border-border bg-card p-3 transition-all hover:border-primary/30 hover:shadow-sm"
           >
             <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
               {file.isProtected ? (
@@ -151,10 +140,7 @@ export function CommitteeFilesSection({ title, files }: CommitteeFilesSectionPro
                   size="icon"
                   className="hidden h-8 w-8 sm:inline-flex"
                   disabled={!!isBusy}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleView(file)
-                  }}
+                  onClick={() => handleView(file)}
                   aria-label={`View ${file.name}`}
                 >
                   {isViewing ? (
@@ -169,10 +155,7 @@ export function CommitteeFilesSection({ title, files }: CommitteeFilesSectionPro
                 size="icon"
                 className="h-8 w-8"
                 disabled={!!isBusy}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  void handleDownload(file)
-                }}
+                onClick={() => void handleDownload(file)}
                 aria-label={`Download ${file.name}`}
               >
                 {isDownloading ? (
@@ -182,7 +165,7 @@ export function CommitteeFilesSection({ title, files }: CommitteeFilesSectionPro
                 )}
               </Button>
             </div>
-          </div>
+          </article>
           )
         })}
       </div>

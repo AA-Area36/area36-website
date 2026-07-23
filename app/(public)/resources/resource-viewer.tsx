@@ -358,20 +358,7 @@ export function ResourceItemWithViewer({
 
   return (
     <>
-      <div
-        role="button"
-        tabIndex={0}
-        className="group flex cursor-pointer items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
-        onClick={() => {
-          void handleDownload()
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault()
-            void handleDownload()
-          }
-        }}
-      >
+      <article className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md">
         <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
           {resource.isProtected ? (
             <Lock className="h-6 w-6" aria-hidden="true" />
@@ -404,10 +391,7 @@ export function ResourceItemWithViewer({
               size="icon"
               className="hidden sm:inline-flex"
               disabled={isBusy}
-              onClick={(e) => {
-                e.stopPropagation()
-                handleViewClick()
-              }}
+              onClick={handleViewClick}
               aria-label={`View ${resource.title}`}
             >
               {isViewing ? (
@@ -421,10 +405,7 @@ export function ResourceItemWithViewer({
             variant="ghost"
             size="icon"
             disabled={isBusy}
-            onClick={(e) => {
-              e.stopPropagation()
-              void handleDownload()
-            }}
+            onClick={() => void handleDownload()}
             aria-label={`Download ${resource.title}`}
           >
             {isDownloading ? (
@@ -434,7 +415,7 @@ export function ResourceItemWithViewer({
             )}
           </Button>
         </div>
-      </div>
+      </article>
       <FilePasswordDialog
         fileId={resource.id}
         fileName={resource.title}
