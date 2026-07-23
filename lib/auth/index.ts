@@ -6,6 +6,7 @@ import { D1Adapter } from "./d1-adapter"
 import { isGroupMember, type AdminDirectoryCredentials } from "@/lib/google/admin-directory"
 import { createLocalAdminBypassSession, isLocalAdminBypassEnabled } from "./dev-bypass"
 import { hasAssignedAccessForEmail, isSeedEmailAllowed } from "./rbac"
+import { isAllowedRedirectHost } from "./redirects"
 
 const ALLOWED_DOMAIN = "@area36.org"
 const ADMIN_GROUP_EMAIL = "area36-internal@area36.org"
@@ -119,15 +120,6 @@ function authCookieOverrides() {
     sessionToken: { options: { domain } },
     callbackUrl: { options: { domain } },
   }
-}
-
-function isAllowedRedirectHost(hostname: string): boolean {
-  const h = hostname.toLowerCase()
-  if (h === "area36.org" || h === "www.area36.org") return true
-  const m = h.match(/^d(\d{1,2})\.area36\.org$/)
-  if (!m) return false
-  const n = Number(m[1])
-  return Number.isFinite(n) && n >= 1 && n <= 27 && n !== 10
 }
 
 const nextAuth = NextAuth(async () => {
