@@ -86,7 +86,7 @@ async function getDistrictAdminForEmail(email: string, env: CloudflareEnv): Prom
       .bind(normalized)
       .all<{ districtNumber: number }>()
     return (res?.results ?? [])
-      .map((r) => Number((r as any).districtNumber))
+      .map((row) => Number(row.districtNumber))
       .filter((n) => Number.isFinite(n))
   } catch {
     // Local dev / fresh environments may not have migrations applied yet.

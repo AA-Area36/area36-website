@@ -5,7 +5,7 @@ import { getDb } from "@/lib/db"
 import { subscriptionDrives, driveSubmissions, type SubscriptionDrive, type DriveSubmission, type DriveSubmissionStatus } from "@/lib/db/schema"
 import { deleteImage, deleteImagesByPrefix } from "@/lib/r2"
 import { createDriveSchema, updateDriveSchema, type CreateDriveData, type UpdateDriveData } from "@/lib/schemas/drive-submission"
-import { eq, desc, and, sql } from "drizzle-orm"
+import { eq, desc, and } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { requireAreaAdminSession } from "@/lib/auth/guards"
 

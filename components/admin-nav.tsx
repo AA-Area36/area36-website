@@ -105,6 +105,7 @@ export function AdminNav({
   )
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Refresh the local preview role when the server-provided role changes.
     setViewAsKey(normalizeLocalViewAsKey(initialLocalViewAs))
   }, [initialLocalViewAs])
 

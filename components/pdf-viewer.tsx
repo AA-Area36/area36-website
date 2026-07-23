@@ -62,6 +62,7 @@ export function PDFViewer({
   // For proxy routes (/api/files/preview/…), keep iframe pointed at the route
   // (mobile browsers handle direct URLs better than blob-backed PDF iframes).
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- A new document resets viewer-local controls and resolution state.
     setZoom(100)
     setPreviewError(null)
 

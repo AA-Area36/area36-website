@@ -153,18 +153,6 @@ function formatNumber(value: unknown): string {
   return "n/a"
 }
 
-function formatBytes(value: unknown): string {
-  if (typeof value !== "number" || !Number.isFinite(value)) return "n/a"
-  const units = ["B", "KB", "MB", "GB", "TB"]
-  let size = value
-  let unitIndex = 0
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024
-    unitIndex++
-  }
-  return `${size.toFixed(2)} ${units[unitIndex]}`
-}
-
 function parseLinkHeader(header: string | null): Record<string, string> {
   if (!header) return {}
   const links: Record<string, string> = {}
@@ -176,23 +164,6 @@ function parseLinkHeader(header: string | null): Record<string, string> {
     }
   }
   return links
-}
-
-async function githubRequest<T>(url: string, token?: string): Promise<T> {
-  const response = await fetch(url, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      "User-Agent": "area36-monthly-report",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  })
-
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`GitHub API error ${response.status}: ${text}`)
-  }
-
-  return (await response.json()) as T
 }
 
 async function fetchGitHubCommits(token: string | undefined, start: Date, end: Date) {
@@ -1429,7 +1400,7 @@ async function generateReport(env: Env, options: { useCurrentMonth?: boolean; fo
   }
 }
 
-export default {
+const worker = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
     
@@ -1465,3 +1436,5 @@ export default {
     ctx.waitUntil(generateReport(env).catch((err) => console.error("Scheduled report failed:", err)))
   },
 }
+
+export default worker

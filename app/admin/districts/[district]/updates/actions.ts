@@ -82,7 +82,7 @@ export async function publishDistrictUpdate(formData: FormData) {
   await db
     .update(schema.districtUpdates)
     .set({
-      publishedAt: sql`(datetime('now'))` as any,
+      publishedAt: sql`(datetime('now'))`,
       updatedAt: new Date().toISOString(),
     })
     .where(and(eq(schema.districtUpdates.id, id), eq(schema.districtUpdates.districtNumber, districtNumber)))

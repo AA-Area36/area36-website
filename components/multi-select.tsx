@@ -64,6 +64,7 @@ export function MultiSelect({
 
     const firstSelected = options.findIndex((o) => value.includes(o.value))
     const initialIndex = firstSelected >= 0 ? firstSelected + 1 : 0
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Opening the list initializes its roving keyboard focus.
     setActiveIndex(initialIndex)
 
     // Wait for popover content to mount before focusing.

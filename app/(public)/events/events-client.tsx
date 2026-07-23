@@ -506,10 +506,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
   React.useEffect(() => {
     updateURL(debouncedUrlSearchQuery, selectedTypes, dateRange, showDistrictMeetings)
   }, [
+    dateRange,
     debouncedUrlSearchQuery,
-    selectedTypes.join(","),
-    dateRange?.from?.getTime(),
-    dateRange?.to?.getTime(),
+    selectedTypes,
     showDistrictMeetings,
     updateURL,
   ])
@@ -613,27 +612,30 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
   const districtMeetingsTotalPages = Math.max(1, Math.ceil(districtMeetingGroups.length / SECTION_PAGE_SIZE))
 
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Clamp pagination when the derived page count shrinks.
     setUpcomingPage((p) => Math.min(Math.max(1, p), upcomingTotalPages))
   }, [upcomingTotalPages])
 
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Clamp pagination when the derived page count shrinks.
     setDistrictPage((p) => Math.min(Math.max(1, p), districtTotalPages))
   }, [districtTotalPages])
 
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Clamp pagination when the derived page count shrinks.
     setDistrictMeetingsPage((p) => Math.min(Math.max(1, p), districtMeetingsTotalPages))
   }, [districtMeetingsTotalPages])
 
   // When filters change, reset pagination back to the first page.
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- A filter change intentionally resets all independent pagers.
     setUpcomingPage(1)
     setDistrictPage(1)
     setDistrictMeetingsPage(1)
   }, [
+    dateRange,
     debouncedUrlSearchQuery,
-    selectedTypes.join(","),
-    dateRange?.from?.getTime(),
-    dateRange?.to?.getTime(),
+    selectedTypes,
   ])
 
   const pagedUpcomingGroups = upcomingGroups.slice((upcomingPage - 1) * SECTION_PAGE_SIZE, upcomingPage * SECTION_PAGE_SIZE)
@@ -684,9 +686,8 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
     })
   }, [
     debouncedPastSearchQuery,
-    pastSelectedTypes.join(","),
-    pastDateRange?.from?.getTime(),
-    pastDateRange?.to?.getTime(),
+    pastDateRange,
+    pastSelectedTypes,
   ])
 
   React.useEffect(() => {
@@ -694,6 +695,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
     if (pastAppliedQueryKey === pastQueryKey && pastPages.length > 0) return
 
     let active = true
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- The request lifecycle begins when this query effect starts.
     setPastLoading(true)
     setPastError(null)
 
@@ -728,9 +730,8 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
     pastPages.length,
     requestPastEventsPage,
     debouncedPastSearchQuery,
-    pastSelectedTypes.join(","),
-    pastDateRange?.from?.getTime(),
-    pastDateRange?.to?.getTime(),
+    pastDateRange,
+    pastSelectedTypes,
   ])
 
   const currentPastPage = pastPages[pastPageIndex] || null
@@ -2262,6 +2263,11 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                   <p className="mt-3 text-muted-foreground">
                     District monthly meetings are hidden. Turn on <span className="font-medium text-foreground">District meetings</span> in the filters.
                   </p>
+                </div>
+              ) : districtMeetingLoadError ? (
+                <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-4" role="alert">
+                  <p className="font-medium text-foreground">District meetings are temporarily unavailable.</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Please refresh the page to try again.</p>
                 </div>
               ) : filteredDistrictMeetingEvents.length === 0 ? (
                 <div className="text-center py-8 rounded-xl border border-border bg-card">

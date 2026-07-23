@@ -3,7 +3,6 @@
 import {
   listFolders,
   listAllFiles,
-  getGDriveCredentials,
 } from "./client"
 import { withCache, CACHE_KEYS } from "./cache"
 import type { Newsletter, DriveFile, GDriveCredentials } from "./types"

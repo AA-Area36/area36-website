@@ -34,7 +34,7 @@ export async function isFolderRestricted(
   // 2. Cloudflare Cache API
   const cacheKey = `folder-restricted:${folderId}`
   try {
-    const { getFromCache, setInCache } = await import("./cache")
+    const { getFromCache } = await import("./cache")
     const cached = await getFromCache<{ restricted: boolean }>(cacheKey)
     if (cached !== null) {
       restrictedCache.set(folderId, {

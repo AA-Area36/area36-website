@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Upload, X, FileText, Image as ImageIcon, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -170,14 +171,18 @@ export function FlyerUpload({
     }
   }
 
-  // Clean up preview URLs on unmount
+  const previewUrlsRef = React.useRef<string[]>([])
+
+  React.useEffect(() => {
+    previewUrlsRef.current = value.flatMap((flyer) =>
+      flyer.previewUrl?.startsWith("blob:") ? [flyer.previewUrl] : [],
+    )
+  }, [value])
+
+  // Clean up locally created preview URLs on unmount.
   React.useEffect(() => {
     return () => {
-      value.forEach((f) => {
-        if (f.previewUrl) {
-          URL.revokeObjectURL(f.previewUrl)
-        }
-      })
+      previewUrlsRef.current.forEach((previewUrl) => URL.revokeObjectURL(previewUrl))
     }
   }, [])
 
@@ -251,15 +256,21 @@ export function FlyerUpload({
                 {/* Preview/Icon */}
                 <div className="flex-shrink-0 w-12 h-12 rounded-md overflow-hidden bg-muted flex items-center justify-center">
                   {flyer.previewUrl ? (
-                    <img
+                    <Image
                       src={flyer.previewUrl}
                       alt={flyer.fileName}
+                      width={48}
+                      height={48}
+                      unoptimized
                       className="w-full h-full object-cover"
                     />
                   ) : flyer.fileKey && isImage ? (
-                    <img
+                    <Image
                       src={`/api/flyers/${flyer.fileKey}`}
                       alt={flyer.fileName}
+                      width={48}
+                      height={48}
+                      unoptimized
                       className="w-full h-full object-cover"
                     />
                   ) : isPDF ? (

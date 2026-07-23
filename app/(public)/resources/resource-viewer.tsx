@@ -25,104 +25,6 @@ interface ResourceViewerProps {
   onResourceChange: (resource: Resource) => void
 }
 
-export function ResourceViewer({
-  resource,
-  resources,
-  open,
-  onOpenChange,
-  onResourceChange,
-}: ResourceViewerProps) {
-  const [unlockedFiles, setUnlockedFiles] = React.useState<Set<string>>(new Set())
-  const [passwordDialogOpen, setPasswordDialogOpen] = React.useState(false)
-  const [pendingResource, setPendingResource] = React.useState<Resource | null>(null)
-
-  // Check if the current resource needs password
-  const isLocked = resource?.isProtected && !unlockedFiles.has(resource.id)
-
-  // When trying to open a protected file, show password dialog instead
-  React.useEffect(() => {
-    if (open && resource?.isProtected && !unlockedFiles.has(resource.id)) {
-      setPendingResource(resource)
-      setPasswordDialogOpen(true)
-      onOpenChange(false)
-    }
-  }, [open, resource, unlockedFiles, onOpenChange])
-
-  if (!open || !resource) return null
-
-  // Don't show viewer for locked files
-  if (isLocked) return null
-
-  // Navigation
-  const currentIndex = resources.findIndex((r) => r.id === resource.id)
-  const canGoPrevious = currentIndex > 0
-  const canGoNext = currentIndex < resources.length - 1 && currentIndex !== -1
-
-  const goPrevious = () => {
-    if (canGoPrevious) {
-      const prevResource = resources[currentIndex - 1]
-      // Check if next resource is protected and not unlocked
-      if (prevResource.isProtected && !unlockedFiles.has(prevResource.id)) {
-        setPendingResource(prevResource)
-        setPasswordDialogOpen(true)
-        onOpenChange(false)
-      } else {
-        onResourceChange(prevResource)
-      }
-    }
-  }
-
-  const goNext = () => {
-    if (canGoNext) {
-      const nextResource = resources[currentIndex + 1]
-      // Check if next resource is protected and not unlocked
-      if (nextResource.isProtected && !unlockedFiles.has(nextResource.id)) {
-        setPendingResource(nextResource)
-        setPasswordDialogOpen(true)
-        onOpenChange(false)
-      } else {
-        onResourceChange(nextResource)
-      }
-    }
-  }
-
-  // Build subtitle
-  const subtitleParts: string[] = []
-  if (resource.date) subtitleParts.push(resource.date)
-  if (resource.size) subtitleParts.push(resource.size)
-  if (resource.isProtected) subtitleParts.push("Protected")
-  const subtitle = subtitleParts.join(" · ")
-
-  return (
-    <PDFViewer
-      previewUrl={resource.previewUrl}
-      title={resource.title}
-      subtitle={subtitle}
-      downloadUrl={resource.downloadUrl}
-      onAuthRequired={() => {
-        clearFileUnlocked(resource.id)
-        setPendingResource(resource)
-        setPasswordDialogOpen(true)
-        onOpenChange(false)
-      }}
-      onClose={() => onOpenChange(false)}
-      onPrevious={goPrevious}
-      onNext={goNext}
-      canGoPrevious={canGoPrevious}
-      canGoNext={canGoNext}
-      currentIndex={currentIndex !== -1 ? currentIndex : undefined}
-      totalCount={resources.length}
-      icon={
-        resource.isProtected ? (
-          <Lock className="h-5 w-5" aria-hidden="true" />
-        ) : (
-          <FileText className="h-5 w-5" aria-hidden="true" />
-        )
-      }
-    />
-  )
-}
-
 // Wrapper component that manages password dialog state
 type ResourceViewerWithPasswordProps = ResourceViewerProps
 
@@ -139,6 +41,7 @@ export function ResourceViewerWithPassword(props: ResourceViewerWithPasswordProp
     if (open && resource) {
       if (resource.isProtected && !unlockedFiles.has(resource.id) && !isFileUnlockedClient(resource.id)) {
         // Need to unlock first
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- Opening a protected resource transitions this controller to its password dialog.
         setPendingResource(resource)
         setPasswordDialogOpen(true)
       } else {

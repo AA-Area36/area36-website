@@ -119,6 +119,7 @@ export function EditEventDialog({ event }: EditEventDialogProps) {
   // Reset form when dialog opens
   React.useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Reinitialize the controlled editor when a dialog opens for a different event.
       setTitle(event.title)
       setDate(event.date)
       setEndDate(event.endDate || "")

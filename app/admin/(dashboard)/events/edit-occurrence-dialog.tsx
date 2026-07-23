@@ -62,6 +62,7 @@ export function EditOccurrenceDialog({ event, occurrenceDate, exception, trigger
   // Reset form when dialog opens
   React.useEffect(() => {
     if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Reinitialize the controlled editor when a dialog opens for a different occurrence.
       setTitle(exception?.title || event.title)
       setStartTime(exception?.startTime ?? event.startTime ?? "")
       setEndTime(exception?.endTime ?? event.endTime ?? "")

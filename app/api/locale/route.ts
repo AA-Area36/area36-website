@@ -3,7 +3,13 @@ import { DEFAULT_LOCALE, isLocale, LOCALE_COOKIE } from "@/lib/i18n/locales"
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as unknown
-  const requested = typeof (body as any)?.locale === "string" ? ((body as any).locale as string) : null
+  const requested =
+    body !== null &&
+    typeof body === "object" &&
+    "locale" in body &&
+    typeof body.locale === "string"
+      ? body.locale
+      : null
   const locale = isLocale(requested) ? requested : DEFAULT_LOCALE
 
   const response = NextResponse.json({ ok: true, locale })

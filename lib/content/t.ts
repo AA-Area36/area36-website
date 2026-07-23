@@ -27,7 +27,7 @@ export function setAtPath(doc: ContentDoc, path: string, value: unknown): Conten
   // Clone the root so callers can treat updates immutably.
   const root = structuredClone(doc) as ContentDoc
 
-  let cur: any = root
+  let cur: unknown = root
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i]!
     const isLast = i === parts.length - 1
@@ -87,4 +87,3 @@ export function formatTemplate(template: string, vars: Record<string, string | n
     return v == null ? "" : String(v)
   })
 }
-

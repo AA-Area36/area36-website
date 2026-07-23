@@ -111,11 +111,13 @@ export function HeaderClient({
 
   // Prevent hydration mismatch with Radix UI auto-generated IDs
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Mount detection intentionally defers Radix UI until hydration completes.
     setMounted(true)
   }, [])
 
   // Close mobile menu on route change (handles back/forward navigation)
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Route navigation closes the mobile navigation drawer.
     setMobileMenuOpen(false)
   }, [pathname])
 

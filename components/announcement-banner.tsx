@@ -10,6 +10,7 @@ export function AnnouncementBanner() {
 
   React.useEffect(() => {
     const isDismissed = localStorage.getItem(STORAGE_KEY) === "true"
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Browser storage is unavailable during the server render.
     setDismissed(isDismissed)
   }, [])
 

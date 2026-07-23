@@ -34,11 +34,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function deepMerge(base: ContentDoc, override: ContentDoc): ContentDoc {
   const out: ContentDoc = structuredClone(base) as ContentDoc
   for (const [k, v] of Object.entries(override)) {
-    const existing = (out as any)[k]
+    const existing = out[k]
     if (isRecord(existing) && isRecord(v)) {
-      ;(out as any)[k] = deepMerge(existing as ContentDoc, v as ContentDoc)
+      out[k] = deepMerge(existing, v)
     } else {
-      ;(out as any)[k] = v as any
+      out[k] = v
     }
   }
   return out

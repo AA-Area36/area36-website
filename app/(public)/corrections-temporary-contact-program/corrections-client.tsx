@@ -71,6 +71,7 @@ function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }
     },
   })
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form's watch API is intentionally used for conditional fields.
   const isSpanishSpeaking = watch("isSpanishSpeaking")
 
   const onSubmit = useCallback(
@@ -97,7 +98,7 @@ function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }
         }
       })
     },
-    [executeRecaptcha]
+    [executeRecaptcha, t]
   )
 
   if (submitted) {

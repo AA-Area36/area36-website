@@ -22,7 +22,12 @@ export type ContentDocRow = {
 }
 
 function isMissingContentDocumentsTableError(err: unknown): boolean {
-  const msg = String((err as any)?.cause?.message ?? (err as any)?.message ?? err)
+  const msg =
+    err instanceof Error
+      ? err.cause instanceof Error
+        ? err.cause.message
+        : err.message
+      : String(err)
   return msg.includes("no such table: content_documents")
 }
 
@@ -104,14 +109,14 @@ export async function saveContentDraft({
         scope,
         locale,
         draftJson: payload,
-        draftUpdatedAt: now as any,
+        draftUpdatedAt: now,
         updatedBy: session.user.email,
       })
       .onConflictDoUpdate({
         target: [schema.contentDocuments.scope, schema.contentDocuments.locale],
         set: {
           draftJson: payload,
-          draftUpdatedAt: now as any,
+          draftUpdatedAt: now,
           updatedBy: session.user.email,
         },
       })
@@ -177,7 +182,7 @@ export async function publishContent({
       .update(schema.contentDocuments)
       .set({
         publishedJson: row.draftJson,
-        publishedAt: sql`(datetime('now'))` as any,
+        publishedAt: sql`(datetime('now'))`,
         updatedBy: session.user.email,
       })
       .where(and(eq(schema.contentDocuments.scope, scope), eq(schema.contentDocuments.locale, locale)))

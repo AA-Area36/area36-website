@@ -124,6 +124,7 @@ export function NewsletterViewer({ newsletters, years }: NewsletterViewerProps) 
   // Reset to page 1 if current page is out of bounds after filtering
   React.useEffect(() => {
     if (currentPage > totalPages && totalPages > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Clamp pagination after filtering removes the current page.
       setCurrentPage(1)
       updateURL(searchQuery, yearFilter, 1)
     }

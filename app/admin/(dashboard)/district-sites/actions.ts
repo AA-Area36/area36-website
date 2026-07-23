@@ -37,7 +37,7 @@ export async function upsertDistrictSite(formData: FormData) {
   const db = await getDb()
   // Use base columns only so local DBs that have not applied the latest district-site
   // migrations are still manageable from localhost.
-  await (db as any).$client
+  await db.$client
     .prepare(
       `INSERT INTO district_sites (
         district_number,
@@ -105,11 +105,11 @@ export async function addDistrictAdmin(formData: FormData) {
       districtNumber,
       email,
       role,
-      updatedAt: now as any,
+      updatedAt: now,
     })
     .onConflictDoUpdate({
       target: [schema.districtAdmins.districtNumber, schema.districtAdmins.email],
-      set: { role, updatedAt: now as any },
+      set: { role, updatedAt: now },
     })
 
   revalidatePath(`/admin/district-sites/${districtNumber}`)

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useCallback, useMemo } from "react"
+import { useState, useTransition, useCallback } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useGoogleReCaptcha } from "react-google-recaptcha-v3"
@@ -91,10 +91,10 @@ function ContactForm({ content, header }: { content?: ContentDoc; header?: Conta
     },
   })
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form's watch API is intentionally used for the recipient summary.
   const selectedRecipients = watch("recipients") ?? []
-  const selectedRecipientDetails = useMemo(
-    () => recipients.filter((recipient) => selectedRecipients.includes(recipient.value)),
-    [selectedRecipients]
+  const selectedRecipientDetails = recipients.filter((recipient) =>
+    selectedRecipients.includes(recipient.value),
   )
   const getErrorProps = (field: keyof ContactFormData) => ({
     "aria-invalid": errors[field] ? true : undefined,
@@ -127,7 +127,7 @@ function ContactForm({ content, header }: { content?: ContentDoc; header?: Conta
         )
       }
     })
-  }, [executeRecaptcha])
+  }, [executeRecaptcha, t])
 
   const handleSendAnother = () => {
     setSubmitted(false)

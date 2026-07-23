@@ -65,6 +65,7 @@ export function useGdriveFiles<T>(
   }, [type, enabled])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- This effect intentionally starts the hook's request lifecycle.
     fetchData()
   }, [fetchData])
 

@@ -44,7 +44,13 @@ const CACHE_TTL = 60 * 5 // 5 minutes
 const NO_STORE_HEADERS = { "Cache-Control": "no-store" } as const
 
 function isMissingPendingTableError(err: unknown): boolean {
-  const msg = String((err as any)?.cause?.message ?? (err as any)?.message ?? err).toLowerCase()
+  const msg = (
+    err instanceof Error
+      ? err.cause instanceof Error
+        ? err.cause.message
+        : err.message
+      : String(err)
+  ).toLowerCase()
   return msg.includes("no such table: file_cache_bust_pending")
 }
 

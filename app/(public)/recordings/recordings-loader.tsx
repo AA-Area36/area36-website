@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useRecordings, type RecordingsData } from "@/lib/hooks/use-gdrive-files"
+import { useRecordings } from "@/lib/hooks/use-gdrive-files"
 import { GdriveLoader } from "@/components/gdrive-loader"
 import { RecordingsClient } from "./recordings-client"
 import { Mic } from "lucide-react"

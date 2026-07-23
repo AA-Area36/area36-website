@@ -269,12 +269,14 @@ export function AdminFilesLoader() {
 
   // Initial load
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- This effect intentionally starts the loader's request lifecycle.
     fetchInitialData()
   }, [fetchInitialData])
 
   // Fetch folders after initial data is loaded
   useEffect(() => {
     if (initialData && Object.keys(folderStates).length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Folder requests begin only after their parent metadata is ready.
       fetchAllFolders()
     }
   }, [initialData]) // eslint-disable-line react-hooks/exhaustive-deps

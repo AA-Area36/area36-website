@@ -923,6 +923,7 @@ export function CorrectionsAdminClient({
 
   useEffect(() => {
     const parsed = parseContactFiltersFromParams(searchParams, initialSearchParams)
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- URL parameters are the source of truth for browser navigation.
     setContactFilters(parsed)
     if (!initializedContactDrafts.current) {
       setContactFilterDrafts(parsed)
@@ -932,6 +933,7 @@ export function CorrectionsAdminClient({
 
   useEffect(() => {
     const parsed = parseRecipientFiltersFromParams(searchParams, initialSearchParams)
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- URL parameters are the source of truth for browser navigation.
     setRecipientFilters(parsed)
     if (!initializedRecipientDrafts.current) {
       setRecipientFilterDrafts(parsed)
@@ -940,10 +942,12 @@ export function CorrectionsAdminClient({
   }, [searchParams, initialSearchParams])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Keep the debounced input synchronized with browser navigation.
     setContactSearchInput((prev) => (prev === contactFilters.q ? prev : contactFilters.q))
   }, [contactFilters.q])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Keep the debounced input synchronized with browser navigation.
     setRecipientSearchInput((prev) => (prev === recipientFilters.q ? prev : recipientFilters.q))
   }, [recipientFilters.q])
 
@@ -965,6 +969,7 @@ export function CorrectionsAdminClient({
 
   useEffect(() => {
     if (!editingContact) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Reinitialize the controlled editor when the selected contact changes.
     setEditContactGender(normalizeGender(editingContact.gender) ?? CORRECTIONS_GENDER_OPTIONS[0])
     setEditContactSpanish(editingContact.isSpanishSpeaking)
     setEditContactActive(editingContact.active)
@@ -972,6 +977,7 @@ export function CorrectionsAdminClient({
 
   useEffect(() => {
     if (!editingRecipient) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Reinitialize the controlled editor when the selected recipient changes.
     setEditRecipientGender(normalizeGender(editingRecipient.gender) ?? CORRECTIONS_GENDER_OPTIONS[0])
     setEditRecipientFacility(editingRecipient.facilityName)
     setEditRecipientSource(editingRecipient.source)

@@ -1,4 +1,4 @@
-import type { Adapter, AdapterUser, AdapterAccount, AdapterSession } from "next-auth/adapters"
+import type { Adapter } from "next-auth/adapters"
 import { eq, and } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/d1"
 import { sql } from "drizzle-orm"
