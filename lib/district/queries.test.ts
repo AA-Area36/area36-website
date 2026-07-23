@@ -15,7 +15,7 @@ function weeklyEvent(): Event {
     startTime: "19:00", endTime: "20:00", timezone: "America/Chicago",
     locationType: "in-person", address: "123 Main St", meetingLink: null,
     description: "District meeting", districtNumber: 24, type: "District",
-    status: "approved", submitterEmail: "test@example.com", flyerUrl: null,
+    status: "approved", submitterEmail: "test@example.com", submissionKey: null, flyerUrl: null,
     denialReason: null, timeTBD: false, addressTBD: false, meetingLinkTBD: false,
     isRecurring: true, recurrenceType: "weekly", recurrencePattern: "[1]",
     monthlyPatternType: null, monthlyPatternValue: null, recurUntil: "2026-07-31",

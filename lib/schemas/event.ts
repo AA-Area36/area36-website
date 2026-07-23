@@ -45,6 +45,7 @@ export const eventSubmissionSchema = z.object({
   description: z.string().min(10, "Description must be at least 10 characters").max(2000, "Description must be 2000 characters or less"),
   types: eventTypesArray,
   submitterEmail: z.string().email("Please enter a valid email address"),
+  submissionId: z.string().uuid("Invalid submission identifier"),
   flyerUrl: optionalUrl,
   recaptchaToken: z.string(),
   // TBD flags

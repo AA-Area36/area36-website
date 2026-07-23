@@ -87,6 +87,7 @@ export const events = sqliteTable("events", {
   type: text("type").$type<EventType>(), // Kept for backward compat, use eventToTypes for new events
   status: text("status").notNull().default("pending").$type<EventStatus>(),
   submitterEmail: text("submitter_email").notNull(),
+  submissionKey: text("submission_key"),
   flyerUrl: text("flyer_url"), // Deprecated: use eventFlyers table
   denialReason: text("denial_reason"),
   // TBD flags

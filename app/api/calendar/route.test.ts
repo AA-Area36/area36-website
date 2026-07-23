@@ -7,7 +7,7 @@ function recurringTimeTbdEvent(): Event {
     id: "event-1", title: "TBD series", date: "2026-07-01", endDate: null,
     startTime: null, endTime: null, timezone: "America/Chicago", locationType: "in-person",
     address: null, meetingLink: null, description: "Description", districtNumber: null,
-    type: "Meeting", status: "approved", submitterEmail: "test@example.com", flyerUrl: null,
+    type: "Meeting", status: "approved", submitterEmail: "test@example.com", submissionKey: null, flyerUrl: null,
     denialReason: null, timeTBD: true, addressTBD: false, meetingLinkTBD: false,
     isRecurring: true, recurrenceType: "weekly", recurrencePattern: "[3]",
     monthlyPatternType: null, monthlyPatternValue: null, recurUntil: "2026-07-31",

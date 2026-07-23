@@ -19,6 +19,7 @@ function recurringEvent(): EventWithRelations {
     type: "District",
     status: "approved",
     submitterEmail: "test@example.com",
+    submissionKey: null,
     flyerUrl: null,
     denialReason: null,
     timeTBD: false,

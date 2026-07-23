@@ -55,7 +55,7 @@ export async function createDistrictEvent(formData: FormData) {
   const db = await getDb()
   const id = crypto.randomUUID()
 
-  await db.insert(schema.events).values({
+  const insertEvent = db.insert(schema.events).values({
     id,
     title,
     date,
@@ -79,12 +79,14 @@ export async function createDistrictEvent(formData: FormData) {
     recurrenceType: "none",
   })
 
-  await db.insert(schema.eventToTypes).values(
+  const insertTypes = db.insert(schema.eventToTypes).values(
     types.map((t) => ({
       eventId: id,
       type: t as EventType,
-    }))
+    })),
   )
+
+  await db.batch([insertEvent, insertTypes])
 
   revalidateDistrictEventPaths(districtNumber)
   await invalidateEventCaches(districtNumber)
@@ -121,7 +123,7 @@ export async function updateDistrictEvent(formData: FormData) {
     .get()
   if (!event) throw new Error("Event not found")
 
-  await db
+  const updateEventQuery = db
     .update(schema.events)
     .set({
       title,
@@ -142,8 +144,14 @@ export async function updateDistrictEvent(formData: FormData) {
     })
     .where(eq(schema.events.id, eventId))
 
-  await db.delete(schema.eventToTypes).where(eq(schema.eventToTypes.eventId, eventId))
-  await db.insert(schema.eventToTypes).values(types.map((t) => ({ eventId, type: t as EventType })))
+  const deleteTypesQuery = db
+    .delete(schema.eventToTypes)
+    .where(eq(schema.eventToTypes.eventId, eventId))
+  const insertTypesQuery = db
+    .insert(schema.eventToTypes)
+    .values(types.map((t) => ({ eventId, type: t as EventType })))
+
+  await db.batch([updateEventQuery, deleteTypesQuery, insertTypesQuery])
 
   revalidateDistrictEventPaths(districtNumber)
   await invalidateEventCaches(districtNumber)

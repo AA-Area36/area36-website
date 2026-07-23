@@ -145,7 +145,7 @@ export async function updateEvent(eventId: string, data: UpdateEventData): Promi
     // Use first type for backward compatibility with legacy `type` column
     const primaryType = data.types[0] || null
 
-    await db
+    const updateEventQuery = db
       .update(events)
       .set({
         title: data.title,
@@ -168,17 +168,20 @@ export async function updateEvent(eventId: string, data: UpdateEventData): Promi
       .where(eq(events.id, eventId))
 
     // Update event types in junction table
-    // First, delete existing types
-    await db.delete(eventToTypes).where(eq(eventToTypes.eventId, eventId))
+    const deleteTypesQuery = db
+      .delete(eventToTypes)
+      .where(eq(eventToTypes.eventId, eventId))
     
-    // Then insert new types
     if (data.types.length > 0) {
-      await db.insert(eventToTypes).values(
+      const insertTypesQuery = db.insert(eventToTypes).values(
         data.types.map((type) => ({
           eventId,
           type,
-        }))
+        })),
       )
+      await db.batch([updateEventQuery, deleteTypesQuery, insertTypesQuery])
+    } else {
+      await db.batch([updateEventQuery, deleteTypesQuery])
     }
 
     revalidatePath("/admin/events")
@@ -226,7 +229,7 @@ export async function updateRecurringEvent(
 
       const primaryType = data.types[0] || null
 
-      await db
+      const updateEventQuery = db
         .update(events)
         .set({
           title: data.title,
@@ -255,14 +258,19 @@ export async function updateRecurringEvent(
         .where(eq(events.id, eventId))
 
       // Update event types
-      await db.delete(eventToTypes).where(eq(eventToTypes.eventId, eventId))
+      const deleteTypesQuery = db
+        .delete(eventToTypes)
+        .where(eq(eventToTypes.eventId, eventId))
       if (data.types.length > 0) {
-        await db.insert(eventToTypes).values(
+        const insertTypesQuery = db.insert(eventToTypes).values(
           data.types.map((type) => ({
             eventId,
             type,
-          }))
+          })),
         )
+        await db.batch([updateEventQuery, deleteTypesQuery, insertTypesQuery])
+      } else {
+        await db.batch([updateEventQuery, deleteTypesQuery])
       }
 
       revalidatePath("/admin/events")

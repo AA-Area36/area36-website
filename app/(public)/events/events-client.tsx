@@ -419,6 +419,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
   const [pastAppliedQueryKey, setPastAppliedQueryKey] = React.useState<string>("")
   const tabsRef = React.useRef<HTMLDivElement>(null)
   const formRef = React.useRef<HTMLFormElement>(null)
+  const submissionIdRef = React.useRef(crypto.randomUUID())
 
   const debouncedUrlSearchQuery = useDebouncedValue(searchQuery, 500)
   const debouncedPastSearchQuery = useDebouncedValue(pastSearchQuery, 500)
@@ -463,6 +464,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
     setPendingFlyerUpload(null)
     setRecurrenceConfig({ isRecurring: false, recurrenceType: "none" })
     setFormStartDate("")
+    submissionIdRef.current = crypto.randomUUID()
   }, [])
 
   // Update URL when filters change
@@ -905,6 +907,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
         types: submissionEventTypes as EventType[],
         description: formData.get("eventDescription") as string,
         submitterEmail: formData.get("submitterEmail") as string,
+        submissionId: submissionIdRef.current,
         flyerUrl: "", // Deprecated - now using flyer uploads
         recaptchaToken,
         timeTBD,
@@ -920,7 +923,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
 
       const result = await submitEvent(data)
 
-      if (result.success && result.eventId) {
+      if (result.success) {
         const uploadResult = await uploadSelectedFlyers(
           result.eventId,
           result.uploadToken,
