@@ -14,6 +14,9 @@ export interface FileAccessResult {
   filename?: string
 }
 
+const MAX_ANCESTRY_DEPTH = 12
+const MAX_ANCESTRY_NODES = 64
+
 /**
  * Validate that a file belongs to an unlocked recording folder
  * Uses dynamic imports to avoid bundling GDrive modules
@@ -26,7 +29,7 @@ export async function validateRecordingAccess(
     // Dynamic import to avoid bundling at build time
     const { getFileMetadata } = await import("@/lib/gdrive/client")
     
-    // Get file metadata to check parent folder
+    // Get file metadata to begin a bounded parent traversal.
     const file = await getFileMetadata(credentials, fileId)
 
     if (!file.parents || file.parents.length === 0) {
@@ -38,21 +41,59 @@ export async function validateRecordingAccess(
     const registeredFolders = await db.select().from(recordingFolders)
     const registeredIds = new Set(registeredFolders.map((f) => f.driveId))
 
-    // Check if any parent folder is registered and unlocked
-    for (const parentId of file.parents) {
-      if (registeredIds.has(parentId)) {
-        const unlocked = await isFolderUnlocked(parentId)
+    const visited = new Set<string>([fileId])
+    let frontier = [...new Set(file.parents)]
+    let examinedNodes = 0
+
+    for (
+      let depth = 0;
+      depth < MAX_ANCESTRY_DEPTH && frontier.length > 0;
+      depth++
+    ) {
+      const registeredAncestors = frontier.filter((id) =>
+        registeredIds.has(id),
+      )
+
+      // A registered folder is the authoritative access boundary. Do not walk
+      // above a locked registered folder and accidentally grant access through
+      // a broader ancestor.
+      if (registeredAncestors.length > 0) {
+        for (const folderId of registeredAncestors) {
+          if (await isFolderUnlocked(folderId)) {
+            return {
+              valid: true,
+              folderId,
+              filename: file.name,
+            }
+          }
+        }
+
         return {
-          valid: unlocked,
-          folderId: parentId,
+          valid: false,
+          folderId: registeredAncestors[0],
           filename: file.name,
         }
       }
+
+      const nextFrontier: string[] = []
+      for (const ancestorId of frontier) {
+        if (visited.has(ancestorId)) continue
+        visited.add(ancestorId)
+        examinedNodes++
+
+        if (examinedNodes > MAX_ANCESTRY_NODES) {
+          return { valid: false }
+        }
+
+        const ancestor = await getFileMetadata(credentials, ancestorId)
+        for (const parentId of ancestor.parents ?? []) {
+          if (!visited.has(parentId)) nextFrontier.push(parentId)
+        }
+      }
+
+      frontier = [...new Set(nextFrontier)]
     }
 
-    // File's direct parent is not registered - might be in a subfolder
-    // For now, deny access to files not directly in a registered folder
-    // TODO: Consider recursive parent traversal for deeply nested files
     return { valid: false }
   } catch (error) {
     console.error("Error validating recording access:", error)
