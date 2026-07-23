@@ -1,15 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { NextRequest } from "next/server"
 
-const { validateFileAccess, getGDriveEnv, getGDriveCredentials } = vi.hoisted(() => ({
+const {
+  validateFileAccess,
+  getGDriveEnv,
+  getGDriveCredentials,
+  getAllowedGDriveRootIds,
+} = vi.hoisted(() => ({
   validateFileAccess: vi.fn(),
   getGDriveEnv: vi.fn(),
   getGDriveCredentials: vi.fn(),
+  getAllowedGDriveRootIds: vi.fn(),
 }))
 vi.mock("@/lib/files/access", () => ({
   validateFileAccess,
   getGDriveEnv,
   getGDriveCredentials,
+  getAllowedGDriveRootIds,
 }))
 
 import { HEAD } from "./route"
@@ -18,6 +25,7 @@ describe("protected file download boundary", () => {
   beforeEach(() => {
     getGDriveEnv.mockResolvedValue({ GDRIVE_SERVICE_ACCOUNT_EMAIL: "configured" })
     getGDriveCredentials.mockResolvedValue({ clientEmail: "configured" })
+    getAllowedGDriveRootIds.mockReturnValue(["resources-root"])
     validateFileAccess.mockReset()
   })
 
