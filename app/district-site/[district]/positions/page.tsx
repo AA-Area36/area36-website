@@ -1,9 +1,14 @@
+import type { Metadata } from "next"
 import { BriefcaseBusiness, CheckCircle2, CircleDot, Mail, User } from "lucide-react"
 import { notFound } from "next/navigation"
 import { getDistrictPositions } from "@/lib/district/queries"
 import { coerceDistrict, resolveDistrictSiteForRender } from "../district-utils"
 
 export const dynamic = "force-dynamic"
+export const metadata: Metadata = {
+  title: "Service Positions",
+  description: "Open and filled district service roles.",
+}
 
 export default async function DistrictPositionsPage({
   params,

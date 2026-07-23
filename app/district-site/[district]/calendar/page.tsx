@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { ArrowRight, CalendarDays, Clock, MapPin } from "lucide-react"
 import { notFound } from "next/navigation"
@@ -6,6 +7,10 @@ import { formatTimeRange } from "@/lib/timezone"
 import { coerceDistrict, districtHref, getDistrictBasePath, resolveDistrictSiteForRender } from "../district-utils"
 
 export const dynamic = "force-dynamic"
+export const metadata: Metadata = {
+  title: "Calendar",
+  description: "Upcoming district events and activities.",
+}
 
 // Format date for the date badge
 function formatDateBadge(dateString: string) {
