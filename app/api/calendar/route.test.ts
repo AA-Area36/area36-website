@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
 import type { Event, EventException } from "@/lib/db/schema"
-import { buildICalTimingLines, generateExDates, generateRRule } from "./route"
+import {
+  buildICalTimingLines,
+  generateExDates,
+  generateRRule,
+  resolveOccurrenceEndDate,
+} from "./route"
 
 function recurringTimeTbdEvent(): Event {
   return {
@@ -49,5 +54,40 @@ describe("calendar event timing", () => {
     expect(generateRRule(event)).toContain("UNTIL=20260731")
     expect(generateRRule(event)).not.toContain("T235959Z")
     expect(generateExDates(event, [exception])).toEqual(["EXDATE;VALUE=DATE:20260715"])
+  })
+
+  it("shifts a recurring event's multi-day duration to a later occurrence", () => {
+    const endDate = resolveOccurrenceEndDate(
+      "2026-07-01",
+      "2026-07-03",
+      "2026-07-22",
+      null,
+    )
+
+    expect(endDate).toBe("2026-07-24")
+    expect(
+      buildICalTimingLines({
+        date: "2026-07-22",
+        endDate,
+        startTime: "18:00",
+        endTime: "12:00",
+        timezone: "America/Chicago",
+        timeTBD: false,
+      }),
+    ).toEqual([
+      "DTSTART;TZID=America/Chicago:20260722T180000",
+      "DTEND;TZID=America/Chicago:20260724T120000",
+    ])
+  })
+
+  it("uses an exception's explicit end date instead of the series duration", () => {
+    expect(
+      resolveOccurrenceEndDate(
+        "2026-07-01",
+        "2026-07-03",
+        "2026-07-22",
+        "2026-07-23",
+      ),
+    ).toBe("2026-07-23")
   })
 })

@@ -48,6 +48,25 @@ function addDaysToDate(date: string, days: number): string {
   return value.toISOString().slice(0, 10)
 }
 
+export function resolveOccurrenceEndDate(
+  seriesStartDate: string,
+  seriesEndDate: string | null,
+  occurrenceDate: string,
+  exceptionEndDate: string | null,
+): string | null {
+  if (exceptionEndDate) return exceptionEndDate
+  if (!seriesEndDate) return null
+
+  const start = new Date(`${seriesStartDate}T00:00:00Z`)
+  const end = new Date(`${seriesEndDate}T00:00:00Z`)
+  const durationDays = Math.round(
+    (end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000),
+  )
+
+  if (durationDays < 0) return null
+  return addDaysToDate(occurrenceDate, durationDays)
+}
+
 export function buildICalTimingLines(input: {
   date: string
   endDate: string | null
@@ -81,13 +100,6 @@ export function buildICalTimingLines(input: {
  */
 function generateUID(eventId: string, domain: string): string {
   return `${eventId}@${domain}`
-}
-
-/**
- * Generate a unique identifier for an occurrence of a recurring event
- */
-function generateOccurrenceUID(eventId: string, occurrenceDate: string, domain: string): string {
-  return `${eventId}_${occurrenceDate}@${domain}`
 }
 
 /**
@@ -352,7 +364,6 @@ async function buildCalendar(
       (e) => e.exceptionType === "modified"
     )
     for (const exception of modifiedExceptions) {
-      const occurrenceUid = generateOccurrenceUID(event.id, exception.occurrenceDate, domain)
       const recurrenceId = event.timeTBD
         ? formatICalDate(exception.occurrenceDate)
         : formatICalDateTime(exception.occurrenceDate, event.startTime)
@@ -370,7 +381,12 @@ async function buildCalendar(
       const modTitle = exception.title || event.title
       const modStartTime = exception.startTime ?? event.startTime
       const modEndTime = exception.endTime ?? event.endTime
-      const modEndDate = exception.endDate || event.endDate
+      const modEndDate = resolveOccurrenceEndDate(
+        event.date,
+        event.endDate,
+        exception.occurrenceDate,
+        exception.endDate,
+      )
       const modAddress = exception.address ?? event.address
       const modMeetingLink = exception.meetingLink ?? event.meetingLink
       const modDescription = exception.description || event.description
