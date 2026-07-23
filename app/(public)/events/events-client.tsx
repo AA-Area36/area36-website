@@ -34,6 +34,7 @@ import type { CalendarFile } from "./calendar-file-actions"
 import type { Event, LocationType, EventType, EventFlyer } from "@/lib/db/schema"
 import type { DisplayEvent } from "@/lib/types/recurrence"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
+import { getCalendarCellLabel } from "./calendar-a11y"
 
 // Event with types array and flyers (from junction tables)
 export interface EventWithTypes extends Event {
@@ -1493,7 +1494,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                 <Button variant="ghost" size="sm" onClick={prevMonth} aria-label="Previous month">
                   ← Previous
                 </Button>
-                <h3 className="text-lg font-semibold text-foreground">
+                <h3 id="events-calendar-heading" className="text-lg font-semibold text-foreground" aria-live="polite">
                   {currentMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
                 </h3>
                 <Button variant="ghost" size="sm" onClick={nextMonth} aria-label="Next month">
@@ -1502,20 +1503,46 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
               </div>
 
               {/* Calendar Grid */}
-              <div className="grid grid-cols-7">
-                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                  <div
-                    key={day}
-                    className="p-2 text-center text-sm font-medium text-muted-foreground border-b border-border bg-muted/30"
-                  >
-                    {day}
+              <div className="grid grid-cols-7" role="table" aria-labelledby="events-calendar-heading">
+                <div role="rowgroup" className="contents">
+                  <div role="row" className="contents">
+                    {[
+                      ["Sun", "Sunday"],
+                      ["Mon", "Monday"],
+                      ["Tue", "Tuesday"],
+                      ["Wed", "Wednesday"],
+                      ["Thu", "Thursday"],
+                      ["Fri", "Friday"],
+                      ["Sat", "Saturday"],
+                    ].map(([shortDay, fullDay]) => (
+                      <div
+                        key={shortDay}
+                        role="columnheader"
+                        aria-label={fullDay}
+                        className="p-2 text-center text-sm font-medium text-muted-foreground border-b border-border bg-muted/30"
+                      >
+                        <span aria-hidden="true">{shortDay}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-                {Array.from({ length: firstDayOfMonth }).map((_, i) => (
-                  <div key={`empty-${i}`} className="p-2 min-h-24 border-b border-r border-border bg-muted/10" />
-                ))}
-                {Array.from({ length: daysInMonth }).map((_, i) => {
-                  const day = i + 1
+                </div>
+                <div role="rowgroup" className="contents">
+                  {Array.from({
+                    length: Math.ceil((firstDayOfMonth + daysInMonth) / 7),
+                  }).map((_, weekIndex) => (
+                    <div key={`week-${weekIndex}`} role="row" className="contents">
+                      {Array.from({ length: 7 }).map((_, weekdayIndex) => {
+                  const day = weekIndex * 7 + weekdayIndex - firstDayOfMonth + 1
+                  if (day < 1 || day > daysInMonth) {
+                    return (
+                      <div
+                        key={`empty-${weekIndex}-${weekdayIndex}`}
+                        role="cell"
+                        aria-label="Outside current month"
+                        className="p-2 min-h-24 border-b border-r border-border bg-muted/10"
+                      />
+                    )
+                  }
                   const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
                   // Filter calendar events based on search and type filters
                   const dayEvents = calendarEvents.filter((e) => {
@@ -1551,12 +1578,18 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                   return (
                     <div
                       key={day}
+                      role="cell"
+                      aria-label={getCalendarCellLabel({
+                        date: new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day),
+                        isToday,
+                        eventTitles: dayEvents.map((event) => event.title),
+                      })}
                       className={`p-2 min-h-24 border-b border-r border-border overflow-visible relative ${isToday ? "bg-primary/5" : ""}`}
                     >
-                      <span className={`text-sm font-medium ${isToday ? "text-primary" : "text-foreground"}`}>
+                      <span aria-hidden="true" className={`text-sm font-medium ${isToday ? "text-primary" : "text-foreground"}`}>
                         {day}
                       </span>
-                      <div className="mt-1 overflow-visible">
+                      <div className="mt-1 overflow-visible" aria-hidden="true">
                         {(() => {
                           // Sort events by their assigned slot
                           const sortedEvents = [...dayEvents].sort((a, b) => {
@@ -1622,7 +1655,10 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                       </div>
                     </div>
                   )
-                })}
+                      })}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
