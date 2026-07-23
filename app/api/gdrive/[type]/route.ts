@@ -3,6 +3,10 @@ import { enrichResourcesWithMetadata, enrichCommitteeFilesWithMetadata, getFileM
 import { getDb } from "@/lib/db"
 import { recordingFolders } from "@/lib/db/schema"
 import { recordError } from "@/lib/monitoring/errors"
+import {
+  createApiErrorResponse,
+  getRedactedErrorMetadata,
+} from "@/lib/api/error-response"
 
 // Valid types for the API
 type GDriveType = 
@@ -522,8 +526,17 @@ export async function GET(
   if (!validTypes.includes(type as GDriveType)) {
     log("error", "Invalid GDrive type requested", { requestId, type })
     return NextResponse.json(
-      { error: `Invalid type. Valid types: ${validTypes.join(", ")}` },
-      { status: 400 }
+      {
+        error: `Invalid type. Valid types: ${validTypes.join(", ")}`,
+        requestId,
+      },
+      {
+        status: 400,
+        headers: {
+          "Cache-Control": "no-store",
+          "X-Request-Id": requestId,
+        },
+      }
     )
   }
 
@@ -569,24 +582,22 @@ export async function GET(
       },
     })
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    const errorStack = error instanceof Error ? error.stack : undefined
-
     log("error", "GDrive API request failed", { 
       requestId, 
       type,
       totalDurationMs: totalTimer.elapsed(),
-      error: errorMessage,
-      stack: errorStack,
+      ...getRedactedErrorMetadata(error),
     })
-    void recordError({ kind: "FETCH_FAILED", route: `/api/gdrive/${type}`, error })
+    void recordError({
+      kind: "FETCH_FAILED",
+      route: `/api/gdrive/${type}`,
+      error,
+      messageOverride: "GDrive API request failed",
+    })
 
-    return NextResponse.json(
-      { error: errorMessage },
-      { 
-        status: 500,
-        headers: { "X-Request-Id": requestId },
-      }
-    )
+    return createApiErrorResponse({
+      message: "Files are temporarily unavailable.",
+      requestId,
+    })
   }
 }

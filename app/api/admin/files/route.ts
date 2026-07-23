@@ -4,6 +4,12 @@ import { getDb } from "@/lib/db"
 import { fileCacheBustPending, fileMetadata } from "@/lib/db/schema"
 import { sql } from "drizzle-orm"
 import { filterArchivedFolders } from "@/lib/gdrive/archive"
+import {
+  createApiErrorResponse,
+  createApiRequestId,
+  getRedactedErrorMetadata,
+} from "@/lib/api/error-response"
+import { recordError } from "@/lib/monitoring/errors"
 
 // Types for folder structure
 interface FolderNode {
@@ -41,7 +47,6 @@ const FOLDER_CONFIG: Record<FolderType, { envKey: string; name: string }> = {
 
 // Cache TTL for admin files (shorter since admins need fresh data)
 const CACHE_TTL = 60 * 5 // 5 minutes
-const NO_STORE_HEADERS = { "Cache-Control": "no-store" } as const
 
 function isMissingPendingTableError(err: unknown): boolean {
   const msg = (
@@ -162,10 +167,19 @@ async function buildSingleFolderTree(
 }
 
 export async function GET(request: NextRequest) {
+  const requestId = createApiRequestId()
+  const responseHeaders = {
+    "Cache-Control": "no-store",
+    "X-Request-Id": requestId,
+  } as const
+
   // Check authentication
   const session = await auth()
   if (!session?.user?.email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: NO_STORE_HEADERS })
+    return NextResponse.json(
+      { error: "Unauthorized", requestId },
+      { status: 401, headers: responseHeaders },
+    )
   }
 
   try {
@@ -196,8 +210,11 @@ export async function GET(request: NextRequest) {
     if (folderType) {
       if (!FOLDER_CONFIG[folderType]) {
         return NextResponse.json(
-          { error: `Invalid folder type. Valid types: ${Object.keys(FOLDER_CONFIG).join(", ")}` },
-          { status: 400, headers: NO_STORE_HEADERS }
+          {
+            error: `Invalid folder type. Valid types: ${Object.keys(FOLDER_CONFIG).join(", ")}`,
+            requestId,
+          },
+          { status: 400, headers: responseHeaders }
         )
       }
 
@@ -209,7 +226,7 @@ export async function GET(request: NextRequest) {
           metadata: allMetadata,
           pendingCacheBustCount,
         },
-        { headers: NO_STORE_HEADERS }
+        { headers: responseHeaders }
       )
     }
 
@@ -232,13 +249,22 @@ export async function GET(request: NextRequest) {
         metadata: allMetadata,
         pendingCacheBustCount,
       },
-      { headers: NO_STORE_HEADERS }
+      { headers: responseHeaders }
     )
   } catch (error) {
-    console.error("Error fetching admin files data:", error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to fetch files" },
-      { status: 500, headers: NO_STORE_HEADERS }
-    )
+    console.error("Error fetching admin files data", {
+      requestId,
+      ...getRedactedErrorMetadata(error),
+    })
+    void recordError({
+      kind: "FETCH_FAILED",
+      route: "/api/admin/files",
+      error,
+      messageOverride: "Admin files API failed",
+    })
+    return createApiErrorResponse({
+      message: "Failed to fetch files.",
+      requestId,
+    })
   }
 }

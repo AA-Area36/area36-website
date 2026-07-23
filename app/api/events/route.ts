@@ -10,6 +10,7 @@ import { withEdgeCache } from "@/lib/cache/edge-cache"
 import { createRequestLogger } from "@/lib/logger"
 import { recordError } from "@/lib/monitoring/errors"
 import { loadEventRelations } from "@/lib/events/load-event-relations"
+import { createApiErrorResponse } from "@/lib/api/error-response"
 
 const CACHE_KEY_BASE = "events:approved"
 const CACHE_TTL = 60 * 5 // 5 minutes
@@ -109,17 +110,18 @@ export async function GET(request: Request) {
       },
     })
   } catch (error) {
-    log.error("Events API failed", error)
-    void recordError({ kind: "D1_QUERY_FAILED", route: "/api/events", error })
+    log.error("Events API failed")
+    void recordError({
+      kind: "D1_QUERY_FAILED",
+      route: "/api/events",
+      error,
+      messageOverride: "Events API failed",
+    })
     log.tracker.finish(500)
 
-    const message = error instanceof Error ? error.message : "Unknown error"
-    return NextResponse.json(
-      { error: message },
-      {
-        status: 500,
-        headers: { "X-Request-Id": log.requestId },
-      }
-    )
+    return createApiErrorResponse({
+      message: "Events are temporarily unavailable.",
+      requestId: log.requestId,
+    })
   }
 }

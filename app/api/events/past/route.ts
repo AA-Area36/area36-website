@@ -12,6 +12,7 @@ import { createRequestLogger } from "@/lib/logger"
 import { recordError } from "@/lib/monitoring/errors"
 import { loadEventRelations } from "@/lib/events/load-event-relations"
 import { getPastEventCandidateStart } from "@/lib/utils/event-query-window"
+import { createApiErrorResponse } from "@/lib/api/error-response"
 
 const PAGE_SIZE_DEFAULT = 5
 const PAGE_SIZE_MAX = 50
@@ -156,17 +157,18 @@ export async function GET(request: Request) {
       }
     )
   } catch (error) {
-    log.error("Past events API failed", error)
-    void recordError({ kind: "D1_QUERY_FAILED", route: "/api/events/past", error })
+    log.error("Past events API failed")
+    void recordError({
+      kind: "D1_QUERY_FAILED",
+      route: "/api/events/past",
+      error,
+      messageOverride: "Past events API failed",
+    })
     log.tracker.finish(500)
 
-    const message = error instanceof Error ? error.message : "Unknown error"
-    return NextResponse.json(
-      { error: message },
-      {
-        status: 500,
-        headers: { "X-Request-Id": log.requestId },
-      }
-    )
+    return createApiErrorResponse({
+      message: "Past events are temporarily unavailable.",
+      requestId: log.requestId,
+    })
   }
 }
