@@ -107,6 +107,7 @@ export function HeaderClient({
   >({})
   const hamburgerRef = React.useRef<HTMLButtonElement>(null)
   const mobileMenuRef = React.useRef<HTMLDivElement>(null)
+  const wasMobileMenuOpenRef = React.useRef(false)
 
   // Prevent hydration mismatch with Radix UI auto-generated IDs
   React.useEffect(() => {
@@ -120,6 +121,9 @@ export function HeaderClient({
 
   // Focus management: focus first link when menu opens, return focus when it closes
   React.useEffect(() => {
+    const wasMobileMenuOpen = wasMobileMenuOpenRef.current
+    wasMobileMenuOpenRef.current = mobileMenuOpen
+
     if (mobileMenuOpen) {
       const timer = setTimeout(() => {
         const firstLink = mobileMenuRef.current?.querySelector<HTMLElement>(
@@ -128,8 +132,12 @@ export function HeaderClient({
         firstLink?.focus()
       }, 50)
       return () => clearTimeout(timer)
-    } else {
-      // Return focus to hamburger button when menu closes
+    }
+
+    if (wasMobileMenuOpen) {
+      // Return focus only after the user closes an open menu. Focusing during
+      // initial hydration would pull keyboard and screen-reader users to the
+      // end of the header before they begin navigating the page.
       hamburgerRef.current?.focus()
     }
   }, [mobileMenuOpen])
