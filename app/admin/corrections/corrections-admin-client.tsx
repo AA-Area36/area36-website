@@ -80,6 +80,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
+import {
+  downloadSpreadsheet,
+  type SpreadsheetCellValue,
+} from "@/lib/export/xlsx"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
@@ -112,8 +116,6 @@ type CorrectionsAdminClientProps = {
   canDelete: boolean
   initialSearchParams: PageSearchParams
 }
-
-type ExportCellValue = string | number
 
 const YEAR_INPUT_PATTERN = "[0-9]{4}"
 const ZIP_INPUT_PATTERN = "[0-9]{5}(-[0-9]{4})?"
@@ -392,7 +394,7 @@ function formatIsoTimestampSegment(value: Date): string {
     .replace(/\.\d{3}Z$/, "Z")
 }
 
-function toExportCellValue(value: unknown): ExportCellValue {
+function toExportCellValue(value: unknown): SpreadsheetCellValue {
   if (value == null) return ""
   if (typeof value === "number") return value
   if (typeof value === "boolean") return value ? "Yes" : "No"
@@ -1268,12 +1270,16 @@ export function CorrectionsAdminClient({
     setRecipientFilters(next)
   }
 
-  async function exportRows(sheetName: string, filenamePrefix: string, rows: Record<string, ExportCellValue>[]) {
-    const XLSX = await import("xlsx")
-    const workbook = XLSX.utils.book_new()
-    const worksheet = XLSX.utils.json_to_sheet(rows)
-    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
-    XLSX.writeFileXLSX(workbook, `${filenamePrefix}-${formatIsoTimestampSegment(new Date())}.xlsx`)
+  async function exportRows(
+    sheetName: string,
+    filenamePrefix: string,
+    rows: Record<string, SpreadsheetCellValue>[],
+  ) {
+    await downloadSpreadsheet({
+      sheetName,
+      fileName: `${filenamePrefix}-${formatIsoTimestampSegment(new Date())}.xlsx`,
+      rows,
+    })
   }
 
   async function handleExportContacts() {
