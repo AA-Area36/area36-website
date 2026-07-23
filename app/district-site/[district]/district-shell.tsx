@@ -161,7 +161,11 @@ export function DistrictShell({ districtNumber, title, previewMode = false, chil
         </div>
       </header>
 
-      <main id="main-content" className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="mx-auto w-full max-w-7xl px-4 py-8 outline-none sm:px-6 lg:px-8 lg:py-10"
+      >
         {children}
       </main>
 
