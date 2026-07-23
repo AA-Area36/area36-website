@@ -15,6 +15,8 @@ declare global {
       UNLOCK_COOKIE_SECRET?: string
       UPLOAD_TOKEN_SECRET?: string
       GOOGLE_ADMIN_IMPERSONATE_EMAIL?: string
+      PUBLIC_HTML_CACHE_ENABLED?: string
+      PUBLIC_HTML_CACHE_HOSTS?: string
     }
   }
 
@@ -52,6 +54,8 @@ declare global {
     // Gmail API (uses same service account as Google Drive)
     GMAIL_SENDER_EMAIL: string
     GOOGLE_ADMIN_IMPERSONATE_EMAIL?: string
+    PUBLIC_HTML_CACHE_ENABLED?: string
+    PUBLIC_HTML_CACHE_HOSTS?: string
   }
 }
 
