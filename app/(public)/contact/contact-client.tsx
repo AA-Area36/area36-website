@@ -176,7 +176,15 @@ function ContactForm({ content, header }: { content?: ContentDoc; header?: Conta
                     </Button>
                   </div>
                 ) : (
-                  <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                  <form
+                    onSubmit={handleSubmit(onSubmit)}
+                    className="space-y-6"
+                    aria-describedby="contact-required-instructions"
+                  >
+                    <p id="contact-required-instructions" className="text-sm text-muted-foreground">
+                      {t("form.requiredInstructions", "Fields marked required must be completed.")}
+                    </p>
+
                     {submitError && (
                       <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive" role="alert" aria-live="assertive">
                         {submitError}
@@ -185,7 +193,8 @@ function ContactForm({ content, header }: { content?: ContentDoc; header?: Conta
 
                     <div className="space-y-2">
                       <Label htmlFor="recipients">
-                        {t("form.recipientsLabel", "Who would you like to contact?")} <span className="text-destructive">*</span>
+                        {t("form.recipientsLabel", "Who would you like to contact?")}{" "}
+                        <span className="font-normal text-muted-foreground">({t("form.requiredLabel", "required")})</span>
                       </Label>
                       <MultiSelect
                         id="recipients"
@@ -197,6 +206,7 @@ function ContactForm({ content, header }: { content?: ContentDoc; header?: Conta
                         onChange={(value) => setValue("recipients", value, { shouldValidate: true })}
                         placeholder={t("form.recipientsPlaceholder", "Select recipients")}
                         className="w-full"
+                        aria-required="true"
                         {...getErrorProps("recipients")}
                       />
                       {errors.recipients && (
@@ -222,18 +232,20 @@ function ContactForm({ content, header }: { content?: ContentDoc; header?: Conta
                     <div className="grid gap-6 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor="firstName">
-                          {t("form.firstNameLabel", "First Name")} <span className="text-destructive">*</span>
+                          {t("form.firstNameLabel", "First Name")}{" "}
+                          <span className="font-normal text-muted-foreground">({t("form.requiredLabel", "required")})</span>
                         </Label>
-                        <Input id="firstName" {...register("firstName")} {...getErrorProps("firstName")} />
+                        <Input id="firstName" required {...register("firstName")} {...getErrorProps("firstName")} />
                         {errors.firstName && (
                           <p id="firstName-error" className="text-sm text-destructive">{errors.firstName.message}</p>
                         )}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="lastName">
-                          {t("form.lastNameLabel", "Last Name")} <span className="text-destructive">*</span>
+                          {t("form.lastNameLabel", "Last Name")}{" "}
+                          <span className="font-normal text-muted-foreground">({t("form.requiredLabel", "required")})</span>
                         </Label>
-                        <Input id="lastName" {...register("lastName")} {...getErrorProps("lastName")} />
+                        <Input id="lastName" required {...register("lastName")} {...getErrorProps("lastName")} />
                         {errors.lastName && (
                           <p id="lastName-error" className="text-sm text-destructive">{errors.lastName.message}</p>
                         )}
@@ -242,9 +254,10 @@ function ContactForm({ content, header }: { content?: ContentDoc; header?: Conta
 
                     <div className="space-y-2">
                       <Label htmlFor="email">
-                        {t("form.emailLabel", "Email")} <span className="text-destructive">*</span>
+                        {t("form.emailLabel", "Email")}{" "}
+                        <span className="font-normal text-muted-foreground">({t("form.requiredLabel", "required")})</span>
                       </Label>
-                      <Input id="email" type="email" {...register("email")} {...getErrorProps("email")} />
+                      <Input id="email" type="email" required {...register("email")} {...getErrorProps("email")} />
                       {errors.email && (
                         <p id="email-error" className="text-sm text-destructive">{errors.email.message}</p>
                       )}
@@ -257,9 +270,10 @@ function ContactForm({ content, header }: { content?: ContentDoc; header?: Conta
 
                     <div className="space-y-2">
                       <Label htmlFor="subject">
-                        {t("form.subjectLabel", "Subject")} <span className="text-destructive">*</span>
+                        {t("form.subjectLabel", "Subject")}{" "}
+                        <span className="font-normal text-muted-foreground">({t("form.requiredLabel", "required")})</span>
                       </Label>
-                      <Input id="subject" placeholder={t("form.subjectPlaceholder", "Brief subject line")} {...register("subject")} {...getErrorProps("subject")} />
+                      <Input id="subject" required placeholder={t("form.subjectPlaceholder", "Brief subject line")} {...register("subject")} {...getErrorProps("subject")} />
                       {errors.subject && (
                         <p id="subject-error" className="text-sm text-destructive">{errors.subject.message}</p>
                       )}
@@ -267,9 +281,10 @@ function ContactForm({ content, header }: { content?: ContentDoc; header?: Conta
 
                     <div className="space-y-2">
                       <Label htmlFor="message">
-                        {t("form.messageLabel", "Message")} <span className="text-destructive">*</span>
+                        {t("form.messageLabel", "Message")}{" "}
+                        <span className="font-normal text-muted-foreground">({t("form.requiredLabel", "required")})</span>
                       </Label>
-                      <Textarea id="message" rows={5} className="resize-none" {...register("message")} {...getErrorProps("message")} />
+                      <Textarea id="message" required rows={5} className="resize-none" {...register("message")} {...getErrorProps("message")} />
                       {errors.message && (
                         <p id="message-error" className="text-sm text-destructive">{errors.message.message}</p>
                       )}
@@ -288,6 +303,8 @@ function ContactForm({ content, header }: { content?: ContentDoc; header?: Conta
                     <div className="flex items-start gap-2">
                       <Checkbox
                         id="consent"
+                        required
+                        aria-required="true"
                         {...getErrorProps("consent")}
                         checked={watch("consent")}
                         onCheckedChange={(checked) =>
@@ -299,6 +316,8 @@ function ContactForm({ content, header }: { content?: ContentDoc; header?: Conta
                           "form.consentText",
                           "I understand that A.A. is a program of anonymity and that my contact information will be kept confidential.",
                         )}
+                        {" "}
+                        <span>({t("form.requiredLabel", "required")})</span>
                       </Label>
                     </div>
                     {errors.consent && (

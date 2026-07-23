@@ -15,6 +15,7 @@ describe("MultiSelect accessibility props", () => {
           onChange={vi.fn()}
           aria-invalid="true"
           aria-describedby="types-error"
+          aria-required="true"
         />
         <p id="types-error">Select a type</p>
       </>
@@ -23,5 +24,6 @@ describe("MultiSelect accessibility props", () => {
     const combobox = screen.getByRole("combobox", { name: "Types" })
     expect(combobox).toHaveAttribute("aria-invalid", "true")
     expect(combobox).toHaveAttribute("aria-describedby", "types-error")
+    expect(combobox).toHaveAttribute("aria-required", "true")
   })
 })

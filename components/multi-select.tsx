@@ -19,7 +19,7 @@ interface MultiSelectOption {
 
 interface MultiSelectProps extends Pick<
   React.AriaAttributes,
-  "aria-label" | "aria-labelledby" | "aria-describedby" | "aria-invalid"
+  "aria-label" | "aria-labelledby" | "aria-describedby" | "aria-invalid" | "aria-required"
 > {
   options: MultiSelectOption[]
   value: string[]
@@ -40,6 +40,7 @@ export function MultiSelect({
   "aria-labelledby": ariaLabelledBy,
   "aria-describedby": ariaDescribedBy,
   "aria-invalid": ariaInvalid,
+  "aria-required": ariaRequired,
 }: MultiSelectProps) {
   const [open, setOpen] = React.useState(false)
   const triggerId = React.useId()
@@ -160,6 +161,7 @@ export function MultiSelect({
           aria-labelledby={ariaLabelledBy}
           aria-describedby={ariaDescribedBy}
           aria-invalid={ariaInvalid}
+          aria-required={ariaRequired}
           className={cn(
             "h-9 justify-between font-normal",
             !value.length && "text-muted-foreground",
