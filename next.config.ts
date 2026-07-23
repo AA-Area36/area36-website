@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
+import { BROWSER_SECURITY_HEADERS } from "./lib/security/browser-headers";
 
 initOpenNextCloudflareForDev();
 
@@ -9,6 +10,15 @@ const districtServerActionOrigins = Array.from({ length: 27 }, (_, index) => ind
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  poweredByHeader: false,
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [...BROWSER_SECURITY_HEADERS],
+      },
+    ];
+  },
   experimental: {
     serverActions: {
       allowedOrigins: ["area36.org", "www.area36.org", ...districtServerActionOrigins],
