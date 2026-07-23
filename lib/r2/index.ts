@@ -41,8 +41,7 @@ export async function deleteImage(key: string): Promise<void> {
   await bucket.delete(key)
 }
 
-export async function deleteImagesByPrefix(prefix: string): Promise<number> {
-  const bucket = await getR2Bucket()
+export async function deleteObjectsByPrefix(bucket: R2Bucket, prefix: string): Promise<number> {
   let listed = await bucket.list({ prefix })
 
   let deletedCount = 0
@@ -61,6 +60,11 @@ export async function deleteImagesByPrefix(prefix: string): Promise<number> {
   }
 
   return deletedCount
+}
+
+export async function deleteImagesByPrefix(prefix: string): Promise<number> {
+  const bucket = await getR2Bucket()
+  return deleteObjectsByPrefix(bucket, prefix)
 }
 
 // Allowed MIME types for event flyers

@@ -9,6 +9,7 @@ import { sendDenialEmailToSubmitter, sendDenialEmailToChair } from "@/lib/email"
 import { serializeWeeklyPattern, serializeMonthlyPatternValue } from "@/lib/utils/recurrence"
 import type { WeeklyPattern, MonthlyPattern } from "@/lib/types/recurrence"
 import { invalidateEventCaches } from "@/lib/utils/event-cache"
+import { completeEventFlyerCleanup, enqueueEventFlyerCleanup } from "@/lib/events/flyer-cleanup"
 
 export interface UpdateEventData {
   title: string
@@ -125,11 +126,31 @@ export async function deleteEvent(eventId: string): Promise<void> {
   }
 
   const db = await getDb()
-  await db.delete(events).where(eq(events.id, eventId))
+  const [event] = await db.select({ id: events.id }).from(events).where(eq(events.id, eventId))
+  if (!event) {
+    throw new Error("Event not found")
+  }
+
+  await db.batch([
+    enqueueEventFlyerCleanup(db, eventId),
+    db.delete(events).where(eq(events.id, eventId)),
+  ])
+
+  let cleanupError: unknown
+  try {
+    await completeEventFlyerCleanup(db, eventId)
+  } catch (error) {
+    console.error("Event deleted with flyer cleanup pending", error)
+    cleanupError = error
+  }
 
   revalidatePath("/admin/events")
   revalidatePath("/events")
   await invalidateEventCaches()
+
+  if (cleanupError) {
+    throw new Error("Event deleted, but flyer cleanup is pending")
+  }
 }
 
 export async function updateEvent(eventId: string, data: UpdateEventData): Promise<{ success: boolean; error?: string }> {

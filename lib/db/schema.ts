@@ -315,6 +315,21 @@ export const eventExceptions = sqliteTable("event_exceptions", {
 export type EventException = typeof eventExceptions.$inferSelect
 export type NewEventException = typeof eventExceptions.$inferInsert
 
+// Durable R2 cleanup jobs retained after their event row is deleted.
+export const eventFlyerCleanupPending = sqliteTable("event_flyer_cleanup_pending", {
+  eventId: text("event_id").primaryKey(),
+  attempts: integer("attempts").notNull().default(0),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+})
+
+export type EventFlyerCleanupPending = typeof eventFlyerCleanupPending.$inferSelect
+export type NewEventFlyerCleanupPending = typeof eventFlyerCleanupPending.$inferInsert
+
 // Subscription Drives tables
 export const driveSubmissionStatuses = ["pending", "approved", "denied"] as const
 export type DriveSubmissionStatus = (typeof driveSubmissionStatuses)[number]

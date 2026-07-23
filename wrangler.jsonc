@@ -4,6 +4,9 @@
   "main": "custom-worker.ts",
   "compatibility_date": "2025-01-15",
   "compatibility_flags": ["nodejs_compat"],
+  "triggers": {
+    "crons": ["*/30 * * * *"]
+  },
   "observability": {
     "logs": {
       "enabled": true,

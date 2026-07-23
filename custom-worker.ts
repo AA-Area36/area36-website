@@ -2,6 +2,7 @@
 // @ts-ignore `.open-next/worker.js` is generated during the OpenNext build.
 import openNextHandler from "./.open-next/worker.js"
 import { serveWithPublicHtmlCache } from "@/lib/cache/public-html-worker"
+import { processPendingEventFlyerCleanup } from "@/lib/events/flyer-cleanup"
 
 export default {
   async fetch(request, env, ctx) {
@@ -13,6 +14,9 @@ export default {
       cache,
       next: () => openNextHandler.fetch(request, env, ctx),
     })
+  },
+  async scheduled(_controller, env, ctx) {
+    ctx.waitUntil(processPendingEventFlyerCleanup(env))
   },
 } satisfies ExportedHandler<CloudflareEnv>
 

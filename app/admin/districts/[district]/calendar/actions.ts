@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import type { EventType } from "@/lib/db/schema"
 import { invalidateEventCaches } from "@/lib/utils/event-cache"
+import { completeEventFlyerCleanup, enqueueEventFlyerCleanup } from "@/lib/events/flyer-cleanup"
 import {
   parseDate,
   parseEventTypes,
@@ -168,10 +169,32 @@ export async function deleteDistrictEvent(formData: FormData) {
   if (!eventId) throw new Error("Missing eventId")
 
   const db = await getDb()
-  await db
-    .delete(schema.events)
+  const event = await db
+    .select({ id: schema.events.id })
+    .from(schema.events)
     .where(and(eq(schema.events.id, eventId), eq(schema.events.districtNumber, districtNumber)))
+    .get()
+  if (!event) throw new Error("Event not found")
+
+  await db.batch([
+    enqueueEventFlyerCleanup(db, eventId),
+    db
+      .delete(schema.events)
+      .where(and(eq(schema.events.id, eventId), eq(schema.events.districtNumber, districtNumber))),
+  ])
+
+  let cleanupError: unknown
+  try {
+    await completeEventFlyerCleanup(db, eventId)
+  } catch (error) {
+    console.error("District event deleted with flyer cleanup pending", error)
+    cleanupError = error
+  }
 
   revalidateDistrictEventPaths(districtNumber)
   await invalidateEventCaches(districtNumber)
+
+  if (cleanupError) {
+    throw new Error("Event deleted, but flyer cleanup is pending")
+  }
 }
