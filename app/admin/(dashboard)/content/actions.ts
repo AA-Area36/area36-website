@@ -7,15 +7,14 @@ import type { Locale } from "@/lib/i18n/locales"
 import { cookies } from "next/headers"
 import { and, eq } from "drizzle-orm"
 import { sql } from "drizzle-orm"
+import { requireAreaAdminSession } from "@/lib/auth/guards"
 
 const CONTENT_PREVIEW_COOKIE = "a36_content_preview"
 
 export type ContentDocRow = {
-  scope: Scope
   locale: Locale
   draftJson: string | null
   publishedJson: string | null
-  createdAt: string
   draftUpdatedAt: string
   publishedAt: string | null
   updatedBy: string | null
@@ -61,15 +60,18 @@ export async function setContentPreviewEnabled(enabled: boolean) {
 }
 
 export async function loadContentDocs(scope: Scope): Promise<ContentDocRow[]> {
+  const session = await requireAreaAdminSession()
+  if (!session) {
+    throw new Error("Unauthorized")
+  }
+
   try {
     const db = await getDb()
     return db
       .select({
-        scope: schema.contentDocuments.scope,
         locale: schema.contentDocuments.locale,
         draftJson: schema.contentDocuments.draftJson,
         publishedJson: schema.contentDocuments.publishedJson,
-        createdAt: schema.contentDocuments.createdAt,
         draftUpdatedAt: schema.contentDocuments.draftUpdatedAt,
         publishedAt: schema.contentDocuments.publishedAt,
         updatedBy: schema.contentDocuments.updatedBy,
