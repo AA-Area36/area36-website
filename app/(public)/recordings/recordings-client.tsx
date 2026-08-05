@@ -44,6 +44,7 @@ interface AudioPlayerState {
   recording: Recording | null
   isPlaying: boolean
   isLoading: boolean
+  playbackError: string | null
   currentTime: number
   duration: number
   volume: number
@@ -87,6 +88,7 @@ export function RecordingsClient({ categories, recordings, years, unlockedFolder
     recording: null,
     isPlaying: false,
     isLoading: false,
+    playbackError: null,
     currentTime: 0,
     duration: 0,
     volume: 0.8,
@@ -160,14 +162,29 @@ export function RecordingsClient({ categories, recordings, years, unlockedFolder
   const hasActiveFilters = searchQuery !== "" || yearFilter !== "all"
 
   // Audio player controls
+  const attemptPlayback = React.useCallback((reload = false) => {
+    const audio = audioRef.current
+    if (!audio) return
+
+    if (reload) audio.load()
+    setPlayerState((prev) => ({ ...prev, isLoading: true, playbackError: null }))
+    void audio.play().catch(() => {
+      setPlayerState((prev) => ({
+        ...prev,
+        isPlaying: false,
+        isLoading: false,
+        playbackError: "This recording could not be played. Check your connection and try again.",
+      }))
+    })
+  }, [])
+
   const playRecording = (recording: Recording) => {
     if (playerState.recording?.id === recording.id) {
       // Toggle play/pause for same recording
       if (playerState.isPlaying) {
         audioRef.current?.pause()
       } else {
-        setPlayerState((prev) => ({ ...prev, isLoading: true }))
-        audioRef.current?.play()
+        attemptPlayback()
       }
     } else {
       // Play new recording - show loading state immediately
@@ -176,6 +193,7 @@ export function RecordingsClient({ categories, recordings, years, unlockedFolder
         recording,
         isPlaying: false,
         isLoading: true,
+        playbackError: null,
         currentTime: 0,
         duration: 0,
       }))
@@ -186,7 +204,7 @@ export function RecordingsClient({ categories, recordings, years, unlockedFolder
     if (playerState.isPlaying) {
       audioRef.current?.pause()
     } else {
-      audioRef.current?.play()
+      attemptPlayback()
     }
   }
 
@@ -237,7 +255,18 @@ export function RecordingsClient({ categories, recordings, years, unlockedFolder
     // Loading state handlers - only clear loading when actual playback starts (playing event)
     // or when timeupdate fires (meaning audio is actually progressing)
     const handleWaiting = () => setPlayerState((prev) => ({ ...prev, isLoading: true }))
-    const handlePlaying = () => setPlayerState((prev) => ({ ...prev, isLoading: false, isPlaying: true }))
+    const handlePlaying = () => setPlayerState((prev) => ({
+      ...prev,
+      isLoading: false,
+      isPlaying: true,
+      playbackError: null,
+    }))
+    const handleError = () => setPlayerState((prev) => ({
+      ...prev,
+      isPlaying: false,
+      isLoading: false,
+      playbackError: "This recording could not be played. Check your connection and try again.",
+    }))
     const handleTimeUpdateWithLoading = () => {
       setPlayerState((prev) => ({
         ...prev,
@@ -254,6 +283,7 @@ export function RecordingsClient({ categories, recordings, years, unlockedFolder
     audio.addEventListener("timeupdate", handleTimeUpdateWithLoading)
     audio.addEventListener("waiting", handleWaiting)
     audio.addEventListener("playing", handlePlaying)
+    audio.addEventListener("error", handleError)
 
     return () => {
       audio.removeEventListener("pause", handlePause)
@@ -262,6 +292,7 @@ export function RecordingsClient({ categories, recordings, years, unlockedFolder
       audio.removeEventListener("timeupdate", handleTimeUpdateWithLoading)
       audio.removeEventListener("waiting", handleWaiting)
       audio.removeEventListener("playing", handlePlaying)
+      audio.removeEventListener("error", handleError)
     }
   }, [])
 
@@ -269,11 +300,9 @@ export function RecordingsClient({ categories, recordings, years, unlockedFolder
   React.useEffect(() => {
     if (playerState.recording && audioRef.current) {
       audioRef.current.load()
-      audioRef.current.play().catch(() => {
-        // Auto-play may be blocked by browser
-      })
+      attemptPlayback()
     }
-  }, [playerState.recording])
+  }, [playerState.recording, attemptPlayback])
 
   return (
     <div className="space-y-8">
@@ -540,6 +569,7 @@ export function RecordingsClient({ categories, recordings, years, unlockedFolder
                 size="icon"
                 onClick={togglePlayPause}
                 className="h-10 w-10 rounded-full"
+                aria-label={playerState.isPlaying ? "Pause current recording" : "Play current recording"}
               >
                 {playerState.isPlaying ? (
                   <Pause className="h-5 w-5" />
@@ -571,6 +601,23 @@ export function RecordingsClient({ categories, recordings, years, unlockedFolder
                     {formatTime(playerState.duration)}
                   </span>
                 </div>
+                {playerState.playbackError ? (
+                  <div
+                    className="mt-2 flex flex-wrap items-center gap-2 text-sm text-destructive"
+                    role="alert"
+                    aria-live="assertive"
+                  >
+                    <span>{playerState.playbackError}</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => attemptPlayback(true)}
+                    >
+                      Retry playback
+                    </Button>
+                  </div>
+                ) : null}
               </div>
 
               {/* Volume */}
