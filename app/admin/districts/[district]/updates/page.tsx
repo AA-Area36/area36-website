@@ -12,6 +12,9 @@ import { FormSubmitButton } from "@/components/form-submit-button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Updates" }
 
 function coerceDistrict(param: string): number | null {
   const n = Number(param)

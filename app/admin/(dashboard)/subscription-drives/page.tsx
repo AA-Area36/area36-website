@@ -8,6 +8,9 @@ import type { DriveSubmission, DriveSubmissionStatus } from "@/lib/db/schema"
 import { getActiveDrive, getDriveSubmissions, getDriveStats, getDriveLeaderboard, approveSubmission, deleteSubmission } from "./actions"
 import { DenySubmissionDialog } from "./deny-submission-dialog"
 import { LeaderboardChart } from "./leaderboard-chart"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Subscription Drives" }
 
 export const dynamic = "force-dynamic"
 

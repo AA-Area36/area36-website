@@ -5,6 +5,7 @@ import { signOut } from "@/lib/auth"
 import { requireHostedDistrictAccessSession } from "@/lib/auth/guards"
 import { getDistrictSiteConfig } from "@/lib/district/queries"
 import { AdminMain } from "@/components/admin-main"
+import type { Metadata } from "next"
 
 function coerceDistrict(param: string): number | null {
   const n = Number(param)
@@ -13,6 +14,22 @@ function coerceDistrict(param: string): number | null {
 }
 
 export const dynamic = "force-dynamic"
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ district: string }>
+}): Promise<Metadata> {
+  const { district } = await params
+  const districtNumber = coerceDistrict(district)
+  const label = districtNumber ? `District ${districtNumber} Admin` : "District Admin"
+  return {
+    title: {
+      default: `${label} | Area 36`,
+      template: `%s | ${label} | Area 36`,
+    },
+  }
+}
 
 export default async function DistrictAdminLayout({
   children,

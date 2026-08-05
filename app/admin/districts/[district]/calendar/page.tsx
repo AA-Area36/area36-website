@@ -10,6 +10,9 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { EventTypesField } from "./event-types-field"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Calendar" }
 
 function coerceDistrict(param: string): number | null {
   const n = Number(param)

@@ -9,6 +9,11 @@ import { getDb, schema } from "@/lib/db"
 import { getEffectivePermissions, isEffectivelyAreaAdmin } from "@/lib/auth/rbac"
 import type { AppPermission } from "@/lib/auth/permissions"
 import { AdminMain } from "@/components/admin-main"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: "Admin Home | Area 36",
+}
 
 export const dynamic = "force-dynamic"
 

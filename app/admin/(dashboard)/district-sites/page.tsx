@@ -2,6 +2,9 @@ import Link from "next/link"
 import { getDb, schema } from "@/lib/db"
 import { desc } from "drizzle-orm"
 import { districtNumbers } from "@/lib/constants/districts"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "District Sites" }
 
 export const dynamic = "force-dynamic"
 

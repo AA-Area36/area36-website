@@ -10,6 +10,14 @@ import { events } from "@/lib/db/schema"
 import { eq, sql } from "drizzle-orm"
 import { AdminNav } from "@/components/admin-nav"
 import { AdminMain } from "@/components/admin-main"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: {
+    default: "Area 36 Admin",
+    template: "%s | Area 36 Admin",
+  },
+}
 
 export default async function DashboardLayout({
   children,

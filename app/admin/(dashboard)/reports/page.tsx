@@ -4,6 +4,9 @@ import { getDb } from "@/lib/db"
 import { reportsMonthly } from "@/lib/db/schema"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Reports" }
 
 export const dynamic = "force-dynamic"
 

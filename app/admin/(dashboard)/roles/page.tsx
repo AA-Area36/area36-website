@@ -11,6 +11,9 @@ import {
   upsertAppUserRole,
 } from "./actions"
 import { RolesManagementClient } from "./roles-management-client"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Roles and Permissions" }
 
 export const dynamic = "force-dynamic"
 
