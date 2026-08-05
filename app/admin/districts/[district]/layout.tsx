@@ -4,6 +4,7 @@ import { Shield } from "lucide-react"
 import { signOut } from "@/lib/auth"
 import { requireHostedDistrictAccessSession } from "@/lib/auth/guards"
 import { getDistrictSiteConfig } from "@/lib/district/queries"
+import { AdminMain } from "@/components/admin-main"
 
 function coerceDistrict(param: string): number | null {
   const n = Number(param)
@@ -75,7 +76,7 @@ export default async function DistrictAdminLayout({
           </nav>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">{children}</main>
+      <AdminMain className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">{children}</AdminMain>
     </div>
   )
 }

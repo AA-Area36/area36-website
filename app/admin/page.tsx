@@ -8,6 +8,7 @@ import { getLocalViewAsProfileForSession } from "@/lib/auth/local-view-as"
 import { getDb, schema } from "@/lib/db"
 import { getEffectivePermissions, isEffectivelyAreaAdmin } from "@/lib/auth/rbac"
 import type { AppPermission } from "@/lib/auth/permissions"
+import { AdminMain } from "@/components/admin-main"
 
 export const dynamic = "force-dynamic"
 
@@ -134,7 +135,7 @@ export default async function AdminHomePage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10 space-y-6">
+      <AdminMain className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10 space-y-6">
         <section className="rounded-xl border border-border bg-card p-6">
           <h1 className="text-2xl font-semibold text-foreground">Admin Home</h1>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -197,7 +198,7 @@ export default async function AdminHomePage() {
             </table>
           </div>
         </section>
-      </main>
+      </AdminMain>
     </div>
   )
 }
