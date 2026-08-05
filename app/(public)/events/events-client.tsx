@@ -80,45 +80,6 @@ function buildMapsHref(address: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
 }
 
-function getPrimaryEventHref(
-  event: Pick<DisplayEvent, "locationType" | "meetingLink" | "address">
-): string | null {
-  // Online wins for Hybrid, per requirement.
-  if ((event.locationType === "online" || event.locationType === "hybrid") && event.meetingLink) {
-    return event.meetingLink
-  }
-  if ((event.locationType === "in-person" || event.locationType === "hybrid") && event.address) {
-    return buildMapsHref(event.address)
-  }
-  return null
-}
-
-function isFromInteractiveElement(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false
-  // Avoid hijacking clicks on links, buttons, form controls, etc.
-  // Important: do not include `[role="link"]` here; the card container itself uses it.
-  return !!target.closest('a,button,input,textarea,select,summary,label,[role="button"],[data-no-card-link]')
-}
-
-function getEventCardLinkProps(href: string | null) {
-  if (!href) return {}
-
-  return {
-    role: "link" as const,
-    tabIndex: 0,
-    onClick: (e: React.MouseEvent) => {
-      if (isFromInteractiveElement(e.target)) return
-      window.open(href, "_blank", "noopener,noreferrer")
-    },
-    onKeyDown: (e: React.KeyboardEvent) => {
-      if (e.key !== "Enter" && e.key !== " ") return
-      if (isFromInteractiveElement(e.target)) return
-      e.preventDefault()
-      window.open(href, "_blank", "noopener,noreferrer")
-    },
-  }
-}
-
 // Generate Google Calendar URL for individual events
 function generateGoogleCalendarUrl(event: DisplayEvent): string {
   // Format dates for Google Calendar: YYYYMMDDTHHMMSS
@@ -1245,12 +1206,10 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                   {pagedUpcomingGroups.map((group) => {
                     if (group.type === "single" && group.event) {
                       const event = group.event
-                      const primaryHref = getPrimaryEventHref(event)
                       return (
                         <article
                           key={event.id}
-                          className={`group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md ${primaryHref ? "cursor-pointer" : ""}`}
-                          {...getEventCardLinkProps(primaryHref)}
+                          className="group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md"
                         >
                           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                             <div className="flex-1">
@@ -1352,7 +1311,6 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                       const firstOccurrence = group.occurrences[0]
                       const remainingOccurrences = group.occurrences.slice(1)
                       const isExpanded = expandedGroups.has(group.parentEventId)
-                      const primaryHref = getPrimaryEventHref(firstOccurrence)
 
                       return (
                         <article
@@ -1361,8 +1319,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                         >
                           {/* Main event card (first occurrence) */}
                           <div
-                            className={`p-6 transition-all hover:bg-muted/30 ${primaryHref ? "cursor-pointer" : ""}`}
-                            {...getEventCardLinkProps(primaryHref)}
+                            className="p-6 transition-all hover:bg-muted/30"
                           >
                             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                               <div className="flex-1">
@@ -1539,12 +1496,10 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                   {pagedDistrictGroups.map((group) => {
                     if (group.type === "single" && group.event) {
                       const event = group.event
-                      const primaryHref = getPrimaryEventHref(event)
                       return (
                         <article
                           key={event.id}
-                          className={`group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md ${primaryHref ? "cursor-pointer" : ""}`}
-                          {...getEventCardLinkProps(primaryHref)}
+                          className="group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md"
                         >
                           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                             <div className="flex-1">
@@ -1646,7 +1601,6 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                       const firstOccurrence = group.occurrences[0]
                       const remainingOccurrences = group.occurrences.slice(1)
                       const isExpanded = expandedGroups.has(group.parentEventId)
-                      const primaryHref = getPrimaryEventHref(firstOccurrence)
 
                       return (
                         <article
@@ -1655,8 +1609,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                         >
                           {/* Main event card (first occurrence) */}
                           <div
-                            className={`p-6 transition-all hover:bg-muted/30 ${primaryHref ? "cursor-pointer" : ""}`}
-                            {...getEventCardLinkProps(primaryHref)}
+                            className="p-6 transition-all hover:bg-muted/30"
                           >
                             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                               <div className="flex-1">
@@ -1844,12 +1797,10 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                   {pagedDistrictMeetingGroups.map((group) => {
                     if (group.type === "single" && group.event) {
                       const event = group.event
-                      const primaryHref = getPrimaryEventHref(event)
                       return (
                         <article
                           key={event.id}
-                          className={`group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md ${primaryHref ? "cursor-pointer" : ""}`}
-                          {...getEventCardLinkProps(primaryHref)}
+                          className="group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md"
                         >
                           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                             <div className="flex-1">
@@ -1926,7 +1877,6 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                       const firstOccurrence = group.occurrences[0]
                       const remainingOccurrences = group.occurrences.slice(1)
                       const isExpanded = expandedGroups.has(group.parentEventId)
-                      const primaryHref = getPrimaryEventHref(firstOccurrence)
 
                       return (
                         <article
@@ -1934,8 +1884,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                           className="rounded-xl border border-border bg-card overflow-hidden"
                         >
                           <div
-                            className={`p-6 transition-all hover:bg-muted/30 ${primaryHref ? "cursor-pointer" : ""}`}
-                            {...getEventCardLinkProps(primaryHref)}
+                            className="p-6 transition-all hover:bg-muted/30"
                           >
                             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                               <div className="flex-1">
@@ -2196,12 +2145,10 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                         {groupEventsDescending(currentPastPage?.events ?? []).map((group) => {
                           if (group.type === "single" && group.event) {
                             const event = group.event
-                            const primaryHref = getPrimaryEventHref(event)
                             return (
                               <article
                                 key={event.id}
-                                className={`group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md ${primaryHref ? "cursor-pointer" : ""}`}
-                                {...getEventCardLinkProps(primaryHref)}
+                                className="group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md"
                               >
                                 <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                                   <div className="flex-1">
@@ -2291,7 +2238,6 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                             const firstOccurrence = group.occurrences[0]
                             const remainingOccurrences = group.occurrences.slice(1)
                             const isExpanded = expandedPastGroups.has(group.parentEventId)
-                            const primaryHref = getPrimaryEventHref(firstOccurrence)
 
                             return (
                               <article
@@ -2299,8 +2245,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                 className="rounded-xl border border-border bg-card overflow-hidden"
                               >
                                 <div
-                                  className={`p-6 transition-all hover:bg-muted/30 ${primaryHref ? "cursor-pointer" : ""}`}
-                                  {...getEventCardLinkProps(primaryHref)}
+                                  className="p-6 transition-all hover:bg-muted/30"
                                 >
                                   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                                     <div className="flex-1">
