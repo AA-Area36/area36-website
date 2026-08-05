@@ -20,6 +20,31 @@ interface ReCaptchaResponse {
 }
 
 const RECAPTCHA_SCORE_THRESHOLD = 0.5
+const TREATMENT_RECIPIENTS = ["ttcc@area36.org", "treatment@area36.org"] as const
+const DELIVERY_ERROR =
+  "We could not deliver your request. Please try again or contact ttcc@area36.org directly."
+
+async function deliverTreatmentMessage(
+  credentials: ReturnType<typeof getGmailCredentials>,
+  message: Omit<Parameters<typeof sendEmail>[1], "to">
+): Promise<boolean> {
+  let delivered = 0
+
+  for (const recipient of TREATMENT_RECIPIENTS) {
+    try {
+      const emailResult = await sendEmail(credentials, { ...message, to: recipient })
+      if (emailResult.success) {
+        delivered++
+      } else {
+        console.error(`Failed to send Treatment TCP form to ${recipient}:`, emailResult.error)
+      }
+    } catch (error) {
+      console.error(`Treatment TCP delivery threw for ${recipient}:`, error)
+    }
+  }
+
+  return delivered > 0
+}
 
 async function getRecaptchaSecretKey(): Promise<string | undefined> {
   try {
@@ -123,19 +148,12 @@ Facility Address: ${result.data.treatmentFacilityAddress}
 ---
 This form was submitted via the Area 36 website Treatment Temporary Contact Program page.`
 
-    // Send to both ttcc@area36.org and treatment@area36.org
-    const recipients = ["ttcc@area36.org", "treatment@area36.org"]
-
-    for (const recipient of recipients) {
-      const emailResult = await sendEmail(credentials, {
-        to: recipient,
-        subject: "[Treatment TCP] New Newcomer Sign Up Request",
-        body,
-      })
-
-      if (!emailResult.success) {
-        console.error(`Failed to send newcomer form to ${recipient}:`, emailResult.error)
-      }
+    const delivered = await deliverTreatmentMessage(credentials, {
+      subject: "[Treatment TCP] New Newcomer Sign Up Request",
+      body,
+    })
+    if (!delivered) {
+      return { success: false, error: DELIVERY_ERROR }
     }
 
     return { success: true, message: "Your request has been submitted. The Treatment TCP Coordinator will contact you shortly." }
@@ -191,20 +209,13 @@ Sobriety Date: ${result.data.sobrietyDate}
 ---
 This form was submitted via the Area 36 website Treatment Temporary Contact Program page.`
 
-    // Send to both ttcc@area36.org and treatment@area36.org
-    const recipients = ["ttcc@area36.org", "treatment@area36.org"]
-
-    for (const recipient of recipients) {
-      const emailResult = await sendEmail(credentials, {
-        to: recipient,
-        subject: "[Treatment TCP] New Volunteer Sign Up",
-        body,
-        replyTo: result.data.email,
-      })
-
-      if (!emailResult.success) {
-        console.error(`Failed to send volunteer form to ${recipient}:`, emailResult.error)
-      }
+    const delivered = await deliverTreatmentMessage(credentials, {
+      subject: "[Treatment TCP] New Volunteer Sign Up",
+      body,
+      replyTo: result.data.email,
+    })
+    if (!delivered) {
+      return { success: false, error: DELIVERY_ERROR }
     }
 
     return { success: true, message: "Your volunteer sign up has been submitted. The Treatment TCP Coordinator will contact you shortly." }
