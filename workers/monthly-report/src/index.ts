@@ -727,7 +727,7 @@ async function fetchUptimeSummary(env: Env, start: Date, end: Date) {
   })
 }
 
-async function fetchErrorSummary(env: Env, start: Date, end: Date) {
+export async function fetchErrorSummary(env: Pick<Env, "DB">, start: Date, end: Date) {
   const startDay = start.toISOString().slice(0, 10)
   const endDay = end.toISOString().slice(0, 10)
 
@@ -742,7 +742,7 @@ async function fetchErrorSummary(env: Env, start: Date, end: Date) {
     .all<{ errorKind: string; count: number }>()
 
   const topErrors = await env.DB.prepare(
-    `SELECT error_kind as errorKind, fingerprint, count, sample_message as sampleMessage, sample_route as sampleRoute
+    `SELECT error_kind as errorKind, fingerprint, count, sample_route as sampleRoute
      FROM errors_daily
      WHERE day >= ? AND day < ?
      ORDER BY count DESC
@@ -753,7 +753,6 @@ async function fetchErrorSummary(env: Env, start: Date, end: Date) {
       errorKind: string
       fingerprint: string
       count: number
-      sampleMessage: string | null
       sampleRoute: string | null
     }>()
 
@@ -1053,7 +1052,6 @@ function renderHtmlReport(data: ReportData) {
               <div style="padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
                 <div style="font-size: 13px; color: #dc2626;">${escapeHtml(row.errorKind)} (${row.count}x)</div>
                 ${row.sampleRoute ? `<div style="font-size: 12px; color: #6b7280;">Route: ${escapeHtml(row.sampleRoute)}</div>` : ""}
-                ${row.sampleMessage ? `<div style="font-size: 12px; color: #6b7280; word-break: break-word;">${escapeHtml(row.sampleMessage.slice(0, 100))}</div>` : ""}
               </div>
             `
               )

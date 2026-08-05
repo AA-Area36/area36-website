@@ -498,7 +498,15 @@ function UptimeSection({ uptime }: { uptime: ReportData["uptime"] }) {
   )
 }
 
-function ErrorsSection({ errors, cloudflare }: { errors: ReportData["errors"]; cloudflare: ReportData["cloudflare"] }) {
+function ErrorsSection({
+  errors,
+  cloudflare,
+  showDiagnostics,
+}: {
+  errors: ReportData["errors"]
+  cloudflare: ReportData["cloudflare"]
+  showDiagnostics: boolean
+}) {
   const totalAppErrors = errors.byKind.reduce((acc, row) => acc + row.count, 0)
   const workerErrorBreakdown = cloudflare.workers.errorBreakdown
   
@@ -612,7 +620,7 @@ function ErrorsSection({ errors, cloudflare }: { errors: ReportData["errors"]; c
                         {row.sampleRoute && (
                           <div className="text-xs text-muted-foreground mt-1">Route: {row.sampleRoute}</div>
                         )}
-                        {row.sampleMessage && (
+                        {showDiagnostics && row.sampleMessage && (
                           <div className="text-xs text-muted-foreground mt-1 truncate">{row.sampleMessage}</div>
                         )}
                       </li>
@@ -707,7 +715,11 @@ export function ReportContent({ data, month, generatedAt, showAllStatuses = fals
             </TabsContent>
 
             <TabsContent value="errors">
-              <ErrorsSection errors={data.errors} cloudflare={data.cloudflare} />
+              <ErrorsSection
+                errors={data.errors}
+                cloudflare={data.cloudflare}
+                showDiagnostics={showAllStatuses}
+              />
             </TabsContent>
           </Tabs>
         </div>

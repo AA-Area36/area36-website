@@ -2,7 +2,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { createTestHarness, type TestHarness } from "wrangler"
-import { fetchEventDetails, renderCommitAuthor } from "./index"
+import { fetchErrorSummary, fetchEventDetails, renderCommitAuthor } from "./index"
 
 interface MonthlyReportEnv {
   DB: D1Database
@@ -36,6 +36,16 @@ beforeAll(async () => {
   await env.DB.prepare(`CREATE TABLE event_to_types (
     event_id TEXT NOT NULL,
     type TEXT NOT NULL
+  )`).run()
+  await env.DB.prepare(`CREATE TABLE errors_daily (
+    day TEXT NOT NULL,
+    error_kind TEXT NOT NULL,
+    fingerprint TEXT NOT NULL,
+    count INTEGER NOT NULL,
+    sample_message TEXT,
+    sample_route TEXT,
+    last_seen_at TEXT,
+    PRIMARY KEY (day, error_kind, fingerprint)
   )`).run()
 
   await env.DB.batch([
@@ -91,6 +101,18 @@ beforeAll(async () => {
       "2026-07-18 12:00:00",
       "2026-07-18 12:00:00"
     ),
+    env.DB.prepare(
+      `INSERT INTO errors_daily (
+        day, error_kind, fingerprint, count, sample_message, sample_route
+      ) VALUES (?, ?, ?, ?, ?, ?)`
+    ).bind(
+      "2026-07-20",
+      "FETCH_FAILED",
+      "error-fingerprint",
+      3,
+      "sentinel-user@example.com?token=secret-value",
+      "/api/example"
+    ),
   ])
 }, 30_000)
 
@@ -117,5 +139,25 @@ describe("monthly report event eligibility", () => {
     expect(events.created.map((event) => event.id)).toEqual(["approved-created"])
     expect(events.updated.map((event) => event.id)).toEqual(["approved-updated"])
     expect(events.summary).toEqual({ createdCount: 1, updatedCount: 1 })
+  })
+})
+
+describe("monthly report diagnostic projection", () => {
+  it("omits raw sample messages from public report data", async () => {
+    const errors = await fetchErrorSummary(
+      env,
+      new Date("2026-07-01T00:00:00Z"),
+      new Date("2026-08-01T00:00:00Z")
+    )
+
+    expect(errors.topErrors).toEqual([
+      {
+        errorKind: "FETCH_FAILED",
+        fingerprint: "error-fingerprint",
+        count: 3,
+        sampleRoute: "/api/example",
+      },
+    ])
+    expect(JSON.stringify(errors)).not.toContain("sentinel-user@example.com")
   })
 })
