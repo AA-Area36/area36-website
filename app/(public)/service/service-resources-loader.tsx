@@ -1,7 +1,7 @@
 "use client"
 
 import { useServiceResources } from "@/lib/hooks/use-gdrive-files"
-import { GdriveLoader } from "@/components/gdrive-loader"
+import { GdriveError, GdriveLoader } from "@/components/gdrive-loader"
 import { ServiceResources } from "./service-resources"
 
 /**
@@ -12,15 +12,14 @@ import { ServiceResources } from "./service-resources"
  * is unavailable.
  */
 export function ServiceResourcesLoader() {
-  const { data, isLoading, error } = useServiceResources()
+  const { data, isLoading, error, refetch } = useServiceResources()
 
   if (isLoading) {
     return <GdriveLoader message="Loading service resources..." />
   }
 
-  // Graceful degradation: log error but show empty resources
-  if (error) {
-    console.error("Failed to load service resources:", error)
+  if (error && !data) {
+    return <GdriveError resourceName="Service resources" onRetry={refetch} />
   }
 
   return <ServiceResources resources={data || []} />
