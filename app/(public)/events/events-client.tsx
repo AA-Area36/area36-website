@@ -25,6 +25,7 @@ import type { Event, LocationType, EventType, EventFlyer } from "@/lib/db/schema
 import type { DisplayEvent } from "@/lib/types/recurrence"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 import { getCalendarCellLabel } from "./calendar-a11y"
+import { parseEventDateRange } from "./event-date-range"
 
 // Event with types array and flyers (from junction tables)
 export interface EventWithTypes extends Event {
@@ -315,9 +316,10 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
   const initialDateFrom = searchParams.get("from")
   const initialDateTo = searchParams.get("to")
   const initialShowDistrictMeetings = searchParams.get("districtMeetings") !== "0"
-  const initialDateRange: DateRange | undefined = initialDateFrom
-    ? { from: parseLocalDate(initialDateFrom), to: initialDateTo ? parseLocalDate(initialDateTo) : undefined }
-    : undefined
+  const initialDateRange: DateRange | undefined = parseEventDateRange(
+    initialDateFrom,
+    initialDateTo
+  )
 
   const [searchQuery, setSearchQuery] = React.useState(initialSearch)
   const [selectedTypes, setSelectedTypes] = React.useState<string[]>(initialTypes)
