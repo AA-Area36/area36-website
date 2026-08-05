@@ -1,17 +1,12 @@
 import type { Metadata } from "next"
-import { ReCaptchaProvider } from "@/components/recaptcha-provider"
-import { AreaAssemblyClient } from "./area-assembly-client"
+import { AreaAssemblyArchive } from "./area-assembly-archive"
 
 export const metadata: Metadata = {
-  title: "Area Assembly / Delegates Workshop | Area 36",
+  title: "April 2026 Area Assembly Archive | Area 36",
   description:
-    "Register for the Area Assembly / Delegates workshop, then review the linked General Service Conference background material.",
+    "Archived information for the concluded April 2026 Area Assembly and Delegates Workshop.",
 }
 
 export default function AreaAssemblyRegistrationPage() {
-  return (
-    <ReCaptchaProvider>
-      <AreaAssemblyClient />
-    </ReCaptchaProvider>
-  )
+  return <AreaAssemblyArchive />
 }
