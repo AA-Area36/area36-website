@@ -1,6 +1,8 @@
 import type { Event } from "@/lib/db/schema"
 import type { WeeklyPattern, MonthlyPattern } from "@/lib/types/recurrence"
 
+const MAX_ARCHIVE_MONTHS = 121
+
 /**
  * Parse the weekly recurrence pattern from database JSON string
  */
@@ -163,8 +165,16 @@ export function generateOccurrenceDates(
     let year = effectiveStart.getFullYear()
     let month = effectiveStart.getMonth()
 
-    // Safety limit - don't go more than 5 years
-    const maxIterations = 60 // 5 years of months
+    const requestedMonths =
+      (effectiveEnd.getFullYear() - effectiveStart.getFullYear()) * 12 +
+      (effectiveEnd.getMonth() - effectiveStart.getMonth()) +
+      1
+    // The past-events API validates a maximum ten-year window. Keep a hard
+    // archive cap for defense in depth while covering every requested month.
+    const maxIterations = Math.min(
+      Math.max(requestedMonths, 0),
+      MAX_ARCHIVE_MONTHS
+    )
     let iterations = 0
 
     while (iterations < maxIterations) {
