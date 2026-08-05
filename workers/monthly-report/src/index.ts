@@ -503,7 +503,11 @@ async function fetchDriveDeltas(env: Env, start: Date, end: Date): Promise<Drive
   return deltas
 }
 
-async function fetchEventDetails(env: Env, start: Date, end: Date): Promise<EventDetails> {
+export async function fetchEventDetails(
+  env: Pick<Env, "DB">,
+  start: Date,
+  end: Date
+): Promise<EventDetails> {
   const startSql = formatSqliteDate(start)
   const endSql = formatSqliteDate(end)
 
@@ -571,6 +575,7 @@ async function fetchEventDetails(env: Env, start: Date, end: Date): Promise<Even
     LEFT JOIN event_to_types et ON e.id = et.event_id
     WHERE e.updated_at >= ? AND e.updated_at < ?
       AND e.created_at < ?
+      AND e.status = 'approved'
     GROUP BY e.id
     ORDER BY e.date ASC
   `)
