@@ -58,7 +58,7 @@ describe("flyer action authorization", () => {
     getDb.mockReset()
     auth.mockReset().mockResolvedValue(null)
     uploadFlyer.mockReset()
-    deleteFlyer.mockReset()
+    deleteFlyer.mockReset().mockResolvedValue(undefined)
     verifyEventUploadToken.mockReset()
     checkRateLimit.mockReset().mockResolvedValue({ ok: true })
     reservePublicEventFlyerUpload.mockReset().mockResolvedValue(true)
@@ -164,5 +164,84 @@ describe("flyer action authorization", () => {
       dbClient,
       expect.any(String)
     )
+  })
+
+  it("assigns flyer order atomically in D1", async () => {
+    auth.mockResolvedValue({ user: { email: "admin@example.test" } })
+    uploadFlyer.mockResolvedValue({
+      success: true,
+      key: "flyers/event-1/flyer.pdf",
+      fileName: "flyer.pdf",
+      fileType: "application/pdf",
+      fileSize: 42,
+    })
+    const run = vi.fn().mockResolvedValue({ success: true })
+    const bind = vi.fn(() => ({ run }))
+    const prepare = vi.fn((query: string) => {
+      void query
+      return { bind }
+    })
+    getDb.mockResolvedValue({
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: vi.fn().mockResolvedValue([{ id: "event-1", districtNumber: 12 }]),
+          })),
+        })),
+      })),
+      $client: { prepare },
+    })
+    const formData = new FormData()
+    formData.set("file", new File(["flyer"], "flyer.pdf", { type: "application/pdf" }))
+    const { uploadEventFlyer } = await import("./flyer-actions")
+
+    await expect(uploadEventFlyer("event-1", formData)).resolves.toMatchObject({ success: true })
+    expect(prepare.mock.calls[0][0]).toContain('COALESCE(MAX("order"), -1) + 1')
+    expect(bind).toHaveBeenCalledWith(
+      expect.any(String),
+      "event-1",
+      "flyers/event-1/flyer.pdf",
+      "flyer.pdf",
+      "application/pdf",
+      42,
+      "event-1"
+    )
+    expect(deleteFlyer).not.toHaveBeenCalled()
+  })
+
+  it("removes an uploaded flyer when its metadata cannot be saved", async () => {
+    auth.mockResolvedValue({ user: { email: "admin@example.test" } })
+    uploadFlyer.mockResolvedValue({
+      success: true,
+      key: "flyers/event-1/orphan.pdf",
+      fileName: "orphan.pdf",
+      fileType: "application/pdf",
+      fileSize: 42,
+    })
+    const prepare = vi.fn((query: string) => {
+      void query
+      return {
+        bind: vi.fn(() => ({ run: vi.fn().mockRejectedValue(new Error("D1 unavailable")) })),
+      }
+    })
+    getDb.mockResolvedValue({
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: vi.fn().mockResolvedValue([{ id: "event-1", districtNumber: 12 }]),
+          })),
+        })),
+      })),
+      $client: { prepare },
+    })
+    const formData = new FormData()
+    formData.set("file", new File(["flyer"], "orphan.pdf", { type: "application/pdf" }))
+    const { uploadEventFlyer } = await import("./flyer-actions")
+
+    await expect(uploadEventFlyer("event-1", formData)).resolves.toEqual({
+      success: false,
+      error: "Failed to save flyer. Please try again.",
+    })
+    expect(deleteFlyer).toHaveBeenCalledWith("flyers/event-1/orphan.pdf")
   })
 })

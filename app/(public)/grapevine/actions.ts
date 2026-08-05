@@ -2,10 +2,11 @@
 
 import { getDb } from "@/lib/db"
 import { subscriptionDrives, driveSubmissions, type SubscriptionDrive, type DriveSubmission } from "@/lib/db/schema"
-import { uploadImage } from "@/lib/r2"
+import { deleteImage, uploadImage } from "@/lib/r2"
 import { eq, and, desc } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { checkRateLimit, getClientIp } from "@/lib/security/rate-limit"
+import { persistUploadedObject } from "@/lib/storage/persist-upload"
 
 interface ReCaptchaResponse {
   success: boolean
@@ -225,21 +226,27 @@ export async function submitDriveConfirmation(formData: FormData) {
       }
     }
 
-    // Save submission to database
-    const db = await getDb()
-    await db.insert(driveSubmissions).values({
-      id: submissionId,
-      driveId: activeDrive.id,
-      district,
-      subscriptionCount,
-      confirmationImageKey: imageKey,
-      submitterContact: submitterContact || null,
-      status: "pending",
-    })
+    await persistUploadedObject(async () => {
+      const db = await getDb()
+      await db.insert(driveSubmissions).values({
+        id: submissionId,
+        driveId: activeDrive.id,
+        district,
+        subscriptionCount,
+        confirmationImageKey: uploadResult.key,
+        submitterContact: submitterContact || null,
+        status: "pending",
+      })
+    }, () => deleteImage(uploadResult.key))
 
     // Revalidate pages to show new submission in charts
-    revalidatePath("/grapevine")
-    revalidatePath("/admin/subscription-drives")
+    try {
+      revalidatePath("/grapevine")
+      revalidatePath("/admin/subscription-drives")
+    } catch (error) {
+      // The submission is committed; stale caches can recover independently.
+      console.error("Drive submission saved but cache invalidation failed", error)
+    }
 
     return {
       success: true,
