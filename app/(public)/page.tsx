@@ -7,6 +7,7 @@ import { TCPHighlight } from "@/components/tcp-highlight"
 import { CTASection } from "@/components/cta-section"
 import { AffiliatedSites } from "@/components/affiliated-sites"
 import { SiteOverview } from "@/components/site-overview"
+import { QuorumBanner } from "@/components/quorum-banner"
 
 export const metadata: Metadata = {
   title: "Home | Southern Minnesota Area 36",
@@ -53,6 +54,7 @@ function DocumentsSkeleton() {
 export default function HomePage() {
   return (
     <>
+      <QuorumBanner />
       <HeroSection />
       <SiteOverview />
       <Suspense fallback={<EventsSkeleton />}>

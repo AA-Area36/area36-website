@@ -60,6 +60,22 @@ export async function requireCorrectionsDeleteSession(): Promise<A36Session | nu
   return null
 }
 
+export async function requireQuorumReadSession(): Promise<A36Session | null> {
+  const session = await getSession()
+  if (!session) return null
+  if (await isEffectivelyAreaAdmin(session)) return session
+  if (await hasPermission(session, "quorum:view")) return session
+  return null
+}
+
+export async function requireQuorumWriteSession(): Promise<A36Session | null> {
+  const session = await getSession()
+  if (!session) return null
+  if (await isEffectivelyAreaAdmin(session)) return session
+  if (await hasPermission(session, "quorum:edit")) return session
+  return null
+}
+
 export async function requireHostedDistrictAccessSession(districtNumber: number): Promise<A36Session | null> {
   const session = await getSession()
   if (!session) return null

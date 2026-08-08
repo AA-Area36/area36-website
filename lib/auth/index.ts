@@ -7,6 +7,7 @@ import { isGroupMember, type AdminDirectoryCredentials } from "@/lib/google/admi
 import { createLocalAdminBypassSession, isLocalAdminBypassEnabled } from "./dev-bypass"
 import { hasAssignedAccessForEmail, isSeedEmailAllowed } from "./rbac"
 import { isAllowedRedirectHost } from "./redirects"
+import { GOOGLE_DRIVE_FILE_SCOPE } from "@/lib/google/user-drive-auth"
 
 const ALLOWED_DOMAIN = "@area36.org"
 const ADMIN_GROUP_EMAIL = "area36-internal@area36.org"
@@ -17,6 +18,10 @@ const ALLOWED_ADMIN_EMAILS = new Set([
   "alttechnology@area36.org",
 ])
 let adminConfigWarningLogged = false
+
+function includesOAuthScope(scopes: string | undefined, requiredScope: string): boolean {
+  return new Set((scopes ?? "").split(/\s+/).filter(Boolean)).has(requiredScope)
+}
 
 function normalizeEmail(email?: string | null): string {
   return email?.trim().toLowerCase() ?? ""
@@ -170,6 +175,33 @@ const nextAuth = NextAuth(async () => {
         } catch {
           return baseUrl
         }
+      },
+    },
+    events: {
+      async signIn({ user, account }) {
+        if (
+          !user.id ||
+          account?.provider !== "google" ||
+          !includesOAuthScope(account.scope, GOOGLE_DRIVE_FILE_SCOPE)
+        ) return
+        await env.DB.prepare(
+          `UPDATE accounts
+              SET refresh_token = COALESCE(?, refresh_token),
+                  access_token = COALESCE(?, access_token),
+                  expires_at = COALESCE(?, expires_at),
+                  token_type = COALESCE(?, token_type),
+                  scope = COALESCE(?, scope)
+            WHERE userId = ? AND provider = 'google'`,
+        )
+          .bind(
+            account.refresh_token ?? null,
+            account.access_token ?? null,
+            account.expires_at ?? null,
+            account.token_type ?? null,
+            account.scope ?? null,
+            user.id,
+          )
+          .run()
       },
     },
     ...(cookieOverrides ? { cookies: cookieOverrides } : {}),
