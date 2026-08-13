@@ -1,6 +1,11 @@
 "use client"
 
-import { useConferenceMaterials, useBackgroundMaterials } from "@/lib/hooks/use-gdrive-files"
+import {
+  useBackgroundMaterials,
+  useConferenceMaterials,
+  useServiceResources,
+} from "@/lib/hooks/use-gdrive-files"
+import { findFinalReportProcessResource } from "@/lib/gdrive/final-report-process"
 import { GdriveLoader } from "@/components/gdrive-loader"
 import { ConferenceMaterialsContent } from "./conference-materials-content"
 import { FinalReportsContent } from "./final-reports-content"
@@ -40,6 +45,7 @@ export function ConferenceMaterialsLoader() {
  */
 export function FinalReportsLoader() {
   const { data, isLoading, error } = useConferenceMaterials()
+  const { data: serviceResources, error: serviceResourcesError } = useServiceResources()
 
   if (isLoading) {
     return <GdriveLoader message="Loading final reports..." />
@@ -49,8 +55,16 @@ export function FinalReportsLoader() {
   if (error) {
     console.error("Failed to load final reports:", error)
   }
+  if (serviceResourcesError) {
+    console.error("Failed to load the Final Report ordering guide:", serviceResourcesError)
+  }
 
-  return <FinalReportsContent oldReports={data?.oldReports || []} />
+  return (
+    <FinalReportsContent
+      oldReports={data?.oldReports || []}
+      orderingGuide={findFinalReportProcessResource(serviceResources || [])}
+    />
+  )
 }
 
 /**

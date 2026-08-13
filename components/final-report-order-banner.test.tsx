@@ -12,8 +12,8 @@ vi.mock("@/lib/hooks/use-gdrive-files", () => ({
 
 import {
   FinalReportOrderBanner,
-  findFinalReportProcessResource,
 } from "./final-report-order-banner"
+import { findFinalReportProcessResource } from "@/lib/gdrive/final-report-process"
 
 const orderingGuide: ServiceResource = {
   id: "ordering-guide",
