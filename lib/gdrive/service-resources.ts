@@ -6,6 +6,8 @@ import type { DriveFile, GDriveCredentials } from "./types"
 
 export interface ServiceResource {
   id: string
+  /** Original filename from Drive, retained when an admin display name is applied. */
+  fileName?: string
   name: string
   description?: string
   previewUrl: string
@@ -31,6 +33,7 @@ function formatFileSize(bytes?: string): string | undefined {
 function mapDriveFileToServiceResource(file: DriveFile): ServiceResource {
   return {
     id: file.id,
+    fileName: file.name,
     name: file.name.replace(/\.(pdf|doc|docx|xls|xlsx)$/i, ""), // Remove file extension from display name
     description: file.description,
     previewUrl: `/api/files/preview/${file.id}`,

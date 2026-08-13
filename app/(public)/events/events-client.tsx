@@ -20,6 +20,7 @@ import { DateRangePicker } from "@/components/date-range-picker"
 import { DateRange } from "react-day-picker"
 import { AnnualCalendarSection } from "./annual-calendar-section"
 import type { CalendarFile } from "./calendar-file-actions"
+import { EventDescription } from "./event-description"
 import type { Event, LocationType, EventType, EventFlyer } from "@/lib/db/schema"
 import type { DisplayEvent } from "@/lib/types/recurrence"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
@@ -1265,7 +1266,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                               <h2 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                                 {event.title}
                               </h2>
-                              <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{event.description}</p>
+                              <EventDescription description={event.description} />
                             </div>
 
                             <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
@@ -1381,7 +1382,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                 <h2 className="text-xl font-semibold text-foreground">
                                   {firstOccurrence.title}
                                 </h2>
-                                <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{firstOccurrence.description}</p>
+                                <EventDescription description={firstOccurrence.description} />
                               </div>
 
                               <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
@@ -1559,7 +1560,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                               <h4 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                                 {event.title}
                               </h4>
-                              <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{event.description}</p>
+                              <EventDescription description={event.description} />
                             </div>
 
                             <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
@@ -1675,7 +1676,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                 <h4 className="text-xl font-semibold text-foreground">
                                   {firstOccurrence.title}
                                 </h4>
-                                <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{firstOccurrence.description}</p>
+                                <EventDescription description={firstOccurrence.description} />
                               </div>
 
                               <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
@@ -1868,7 +1869,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                               <h4 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                                 {event.title}
                               </h4>
-                              <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{event.description}</p>
+                              <EventDescription description={event.description} />
                             </div>
 
                             <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
@@ -1954,7 +1955,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                 <h4 className="text-xl font-semibold text-foreground">
                                   {firstOccurrence.title}
                                 </h4>
-                                <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{firstOccurrence.description}</p>
+                                <EventDescription description={firstOccurrence.description} />
                               </div>
 
                               <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
@@ -2222,7 +2223,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                     <h4 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                                       {event.title}
                                     </h4>
-                                    <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{event.description}</p>
+                                    <EventDescription description={event.description} />
                                   </div>
 
                                   <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
@@ -2319,7 +2320,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                       <h4 className="text-xl font-semibold text-foreground">
                                         {firstOccurrence.title}
                                       </h4>
-                                      <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{firstOccurrence.description}</p>
+                                      <EventDescription description={firstOccurrence.description} />
                                     </div>
 
                                     <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
