@@ -46,6 +46,11 @@ describe("FinalReportOrderBanner", () => {
       expect(link).toHaveAttribute("target", "_blank")
       expect(link).toHaveAttribute("rel", "noopener noreferrer")
     }
+    expect(screen.getByRole("link", { name: "View ordering guide" })).toHaveAttribute(
+      "data-variant",
+      "secondary",
+    )
+    expect(screen.queryByText("New guide")).not.toBeInTheDocument()
   })
 
   it("remembers when the new announcement is dismissed", async () => {

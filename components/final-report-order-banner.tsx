@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { ArrowUpRight, FileText, X } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { useServiceResources } from "@/lib/hooks/use-gdrive-files"
 import type { ServiceResource } from "@/lib/gdrive/service-resources"
 
@@ -63,9 +64,6 @@ export function FinalReportOrderBanner() {
           <FileText className="h-4 w-4" aria-hidden="true" />
         </div>
         <p className="min-w-0 flex-1 text-sm leading-snug">
-          <span className="mr-2 inline-flex rounded-full bg-white/15 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-[0.14em] ring-1 ring-white/20">
-            New guide
-          </span>
           <span className="font-semibold">Ordering General Service Conference Final Reports.</span>{" "}
           <span className="hidden text-primary-foreground/80 sm:inline">
             Find the process and instructions for requesting printed reports.
@@ -73,15 +71,16 @@ export function FinalReportOrderBanner() {
         </p>
 
         <div className="flex shrink-0 items-center gap-1">
-          <a
-            href={resource.previewUrl}
-            className="hidden items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-primary shadow-sm transition-colors hover:bg-white/90 sm:inline-flex"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            View ordering guide
-            <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
-          </a>
+          <Button asChild variant="secondary" size="sm" className="hidden shadow-sm sm:inline-flex">
+            <a
+              href={resource.previewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View ordering guide
+              <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </a>
+          </Button>
           <a
             href={resource.previewUrl}
             className="inline-flex rounded-md px-2 py-1.5 text-sm font-semibold underline underline-offset-4 hover:bg-white/10 sm:hidden"
