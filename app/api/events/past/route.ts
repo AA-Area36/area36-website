@@ -2,19 +2,17 @@ import { NextResponse } from "next/server"
 import { getDb } from "@/lib/db"
 import {
   events,
-  eventToTypes,
-  eventFlyers,
-  eventExceptions,
   eventTypes as allowedEventTypes,
   type EventType,
-  type EventFlyer,
-  type EventException,
 } from "@/lib/db/schema"
-import { eq, inArray } from "drizzle-orm"
+import { and, eq, gte, isNull, lte, or } from "drizzle-orm"
 import { getEventsForDateRange } from "@/lib/utils/event-queries"
-import type { EventWithRelations, DisplayEvent } from "@/lib/types/recurrence"
+import type { DisplayEvent } from "@/lib/types/recurrence"
 import { createRequestLogger } from "@/lib/logger"
 import { recordError } from "@/lib/monitoring/errors"
+import { loadEventRelations } from "@/lib/events/load-event-relations"
+import { getPastEventCandidateStart } from "@/lib/utils/event-query-window"
+import { createApiErrorResponse } from "@/lib/api/error-response"
 
 const PAGE_SIZE_DEFAULT = 5
 const PAGE_SIZE_MAX = 50
@@ -64,54 +62,36 @@ export async function GET(request: Request) {
     const hardRangeEndStr = toStr && toStr < todayStr ? toStr : todayStr
     const cursorDay = cursor ? cursor.substring(0, 10) : null
     const rangeEndStr = cursorDay && cursorDay < hardRangeEndStr ? cursorDay : hardRangeEndStr
+    const candidateStartStr = getPastEventCandidateStart(rangeEndStr, fromStr)
 
     const db = await log.tracker.time("db.connect", () => getDb())
 
-    // Fetch approved base events + relations once; occurrences are generated per-request based on date window.
+    // Bound the D1 candidate set before recurrence expansion. A base event can
+    // contribute if it starts by the window end and either starts or continues
+    // into the window.
     const eventsData = await log.tracker.time("db.events", () =>
-      db.select().from(events).where(eq(events.status, "approved"))
+      db
+        .select()
+        .from(events)
+        .where(
+          and(
+            eq(events.status, "approved"),
+            lte(events.date, rangeEndStr),
+            or(
+              and(
+                eq(events.isRecurring, false),
+                or(gte(events.date, candidateStartStr), gte(events.endDate, candidateStartStr))
+              ),
+              and(
+                eq(events.isRecurring, true),
+                or(isNull(events.recurUntil), gte(events.recurUntil, candidateStartStr))
+              )
+            )
+          )
+        )
     )
 
-    const eventTypesData = await log.tracker.time("db.eventTypes", () => db.select().from(eventToTypes))
-    const typesMap = new Map<string, EventType[]>()
-    for (const row of eventTypesData) {
-      const existing = typesMap.get(row.eventId) || []
-      existing.push(row.type)
-      typesMap.set(row.eventId, existing)
-    }
-
-    const flyersData = await log.tracker.time("db.flyers", () =>
-      db.select().from(eventFlyers).orderBy(eventFlyers.order)
-    )
-    const flyersMap = new Map<string, EventFlyer[]>()
-    for (const row of flyersData) {
-      const existing = flyersMap.get(row.eventId) || []
-      existing.push(row)
-      flyersMap.set(row.eventId, existing)
-    }
-
-    const recurringEventIds = eventsData.filter((e) => e.isRecurring).map((e) => e.id)
-    const exceptionsMap = new Map<string, EventException[]>()
-    if (recurringEventIds.length > 0) {
-      const exceptionsData = await log.tracker.time("db.exceptions", () =>
-        db
-          .select()
-          .from(eventExceptions)
-          .where(inArray(eventExceptions.eventId, recurringEventIds))
-      )
-      for (const row of exceptionsData) {
-        const existing = exceptionsMap.get(row.eventId) || []
-        existing.push(row)
-        exceptionsMap.set(row.eventId, existing)
-      }
-    }
-
-    const eventsWithRelations: EventWithRelations[] = eventsData.map((event) => ({
-      ...event,
-      types: typesMap.get(event.id) || (event.type ? [event.type] : []),
-      flyers: flyersMap.get(event.id) || [],
-      exceptions: exceptionsMap.get(event.id) || [],
-    }))
+    const eventsWithRelations = await loadEventRelations(db, eventsData, log)
 
     const rangeEnd = dateEnd(rangeEndStr)
 
@@ -177,17 +157,18 @@ export async function GET(request: Request) {
       }
     )
   } catch (error) {
-    log.error("Past events API failed", error)
-    void recordError({ kind: "D1_QUERY_FAILED", route: "/api/events/past", error })
+    log.error("Past events API failed")
+    void recordError({
+      kind: "D1_QUERY_FAILED",
+      route: "/api/events/past",
+      error,
+      messageOverride: "Past events API failed",
+    })
     log.tracker.finish(500)
 
-    const message = error instanceof Error ? error.message : "Unknown error"
-    return NextResponse.json(
-      { error: message },
-      {
-        status: 500,
-        headers: { "X-Request-Id": log.requestId },
-      }
-    )
+    return createApiErrorResponse({
+      message: "Past events are temporarily unavailable.",
+      requestId: log.requestId,
+    })
   }
 }

@@ -12,6 +12,8 @@ export const ADMIN_PERMISSIONS = [
   "content:write",
   "district-sites:read",
   "district-sites:write",
+  "quorum:view",
+  "quorum:edit",
   "corrections:view",
   "corrections:export",
   "corrections:edit",

@@ -42,6 +42,59 @@ function formatICalDate(date: string): string {
   return date.replace(/-/g, "")
 }
 
+function addDaysToDate(date: string, days: number): string {
+  const value = new Date(`${date}T00:00:00Z`)
+  value.setUTCDate(value.getUTCDate() + days)
+  return value.toISOString().slice(0, 10)
+}
+
+export function resolveOccurrenceEndDate(
+  seriesStartDate: string,
+  seriesEndDate: string | null,
+  occurrenceDate: string,
+  exceptionEndDate: string | null,
+): string | null {
+  if (exceptionEndDate) return exceptionEndDate
+  if (!seriesEndDate) return null
+
+  const start = new Date(`${seriesStartDate}T00:00:00Z`)
+  const end = new Date(`${seriesEndDate}T00:00:00Z`)
+  const durationDays = Math.round(
+    (end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000),
+  )
+
+  if (durationDays < 0) return null
+  return addDaysToDate(occurrenceDate, durationDays)
+}
+
+export function buildICalTimingLines(input: {
+  date: string
+  endDate: string | null
+  startTime: string | null
+  endTime: string | null
+  timezone: string
+  timeTBD: boolean
+}): string[] {
+  if (input.timeTBD) {
+    const result = [`DTSTART;VALUE=DATE:${formatICalDate(input.date)}`]
+    if (input.endDate) {
+      result.push(`DTEND;VALUE=DATE:${formatICalDate(addDaysToDate(input.endDate, 1))}`)
+    }
+    return result
+  }
+
+  const result = [
+    `DTSTART;TZID=${input.timezone}:${formatICalDateTime(input.date, input.startTime)}`,
+  ]
+  if (input.endTime) {
+    const endDate = input.endDate || input.date
+    result.push(`DTEND;TZID=${input.timezone}:${formatICalDateTime(endDate, input.endTime)}`)
+  } else if (input.endDate) {
+    result.push(`DTEND;TZID=${input.timezone}:${formatICalDateTime(input.endDate, "23:59")}`)
+  }
+  return result
+}
+
 /**
  * Generate a unique identifier for an event
  */
@@ -50,16 +103,9 @@ function generateUID(eventId: string, domain: string): string {
 }
 
 /**
- * Generate a unique identifier for an occurrence of a recurring event
- */
-function generateOccurrenceUID(eventId: string, occurrenceDate: string, domain: string): string {
-  return `${eventId}_${occurrenceDate}@${domain}`
-}
-
-/**
  * Generate iCal RRULE for recurring events
  */
-function generateRRule(event: Event): string | null {
+export function generateRRule(event: Event): string | null {
   if (!event.isRecurring || event.recurrenceType === "none") {
     return null
   }
@@ -76,7 +122,7 @@ function generateRRule(event: Event): string | null {
     if (event.recurUntil) {
       // UNTIL must be in UTC format: YYYYMMDDTHHMMSSZ
       const untilDate = formatICalDate(event.recurUntil)
-      rrule += `;UNTIL=${untilDate}T235959Z`
+      rrule += event.timeTBD ? `;UNTIL=${untilDate}` : `;UNTIL=${untilDate}T235959Z`
     }
 
     return rrule
@@ -98,7 +144,7 @@ function generateRRule(event: Event): string | null {
 
     if (event.recurUntil) {
       const untilDate = formatICalDate(event.recurUntil)
-      rrule += `;UNTIL=${untilDate}T235959Z`
+      rrule += event.timeTBD ? `;UNTIL=${untilDate}` : `;UNTIL=${untilDate}T235959Z`
     }
 
     return rrule
@@ -110,7 +156,7 @@ function generateRRule(event: Event): string | null {
 /**
  * Generate EXDATE entries for cancelled occurrences
  */
-function generateExDates(
+export function generateExDates(
   event: Event,
   exceptions: EventException[]
 ): string[] {
@@ -121,6 +167,9 @@ function generateExDates(
   if (cancelledExceptions.length === 0) return []
 
   return cancelledExceptions.map((exception) => {
+    if (event.timeTBD) {
+      return `EXDATE;VALUE=DATE:${formatICalDate(exception.occurrenceDate)}`
+    }
     const dateTime = formatICalDateTime(exception.occurrenceDate, event.startTime)
     return `EXDATE;TZID=${event.timezone}:${dateTime}`
   })
@@ -264,19 +313,7 @@ async function buildCalendar(
     lines.push(`DTSTAMP:${dtstamp}`)
 
     // Handle start date/time
-    const startDateTime = formatICalDateTime(event.date, event.startTime)
-    lines.push(`DTSTART;TZID=${event.timezone}:${startDateTime}`)
-
-    // Handle end date/time
-    if (event.endTime) {
-      const endDate = event.endDate || event.date
-      const endDateTime = formatICalDateTime(endDate, event.endTime)
-      lines.push(`DTEND;TZID=${event.timezone}:${endDateTime}`)
-    } else if (event.endDate) {
-      // Multi-day event without specific end time - use end of day
-      const endDateTime = formatICalDateTime(event.endDate, "23:59")
-      lines.push(`DTEND;TZID=${event.timezone}:${endDateTime}`)
-    }
+    lines.push(...buildICalTimingLines(event))
 
     // Add RRULE for recurring events
     const rrule = generateRRule(event)
@@ -291,10 +328,10 @@ async function buildCalendar(
     }
 
     // Summary (title)
-    lines.push(foldLine(`SUMMARY:${escapeICalText(event.title)}`))
+    lines.push(foldLine(`SUMMARY:${escapeICalText(event.timeTBD ? `${event.title} (Time TBD)` : event.title)}`))
 
     // Description
-    let description = event.description
+    let description = event.timeTBD ? `Time: TBD\n\n${event.description}` : event.description
     if (event.meetingLink) {
       description += `\\n\\nOnline Meeting Link: ${event.meetingLink}`
     }
@@ -327,43 +364,50 @@ async function buildCalendar(
       (e) => e.exceptionType === "modified"
     )
     for (const exception of modifiedExceptions) {
-      const occurrenceUid = generateOccurrenceUID(event.id, exception.occurrenceDate, domain)
-      const recurrenceId = formatICalDateTime(exception.occurrenceDate, event.startTime)
+      const recurrenceId = event.timeTBD
+        ? formatICalDate(exception.occurrenceDate)
+        : formatICalDateTime(exception.occurrenceDate, event.startTime)
 
       lines.push("BEGIN:VEVENT")
       lines.push(`UID:${uid}`) // Same UID as parent event
       lines.push(`DTSTAMP:${dtstamp}`)
-      lines.push(`RECURRENCE-ID;TZID=${event.timezone}:${recurrenceId}`)
+      lines.push(
+        event.timeTBD
+          ? `RECURRENCE-ID;VALUE=DATE:${recurrenceId}`
+          : `RECURRENCE-ID;TZID=${event.timezone}:${recurrenceId}`
+      )
 
       // Use exception values if provided, otherwise fall back to parent event
       const modTitle = exception.title || event.title
       const modStartTime = exception.startTime ?? event.startTime
       const modEndTime = exception.endTime ?? event.endTime
-      const modEndDate = exception.endDate || event.endDate
+      const modEndDate = resolveOccurrenceEndDate(
+        event.date,
+        event.endDate,
+        exception.occurrenceDate,
+        exception.endDate,
+      )
       const modAddress = exception.address ?? event.address
       const modMeetingLink = exception.meetingLink ?? event.meetingLink
       const modDescription = exception.description || event.description
       const modLocationType = exception.locationType || event.locationType
+      const modTimeTBD = exception.timeTBD ?? event.timeTBD
 
       // Start date/time (occurrence date with potentially modified time)
-      const modStartDateTime = formatICalDateTime(exception.occurrenceDate, modStartTime)
-      lines.push(`DTSTART;TZID=${event.timezone}:${modStartDateTime}`)
-
-      // End date/time
-      if (modEndTime) {
-        const endDate = modEndDate || exception.occurrenceDate
-        const modEndDateTime = formatICalDateTime(endDate, modEndTime)
-        lines.push(`DTEND;TZID=${event.timezone}:${modEndDateTime}`)
-      } else if (modEndDate) {
-        const modEndDateTime = formatICalDateTime(modEndDate, "23:59")
-        lines.push(`DTEND;TZID=${event.timezone}:${modEndDateTime}`)
-      }
+      lines.push(...buildICalTimingLines({
+        date: exception.occurrenceDate,
+        endDate: modEndDate,
+        startTime: modStartTime,
+        endTime: modEndTime,
+        timezone: event.timezone,
+        timeTBD: modTimeTBD,
+      }))
 
       // Summary
-      lines.push(foldLine(`SUMMARY:${escapeICalText(modTitle)}`))
+      lines.push(foldLine(`SUMMARY:${escapeICalText(modTimeTBD ? `${modTitle} (Time TBD)` : modTitle)}`))
 
       // Description
-      let modDescriptionFull = modDescription
+      let modDescriptionFull = modTimeTBD ? `Time: TBD\n\n${modDescription}` : modDescription
       if (modMeetingLink) {
         modDescriptionFull += `\\n\\nOnline Meeting Link: ${modMeetingLink}`
       }

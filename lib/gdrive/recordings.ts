@@ -7,6 +7,7 @@ import {
 } from "./client"
 import { withCache, CACHE_KEYS } from "./cache"
 import { filterArchivedFolders } from "./archive"
+import { createConcurrencyLimiter } from "@/lib/utils/concurrency"
 import type {
   Recording,
   RecordingsData,
@@ -201,13 +202,14 @@ export async function getRecordings(
   return withCache(
     CACHE_KEYS.recordings,
     async () => {
+      const driveCall = createConcurrencyLimiter(4)
       const categories: CategoryInfo[] = []
       const recordings: Record<string, Recording[]> = {}
 
       // Get category subfolders and root files in parallel
       const [categoryFolders, rootFiles] = await Promise.all([
-        listFolders(credentials, recordingsFolderId),
-        listAllFiles(credentials, recordingsFolderId, { orderBy: "name desc" }),
+        driveCall(() => listFolders(credentials, recordingsFolderId)),
+        driveCall(() => listAllFiles(credentials, recordingsFolderId, { orderBy: "name desc" })),
       ])
       const visibleCategoryFolders = filterArchivedFolders(categoryFolders)
 
@@ -220,8 +222,8 @@ export async function getRecordings(
 
           // Get subfolders and direct files in parallel
           const [subfolders, directFiles] = await Promise.all([
-            listFolders(credentials, folder.id),
-            listAllFiles(credentials, folder.id, { orderBy: "name desc" }),
+            driveCall(() => listFolders(credentials, folder.id)),
+            driveCall(() => listAllFiles(credentials, folder.id, { orderBy: "name desc" })),
           ])
 
           const yearSubfolders = filterArchivedFolders(subfolders).filter((sf) => /^20\d{2}$/.test(sf.name))
@@ -230,9 +232,9 @@ export async function getRecordings(
             // Process all year subfolders in parallel
             const yearResults = await Promise.all(
               yearSubfolders.map(async (yearFolder) => {
-                const files = await listAllFiles(credentials, yearFolder.id, {
+                const files = await driveCall(() => listAllFiles(credentials, yearFolder.id, {
                   orderBy: "name desc",
-                })
+                }))
                 return { files, folderName: yearFolder.name }
               })
             )

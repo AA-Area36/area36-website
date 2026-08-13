@@ -1,12 +1,11 @@
-import type { DrizzleD1Database } from "drizzle-orm/d1"
-import { schema } from "@/lib/db"
+import type { AppDatabase } from "@/lib/db"
 
 export async function ensureDistrictSiteExists(
-  db: DrizzleD1Database<typeof schema>,
+  db: AppDatabase,
   districtNumber: number
 ) {
   // Use base columns only so local DBs that have not run newer migrations still work.
-  await (db as any).$client
+  await db.$client
     .prepare(
       `INSERT INTO district_sites (
         district_number,

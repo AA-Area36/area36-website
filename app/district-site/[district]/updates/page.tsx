@@ -1,9 +1,14 @@
+import type { Metadata } from "next"
 import { ExternalLink, FileText } from "lucide-react"
 import { notFound } from "next/navigation"
 import { getDistrictPublishedUpdates } from "@/lib/district/queries"
 import { coerceDistrict, formatDistrictPublished, getAgendaDocumentLink, resolveDistrictSiteForRender } from "../district-utils"
 
 export const dynamic = "force-dynamic"
+export const metadata: Metadata = {
+  title: "Agenda Notes",
+  description: "Published district committee communications and agenda notes.",
+}
 
 export default async function DistrictUpdatesPage({
   params,

@@ -39,6 +39,7 @@ export function DistrictShell({ districtNumber, title, previewMode = false, chil
   const [mobileOpen, setMobileOpen] = React.useState(false)
 
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Route navigation closes the mobile navigation drawer.
     setMobileOpen(false)
   }, [pathname])
 
@@ -119,6 +120,8 @@ export function DistrictShell({ districtNumber, title, previewMode = false, chil
 
           <nav
             id="district-mobile-nav"
+            aria-hidden={!mobileOpen}
+            inert={!mobileOpen}
             className={cn(
               "overflow-hidden transition-all duration-300 md:hidden",
               mobileOpen ? "mt-4 max-h-[420px] opacity-100" : "max-h-0 opacity-0",
@@ -159,7 +162,11 @@ export function DistrictShell({ districtNumber, title, previewMode = false, chil
         </div>
       </header>
 
-      <main id="main-content" className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="mx-auto w-full max-w-7xl px-4 py-8 outline-none sm:px-6 lg:px-8 lg:py-10"
+      >
         {children}
       </main>
 

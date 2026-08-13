@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Trash2, FolderLock, Key, Copy } from "lucide-react"
+import { Trash2, FolderLock, Key } from "lucide-react"
 import { getRecordingFolders, deleteRecordingFolder } from "./actions"
 import { AddFolderDialog } from "./add-folder-dialog"
 import { EditFolderDialog } from "./edit-folder-dialog"

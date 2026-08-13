@@ -35,7 +35,15 @@ function parseYmd(value: string | null): Date | null {
 function isDistrictDirectory(value: unknown): value is DistrictDirectoryEntry[] {
   return (
     Array.isArray(value) &&
-    value.every((d) => d && typeof d === "object" && typeof (d as any).number === "number" && typeof (d as any).name === "string")
+    value.every(
+      (district) =>
+        district !== null &&
+        typeof district === "object" &&
+        "number" in district &&
+        typeof district.number === "number" &&
+        "name" in district &&
+        typeof district.name === "string",
+    )
   )
 }
 

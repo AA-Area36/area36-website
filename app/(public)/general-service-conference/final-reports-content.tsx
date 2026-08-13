@@ -8,9 +8,11 @@ import { PDFViewer } from "@/components/pdf-viewer"
 import { downloadFile } from "@/lib/files/download"
 import { supportsInlinePdfPreview } from "@/lib/files/preview"
 import type { Resource } from "@/lib/gdrive/types"
+import type { ServiceResource } from "@/lib/gdrive/service-resources"
 
 interface FinalReportsContentProps {
   oldReports: Resource[]
+  orderingGuide?: ServiceResource
 }
 
 // Helper to extract year from report title/filename
@@ -149,7 +151,7 @@ function DriveReportItem({
   )
 }
 
-export function FinalReportsContent({ oldReports }: FinalReportsContentProps) {
+export function FinalReportsContent({ oldReports, orderingGuide }: FinalReportsContentProps) {
   const [viewerOpen, setViewerOpen] = React.useState(false)
   const [selectedReport, setSelectedReport] = React.useState<Resource | null>(null)
   const [loadingAction, setLoadingAction] = React.useState<{
@@ -306,6 +308,34 @@ export function FinalReportsContent({ oldReports }: FinalReportsContentProps) {
           </Link>
         </p>
       </div>
+
+      {orderingGuide && (
+        <aside
+          aria-labelledby="final-report-ordering-heading"
+          className="mt-6 flex flex-col gap-3 rounded-lg border border-border/70 bg-muted/20 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="flex items-start gap-3">
+            <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <div>
+              <h3 id="final-report-ordering-heading" className="text-sm font-medium text-foreground">
+                Ordering printed Final Reports
+              </h3>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Review the process for requesting printed conference reports.
+              </p>
+            </div>
+          </div>
+          <Link
+            href={orderingGuide.previewUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline"
+          >
+            View ordering instructions
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+          </Link>
+        </aside>
+      )}
 
       {/* PDF Viewer */}
       {viewerOpen && selectedReport && (

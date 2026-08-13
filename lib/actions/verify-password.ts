@@ -6,6 +6,39 @@ import { eq } from "drizzle-orm"
 import { setUnlockedFolder } from "@/lib/recordings/session"
 import { setUnlockedFile } from "@/lib/files/session"
 import { verifyPassword } from "@/lib/security/passwords"
+import { checkRateLimit, getClientIp } from "@/lib/security/rate-limit"
+
+const MAX_UNLOCK_ID_LENGTH = 256
+const MAX_UNLOCK_PASSWORD_LENGTH = 256
+const UNLOCK_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000
+const UNLOCK_ERROR = "Unable to unlock. Check the password and try again later."
+
+function hasValidUnlockInput(driveId: unknown, password: unknown): driveId is string {
+  return (
+    typeof driveId === "string" &&
+    driveId.length > 0 &&
+    driveId.length <= MAX_UNLOCK_ID_LENGTH &&
+    typeof password === "string" &&
+    password.length > 0 &&
+    password.length <= MAX_UNLOCK_PASSWORD_LENGTH
+  )
+}
+
+async function canAttemptUnlock(kind: "folder" | "file", driveId: string): Promise<boolean> {
+  const ip = await getClientIp()
+  const [clientLimit, resourceLimit] = await Promise.all([
+    checkRateLimit(`unlock:${kind}:client:${ip}`, {
+      limit: 30,
+      windowMs: UNLOCK_RATE_LIMIT_WINDOW_MS,
+    }),
+    checkRateLimit(`unlock:${kind}:resource:${ip}:${driveId}`, {
+      limit: 5,
+      windowMs: UNLOCK_RATE_LIMIT_WINDOW_MS,
+    }),
+  ])
+
+  return clientLimit.ok && resourceLimit.ok
+}
 
 /**
  * Verify password for a recording folder and unlock it
@@ -16,6 +49,13 @@ export async function verifyFolderPassword(
   password: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    if (!hasValidUnlockInput(driveId, password)) {
+      return { success: false, error: UNLOCK_ERROR }
+    }
+    if (!(await canAttemptUnlock("folder", driveId))) {
+      return { success: false, error: UNLOCK_ERROR }
+    }
+
     const db = await getDb()
     const [folder] = await db
       .select()
@@ -23,19 +63,19 @@ export async function verifyFolderPassword(
       .where(eq(recordingFolders.driveId, driveId))
 
     if (!folder) {
-      return { success: false, error: "Folder not found" }
+      return { success: false, error: UNLOCK_ERROR }
     }
 
     const valid = await verifyPassword(password, folder.password)
     if (!valid) {
-      return { success: false, error: "Incorrect password" }
+      return { success: false, error: UNLOCK_ERROR }
     }
 
     await setUnlockedFolder(driveId)
     return { success: true }
   } catch (error) {
     console.error("Error verifying folder password:", error)
-    return { success: false, error: "Verification failed" }
+    return { success: false, error: UNLOCK_ERROR }
   }
 }
 
@@ -57,6 +97,13 @@ export async function verifyFilePassword(
   unlockExpiresAt?: number
 }> {
   try {
+    if (!hasValidUnlockInput(driveId, password)) {
+      return { success: false, error: UNLOCK_ERROR }
+    }
+    if (!(await canAttemptUnlock("file", driveId))) {
+      return { success: false, error: UNLOCK_ERROR }
+    }
+
     const db = await getDb()
     const results = await db
       .select()
@@ -66,12 +113,12 @@ export async function verifyFilePassword(
 
     const meta = results[0]
     if (!meta || !meta.password) {
-      return { success: false, error: "File not found" }
+      return { success: false, error: UNLOCK_ERROR }
     }
 
     const valid = await verifyPassword(password, meta.password)
     if (!valid) {
-      return { success: false, error: "Incorrect password" }
+      return { success: false, error: UNLOCK_ERROR }
     }
 
     // Set cookie to unlock file (for subsequent page loads / refreshes)
@@ -94,6 +141,6 @@ export async function verifyFilePassword(
     }
   } catch (error) {
     console.error("Error verifying file password:", error)
-    return { success: false, error: "Verification failed" }
+    return { success: false, error: UNLOCK_ERROR }
   }
 }

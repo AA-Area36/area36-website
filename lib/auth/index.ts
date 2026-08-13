@@ -6,6 +6,8 @@ import { D1Adapter } from "./d1-adapter"
 import { isGroupMember, type AdminDirectoryCredentials } from "@/lib/google/admin-directory"
 import { createLocalAdminBypassSession, isLocalAdminBypassEnabled } from "./dev-bypass"
 import { hasAssignedAccessForEmail, isSeedEmailAllowed } from "./rbac"
+import { isAllowedRedirectHost } from "./redirects"
+import { GOOGLE_DRIVE_FILE_SCOPE } from "@/lib/google/user-drive-auth"
 
 const ALLOWED_DOMAIN = "@area36.org"
 const ADMIN_GROUP_EMAIL = "area36-internal@area36.org"
@@ -16,6 +18,10 @@ const ALLOWED_ADMIN_EMAILS = new Set([
   "alttechnology@area36.org",
 ])
 let adminConfigWarningLogged = false
+
+function includesOAuthScope(scopes: string | undefined, requiredScope: string): boolean {
+  return new Set((scopes ?? "").split(/\s+/).filter(Boolean)).has(requiredScope)
+}
 
 function normalizeEmail(email?: string | null): string {
   return email?.trim().toLowerCase() ?? ""
@@ -85,7 +91,7 @@ async function getDistrictAdminForEmail(email: string, env: CloudflareEnv): Prom
       .bind(normalized)
       .all<{ districtNumber: number }>()
     return (res?.results ?? [])
-      .map((r) => Number((r as any).districtNumber))
+      .map((row) => Number(row.districtNumber))
       .filter((n) => Number.isFinite(n))
   } catch {
     // Local dev / fresh environments may not have migrations applied yet.
@@ -119,15 +125,6 @@ function authCookieOverrides() {
     sessionToken: { options: { domain } },
     callbackUrl: { options: { domain } },
   }
-}
-
-function isAllowedRedirectHost(hostname: string): boolean {
-  const h = hostname.toLowerCase()
-  if (h === "area36.org" || h === "www.area36.org") return true
-  const m = h.match(/^d(\d{1,2})\.area36\.org$/)
-  if (!m) return false
-  const n = Number(m[1])
-  return Number.isFinite(n) && n >= 1 && n <= 27 && n !== 10
 }
 
 const nextAuth = NextAuth(async () => {
@@ -178,6 +175,33 @@ const nextAuth = NextAuth(async () => {
         } catch {
           return baseUrl
         }
+      },
+    },
+    events: {
+      async signIn({ user, account }) {
+        if (
+          !user.id ||
+          account?.provider !== "google" ||
+          !includesOAuthScope(account.scope, GOOGLE_DRIVE_FILE_SCOPE)
+        ) return
+        await env.DB.prepare(
+          `UPDATE accounts
+              SET refresh_token = COALESCE(?, refresh_token),
+                  access_token = COALESCE(?, access_token),
+                  expires_at = COALESCE(?, expires_at),
+                  token_type = COALESCE(?, token_type),
+                  scope = COALESCE(?, scope)
+            WHERE userId = ? AND provider = 'google'`,
+        )
+          .bind(
+            account.refresh_token ?? null,
+            account.access_token ?? null,
+            account.expires_at ?? null,
+            account.token_type ?? null,
+            account.scope ?? null,
+            user.id,
+          )
+          .run()
       },
     },
     ...(cookieOverrides ? { cookies: cookieOverrides } : {}),

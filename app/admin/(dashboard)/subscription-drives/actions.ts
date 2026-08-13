@@ -5,17 +5,26 @@ import { getDb } from "@/lib/db"
 import { subscriptionDrives, driveSubmissions, type SubscriptionDrive, type DriveSubmission, type DriveSubmissionStatus } from "@/lib/db/schema"
 import { deleteImage, deleteImagesByPrefix } from "@/lib/r2"
 import { createDriveSchema, updateDriveSchema, type CreateDriveData, type UpdateDriveData } from "@/lib/schemas/drive-submission"
-import { eq, desc, and, sql } from "drizzle-orm"
+import { eq, desc, and } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
+import { requireAreaAdminSession } from "@/lib/auth/guards"
+
+async function requireSubscriptionDriveAdmin(): Promise<void> {
+  if (!(await requireAreaAdminSession())) {
+    throw new Error("Unauthorized")
+  }
+}
 
 // Fetch all drives
 export async function getAllDrives(): Promise<SubscriptionDrive[]> {
+  await requireSubscriptionDriveAdmin()
   const db = await getDb()
   return db.select().from(subscriptionDrives).orderBy(desc(subscriptionDrives.createdAt))
 }
 
 // Fetch submissions for a drive
 export async function getDriveSubmissions(driveId: string, status?: DriveSubmissionStatus | "all"): Promise<DriveSubmission[]> {
+  await requireSubscriptionDriveAdmin()
   const db = await getDb()
 
   if (status && status !== "all") {
@@ -52,6 +61,7 @@ export interface DriveLeaderboardEntry {
 }
 
 export async function getDriveStats(driveId: string): Promise<DriveStats> {
+  await requireSubscriptionDriveAdmin()
   const db = await getDb()
 
   const submissions = await db
@@ -97,6 +107,7 @@ export async function getDriveStats(driveId: string): Promise<DriveStats> {
 }
 
 export async function getDriveLeaderboard(driveId: string): Promise<DriveLeaderboardEntry[]> {
+  await requireSubscriptionDriveAdmin()
   const db = await getDb()
   const allSubmissions = await db
     .select()
@@ -318,6 +329,7 @@ export async function endDrive(driveId: string, deleteImages: boolean = false): 
 
 // Get a single drive by ID
 export async function getDrive(driveId: string): Promise<SubscriptionDrive | null> {
+  await requireSubscriptionDriveAdmin()
   const db = await getDb()
   const [drive] = await db.select().from(subscriptionDrives).where(eq(subscriptionDrives.id, driveId))
   return drive || null

@@ -1,7 +1,9 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { Inter } from "next/font/google"
 import { DistrictShell } from "./district-shell"
 import { coerceDistrict, resolveDistrictSiteForRender } from "./district-utils"
+import { createDistrictMetadata } from "./metadata"
 
 const districtDisplay = Inter({
   subsets: ["latin"],
@@ -16,6 +18,19 @@ const districtBody = Inter({
 })
 
 export const dynamic = "force-dynamic"
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ district: string }>
+}): Promise<Metadata> {
+  const { district } = await params
+  const districtNumber = coerceDistrict(district)
+  if (!districtNumber) return {}
+
+  const site = await resolveDistrictSiteForRender(districtNumber)
+  return site ? createDistrictMetadata(site.title) : {}
+}
 
 export default async function DistrictLayout({
   children,

@@ -273,10 +273,7 @@ export function RecordingsClient({ categories, recordings, years, unlockedFolder
         // Auto-play may be blocked by browser
       })
     }
-  }, [playerState.recording?.id])
-
-  // Calculate total count across all categories
-  const totalCount = Object.values(recordings).flat().length
+  }, [playerState.recording])
 
   return (
     <div className="space-y-8">

@@ -78,7 +78,7 @@ async function upsertUptime(
     .run()
 }
 
-export default {
+const worker = {
   async scheduled(_: ScheduledEvent, env: Env, ctx: ExecutionContext) {
     const base = normalizeBase(env.SITE_BASE_URL)
     const endpoints = parseEndpoints(env)
@@ -102,3 +102,5 @@ export default {
     }
   },
 }
+
+export default worker

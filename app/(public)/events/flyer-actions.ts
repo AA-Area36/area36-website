@@ -6,6 +6,7 @@ import { uploadFlyer, deleteFlyer } from "@/lib/r2"
 import { eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
+import { requireAreaAdminSession } from "@/lib/auth/guards"
 import { verifyEventUploadToken } from "@/lib/security/upload-token"
 import { invalidateEventCaches } from "@/lib/utils/event-cache"
 
@@ -107,6 +108,11 @@ export async function uploadEventFlyer(
 export async function deleteEventFlyer(
   flyerId: string
 ): Promise<{ success: boolean; error?: string }> {
+  const session = await requireAreaAdminSession()
+  if (!session) {
+    return { success: false, error: "Unauthorized" }
+  }
+
   const db = await getDb()
 
   // Get the flyer to find its R2 key
@@ -156,9 +162,25 @@ export async function reorderEventFlyers(
   eventId: string,
   flyerIds: string[]
 ): Promise<{ success: boolean; error?: string }> {
+  const session = await requireAreaAdminSession()
+  if (!session) {
+    return { success: false, error: "Unauthorized" }
+  }
+
   const db = await getDb()
 
   try {
+    const eventFlyerRows = flyerIds.length > 0
+      ? await db
+          .select({ id: eventFlyers.id, eventId: eventFlyers.eventId })
+          .from(eventFlyers)
+          .where(eq(eventFlyers.eventId, eventId))
+      : []
+    const eventFlyerIds = new Set(eventFlyerRows.map((flyer) => flyer.id))
+    if (flyerIds.some((flyerId) => !eventFlyerIds.has(flyerId))) {
+      return { success: false, error: "One or more flyers do not belong to this event" }
+    }
+
     // Update each flyer's order based on its position in the array
     for (let i = 0; i < flyerIds.length; i++) {
       await db

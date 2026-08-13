@@ -6,6 +6,14 @@ import { loadContentDocs } from "./actions"
 import { ContentEditor } from "./content-editor"
 import { cn } from "@/lib/utils"
 
+type LocaleState = {
+  doc: ContentDoc
+  publishedDoc: ContentDoc | null
+  draftUpdatedAt: string | null
+  publishedAt: string | null
+  updatedBy: string | null
+}
+
 function safeParse(value: string | null): ContentDoc | null {
   if (!value) return null
   try {
@@ -52,7 +60,7 @@ export default async function AdminContentPage({
         },
       ]
     }),
-  ) as Record<Locale, any>
+  ) as Record<Locale, LocaleState>
 
   return (
     <div className="space-y-6">

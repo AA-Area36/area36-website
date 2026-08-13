@@ -30,7 +30,7 @@ export async function getDistrictSiteByNumber(districtNumber: number): Promise<D
     .from(schema.districtSites)
     .where(eq(schema.districtSites.districtNumber, districtNumber))
     .get()
-  return (row as any) ?? null
+  return row ?? null
 }
 
 export async function getDistrictSiteBySubdomain(subdomain: string): Promise<DistrictSiteRow | null> {
@@ -49,7 +49,7 @@ export async function getDistrictSiteBySubdomain(subdomain: string): Promise<Dis
     .from(schema.districtSites)
     .where(eq(schema.districtSites.subdomain, subdomain))
     .get()
-  return (row as any) ?? null
+  return row ?? null
 }
 
 export async function listDistrictSites(): Promise<DistrictSiteRow[]> {
@@ -67,7 +67,7 @@ export async function listDistrictSites(): Promise<DistrictSiteRow[]> {
     })
     .from(schema.districtSites)
     .all()
-  return rows as any
+  return rows
 }
 
 export function validateRedirectUrl(value: string): { ok: true; url: string } | { ok: false; error: string } {

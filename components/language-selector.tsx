@@ -27,6 +27,7 @@ export function LanguageSelector() {
   React.useEffect(() => {
     const fromCookie = readCookie("a36_locale")
     const fromHtml = document?.documentElement?.lang
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Locale cookies and document language are browser-only sources.
     setCurrentLanguage(fromCookie || fromHtml || "en")
   }, [])
 

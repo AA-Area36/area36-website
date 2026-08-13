@@ -26,6 +26,13 @@ type CorrectionsHeaderContent = {
   backLinkLabel?: string
 }
 
+function errorAttributes(id: string, error: unknown) {
+  return {
+    "aria-invalid": error ? true : undefined,
+    "aria-describedby": error ? `${id}-error` : undefined,
+  }
+}
+
 function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }) {
   const [submitted, setSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -64,6 +71,7 @@ function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }
     },
   })
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form's watch API is intentionally used for conditional fields.
   const isSpanishSpeaking = watch("isSpanishSpeaking")
 
   const onSubmit = useCallback(
@@ -90,12 +98,12 @@ function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }
         }
       })
     },
-    [executeRecaptcha]
+    [executeRecaptcha, t]
   )
 
   if (submitted) {
     return (
-      <div className="rounded-xl border border-border bg-card p-8 text-center">
+      <div className="rounded-xl border border-border bg-card p-8 text-center" role="status" aria-live="polite">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
           <CheckCircle className="h-6 w-6" aria-hidden="true" />
         </div>
@@ -125,7 +133,7 @@ function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       {submitError && (
-        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive" role="alert" aria-live="assertive">
           {submitError}
         </div>
       )}
@@ -135,15 +143,15 @@ function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }
           <Label htmlFor="corrections-firstName">
             {t("form.firstNameLabel", "First Name")} <span className="text-destructive">*</span>
           </Label>
-          <Input id="corrections-firstName" {...register("firstName")} />
-          {errors.firstName && <p className="text-sm text-destructive">{errors.firstName.message}</p>}
+          <Input id="corrections-firstName" {...register("firstName")} {...errorAttributes("corrections-firstName", errors.firstName)} />
+          {errors.firstName && <p id="corrections-firstName-error" className="text-sm text-destructive">{errors.firstName.message}</p>}
         </div>
         <div className="space-y-2">
           <Label htmlFor="corrections-lastName">
             {t("form.lastNameLabel", "Last Name")} <span className="text-destructive">*</span>
           </Label>
-          <Input id="corrections-lastName" {...register("lastName")} />
-          {errors.lastName && <p className="text-sm text-destructive">{errors.lastName.message}</p>}
+          <Input id="corrections-lastName" {...register("lastName")} {...errorAttributes("corrections-lastName", errors.lastName)} />
+          {errors.lastName && <p id="corrections-lastName-error" className="text-sm text-destructive">{errors.lastName.message}</p>}
         </div>
       </div>
 
@@ -162,7 +170,7 @@ function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }
                   field.onChange(value)
                 }}
               >
-                <SelectTrigger id="corrections-gender" className="w-full" aria-invalid={!!errors.gender}>
+                <SelectTrigger id="corrections-gender" className="w-full" {...errorAttributes("corrections-gender", errors.gender)}>
                   <SelectValue placeholder={t("form.genderPlaceholder", "Select gender")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -172,14 +180,14 @@ function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }
               </Select>
             )}
           />
-          {errors.gender && <p className="text-sm text-destructive">{errors.gender.message}</p>}
+          {errors.gender && <p id="corrections-gender-error" className="text-sm text-destructive">{errors.gender.message}</p>}
         </div>
         <div className="space-y-2">
           <Label htmlFor="corrections-birthYear">
             {t("form.birthYearLabel", "Birth Year")} <span className="text-destructive">*</span>
           </Label>
-          <Input id="corrections-birthYear" inputMode="numeric" maxLength={4} {...register("birthYear")} />
-          {errors.birthYear && <p className="text-sm text-destructive">{errors.birthYear.message}</p>}
+          <Input id="corrections-birthYear" inputMode="numeric" maxLength={4} {...register("birthYear")} {...errorAttributes("corrections-birthYear", errors.birthYear)} />
+          {errors.birthYear && <p id="corrections-birthYear-error" className="text-sm text-destructive">{errors.birthYear.message}</p>}
         </div>
       </div>
 
@@ -193,8 +201,8 @@ function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }
           <Label htmlFor="corrections-city">
             {t("form.cityLabel", "City")} <span className="text-destructive">*</span>
           </Label>
-          <Input id="corrections-city" {...register("city")} />
-          {errors.city && <p className="text-sm text-destructive">{errors.city.message}</p>}
+          <Input id="corrections-city" {...register("city")} {...errorAttributes("corrections-city", errors.city)} />
+          {errors.city && <p id="corrections-city-error" className="text-sm text-destructive">{errors.city.message}</p>}
         </div>
         <div className="space-y-2">
           <Label htmlFor="corrections-county">{t("form.countyLabel", "County")}</Label>
@@ -217,8 +225,8 @@ function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }
         <Label htmlFor="corrections-email">
           {t("form.emailLabel", "Email")} <span className="text-destructive">*</span>
         </Label>
-        <Input id="corrections-email" type="email" {...register("email")} />
-        {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
+        <Input id="corrections-email" type="email" {...register("email")} {...errorAttributes("corrections-email", errors.email)} />
+        {errors.email && <p id="corrections-email-error" className="text-sm text-destructive">{errors.email.message}</p>}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -226,13 +234,13 @@ function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }
           <Label htmlFor="corrections-sobrietyDate">
             {t("form.sobrietyDateLabel", "Sobriety Date")} <span className="text-destructive">*</span>
           </Label>
-          <Input id="corrections-sobrietyDate" type="date" {...register("sobrietyDate")} />
-          {errors.sobrietyDate && <p className="text-sm text-destructive">{errors.sobrietyDate.message}</p>}
+          <Input id="corrections-sobrietyDate" type="date" {...register("sobrietyDate")} {...errorAttributes("corrections-sobrietyDate", errors.sobrietyDate)} />
+          {errors.sobrietyDate && <p id="corrections-sobrietyDate-error" className="text-sm text-destructive">{errors.sobrietyDate.message}</p>}
         </div>
         <div className="space-y-2">
           <Label htmlFor="corrections-homeGroup">{t("form.homeGroupLabel", "Home Group")}</Label>
-          <Input id="corrections-homeGroup" {...register("homeGroup")} />
-          {errors.homeGroup && <p className="text-sm text-destructive">{errors.homeGroup.message}</p>}
+          <Input id="corrections-homeGroup" {...register("homeGroup")} {...errorAttributes("corrections-homeGroup", errors.homeGroup)} />
+          {errors.homeGroup && <p id="corrections-homeGroup-error" className="text-sm text-destructive">{errors.homeGroup.message}</p>}
         </div>
       </div>
 

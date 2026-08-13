@@ -3,6 +3,7 @@ import {
   validateFileAccess,
   getGDriveEnv,
   getGDriveCredentials,
+  getAllowedGDriveRootIds,
 } from "@/lib/files/access"
 
 // Use nodejs runtime for compatibility with Cloudflare Workers via OpenNext
@@ -13,6 +14,7 @@ async function resolveAccess(
   fileId: string
 ): Promise<{
   credentials: Awaited<ReturnType<typeof getGDriveCredentials>>
+  filename?: string
 } | {
   errorResponse: NextResponse
 }> {
@@ -34,10 +36,11 @@ async function resolveAccess(
   const unlockToken = request.nextUrl.searchParams.get("unlock")
 
   // Validate access
-  const { valid, requiresPassword } = await validateFileAccess(
+  const { valid, filename, requiresPassword } = await validateFileAccess(
     fileId,
     credentials,
-    unlockToken
+    unlockToken,
+    getAllowedGDriveRootIds(env)
   )
 
   if (!valid) {
@@ -57,7 +60,20 @@ async function resolveAccess(
     }
   }
 
-  return { credentials }
+  return { credentials, filename }
+}
+
+const INLINE_PREVIEW_TYPES = new Set([
+  "application/pdf",
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "text/plain",
+])
+
+function normalizeContentType(value: string | null): string | null {
+  return value?.split(";")[0]?.trim().toLowerCase() || null
 }
 
 export async function HEAD(
@@ -137,6 +153,20 @@ export async function GET(
       )
     }
 
+    const contentType = normalizeContentType(
+      driveResponse.headers.get("content-type")
+    )
+    if (!contentType || !INLINE_PREVIEW_TYPES.has(contentType)) {
+      await driveResponse.body?.cancel()
+      return NextResponse.json(
+        { error: "This file type cannot be previewed safely" },
+        {
+          status: 415,
+          headers: { "X-Content-Type-Options": "nosniff" },
+        }
+      )
+    }
+
     const responseHeaders = new Headers()
     const passthroughHeaders = [
       "content-type",
@@ -152,12 +182,16 @@ export async function GET(
         responseHeaders.set(headerName, value)
       }
     }
-    if (!responseHeaders.has("content-type")) {
-      responseHeaders.set("content-type", "application/pdf")
-    }
-
     // Inline disposition so the browser renders it (for iframe embedding)
-    responseHeaders.set("Content-Disposition", "inline")
+    const safeFilename = (access.filename || "preview")
+      .replace(/[^\w\s.-]/g, "_")
+      .replace(/\s+/g, "_")
+      .replace(/^_+|_+$/g, "") || "preview"
+    responseHeaders.set(
+      "Content-Disposition",
+      `inline; filename="${safeFilename}"`
+    )
+    responseHeaders.set("X-Content-Type-Options", "nosniff")
 
     // Allow caching for preview content
     responseHeaders.set(

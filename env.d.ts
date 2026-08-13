@@ -11,10 +11,15 @@ declare global {
       GDRIVE_SERVICE_ACCOUNT_EMAIL: string
       GDRIVE_PRIVATE_KEY: string
       GDRIVE_PRIVATE_KEY_ID: string
+      GDRIVE_QUORUM_FOLDER_ID?: string
+      QUORUM_DRIVE_OWNER_EMAIL?: string
+      GMAIL_SENDER_EMAIL?: string
       NEXTAUTH_SECRET?: string
       UNLOCK_COOKIE_SECRET?: string
       UPLOAD_TOKEN_SECRET?: string
       GOOGLE_ADMIN_IMPERSONATE_EMAIL?: string
+      PUBLIC_HTML_CACHE_ENABLED?: string
+      PUBLIC_HTML_CACHE_HOSTS?: string
     }
   }
 
@@ -49,9 +54,13 @@ declare global {
     GDRIVE_RECORDINGS_FOLDER_ID: string
     GDRIVE_COMMITTEES_FOLDER_ID: string
     GDRIVE_SERVICE_RESOURCES_FOLDER_ID: string
+    GDRIVE_QUORUM_FOLDER_ID: string
     // Gmail API (uses same service account as Google Drive)
     GMAIL_SENDER_EMAIL: string
+    QUORUM_DRIVE_OWNER_EMAIL?: string
     GOOGLE_ADMIN_IMPERSONATE_EMAIL?: string
+    PUBLIC_HTML_CACHE_ENABLED?: string
+    PUBLIC_HTML_CACHE_HOSTS?: string
   }
 }
 

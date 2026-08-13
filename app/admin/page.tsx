@@ -36,6 +36,7 @@ function buildFeatureAccessRows(permissions: Set<AppPermission>) {
     },
     { feature: "Reports", read: permissions.has("reports:read"), write: false },
     { feature: "District Sites", read: permissions.has("district-sites:read"), write: permissions.has("district-sites:write") },
+    { feature: "Quorum", read: permissions.has("quorum:view"), write: permissions.has("quorum:edit") },
     {
       feature: "Corrections",
       read: permissions.has("corrections:view"),

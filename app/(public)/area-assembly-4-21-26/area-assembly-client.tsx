@@ -45,6 +45,7 @@ export function AreaAssemblyClient() {
     },
   })
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form's watch API is intentionally used for conditional fields.
   const attendingApril18 = watch("attendingApril18")
 
   useEffect(() => {

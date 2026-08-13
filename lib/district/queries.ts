@@ -1,17 +1,112 @@
 import { getDb, schema } from "@/lib/db"
-import { and, asc, desc, eq, isNotNull } from "drizzle-orm"
+import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, or } from "drizzle-orm"
+import type { EventException, EventFlyer, EventType } from "@/lib/db/schema"
+import type { EventWithRelations } from "@/lib/types/recurrence"
+import { getEventsForDateRange } from "@/lib/utils/event-queries"
+import { recordError } from "@/lib/monitoring/errors"
+
+export class DistrictDataUnavailableError extends Error {
+  constructor() {
+    super("District information is temporarily unavailable")
+    this.name = "DistrictDataUnavailableError"
+  }
+}
+
+function throwDistrictDataUnavailable(
+  resource: string,
+  districtNumber: number,
+  cause: unknown
+): never {
+  void recordError({
+    kind: "D1_QUERY_FAILED",
+    route: `/district-site/${districtNumber}/${resource}`,
+    error: cause,
+    messageOverride: `District ${resource} query failed`,
+  })
+  throw new DistrictDataUnavailableError()
+}
 
 export async function getDistrictPublicEvents(districtNumber: number) {
   try {
     const db = await getDb()
-    return db
+    const now = new Date()
+    const todayStr = now.toLocaleDateString("en-CA", { timeZone: "America/Chicago" })
+    const yesterday = new Date(now)
+    yesterday.setDate(yesterday.getDate() - 1)
+    const yesterdayStr = yesterday.toLocaleDateString("en-CA", { timeZone: "America/Chicago" })
+
+    const events = await db
       .select()
       .from(schema.events)
-      .where(and(eq(schema.events.status, "approved"), eq(schema.events.districtNumber, districtNumber)))
+      .where(
+        and(
+          eq(schema.events.status, "approved"),
+          eq(schema.events.districtNumber, districtNumber),
+          or(
+            and(
+              eq(schema.events.isRecurring, false),
+              or(
+                gt(schema.events.endDate, yesterdayStr),
+                and(isNull(schema.events.endDate), gt(schema.events.date, yesterdayStr))
+              )
+            ),
+            and(
+              eq(schema.events.isRecurring, true),
+              or(isNull(schema.events.recurUntil), gte(schema.events.recurUntil, todayStr))
+            )
+          )
+        )
+      )
       .orderBy(asc(schema.events.date))
       .all()
-  } catch {
-    return []
+
+    if (events.length === 0) return []
+    const eventIds = events.map((event) => event.id)
+    const recurringIds = events.filter((event) => event.isRecurring).map((event) => event.id)
+    const [typeRows, flyerRows, exceptionRows] = await Promise.all([
+      db.select().from(schema.eventToTypes).where(inArray(schema.eventToTypes.eventId, eventIds)).all(),
+      db
+        .select()
+        .from(schema.eventFlyers)
+        .where(inArray(schema.eventFlyers.eventId, eventIds))
+        .orderBy(schema.eventFlyers.order)
+        .all(),
+      recurringIds.length > 0
+        ? db.select().from(schema.eventExceptions).where(inArray(schema.eventExceptions.eventId, recurringIds)).all()
+        : Promise.resolve([] as EventException[]),
+    ])
+
+    const typesByEvent = new Map<string, EventType[]>()
+    for (const row of typeRows) {
+      const values = typesByEvent.get(row.eventId) ?? []
+      values.push(row.type)
+      typesByEvent.set(row.eventId, values)
+    }
+    const flyersByEvent = new Map<string, EventFlyer[]>()
+    for (const row of flyerRows) {
+      const values = flyersByEvent.get(row.eventId) ?? []
+      values.push(row)
+      flyersByEvent.set(row.eventId, values)
+    }
+    const exceptionsByEvent = new Map<string, EventException[]>()
+    for (const row of exceptionRows) {
+      const values = exceptionsByEvent.get(row.eventId) ?? []
+      values.push(row)
+      exceptionsByEvent.set(row.eventId, values)
+    }
+
+    const eventsWithRelations: EventWithRelations[] = events.map((event) => ({
+      ...event,
+      types: typesByEvent.get(event.id) ?? (event.type ? [event.type] : []),
+      flyers: flyersByEvent.get(event.id) ?? [],
+      exceptions: exceptionsByEvent.get(event.id) ?? [],
+    }))
+    const rangeStart = new Date(todayStr)
+    const rangeEnd = new Date(todayStr)
+    rangeEnd.setFullYear(rangeEnd.getFullYear() + 1)
+    return getEventsForDateRange(eventsWithRelations, rangeStart, rangeEnd)
+  } catch (error) {
+    throwDistrictDataUnavailable("events", districtNumber, error)
   }
 }
 
@@ -24,8 +119,8 @@ export async function getDistrictContacts(districtNumber: number) {
       .where(eq(schema.districtContacts.districtNumber, districtNumber))
       .orderBy(asc(schema.districtContacts.sortOrder), asc(schema.districtContacts.role))
       .all()
-  } catch {
-    return []
+  } catch (error) {
+    throwDistrictDataUnavailable("contacts", districtNumber, error)
   }
 }
 
@@ -38,8 +133,8 @@ export async function getDistrictPositions(districtNumber: number) {
       .where(eq(schema.districtPositions.districtNumber, districtNumber))
       .orderBy(asc(schema.districtPositions.sortOrder), asc(schema.districtPositions.title))
       .all()
-  } catch {
-    return []
+  } catch (error) {
+    throwDistrictDataUnavailable("positions", districtNumber, error)
   }
 }
 
@@ -52,8 +147,8 @@ export async function getDistrictPublishedUpdates(districtNumber: number) {
       .where(and(eq(schema.districtUpdates.districtNumber, districtNumber), isNotNull(schema.districtUpdates.publishedAt)))
       .orderBy(desc(schema.districtUpdates.publishedAt))
       .all()
-  } catch {
-    return []
+  } catch (error) {
+    throwDistrictDataUnavailable("updates", districtNumber, error)
   }
 }
 
@@ -66,8 +161,8 @@ export async function getDistrictAllUpdates(districtNumber: number) {
       .where(eq(schema.districtUpdates.districtNumber, districtNumber))
       .orderBy(desc(schema.districtUpdates.updatedAt))
       .all()
-  } catch {
-    return []
+  } catch (error) {
+    throwDistrictDataUnavailable("all-updates", districtNumber, error)
   }
 }
 
@@ -134,8 +229,8 @@ export async function getDistrictSiteConfig(districtNumber: number) {
         meetingPasscode: null,
         meetingContactForDetails: false,
       }
-    } catch {
-      return null
+    } catch (error) {
+      throwDistrictDataUnavailable("configuration", districtNumber, error)
     }
   }
 }

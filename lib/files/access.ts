@@ -5,6 +5,7 @@ import { isFileUnlocked } from "@/lib/files/session"
 import { getDb } from "@/lib/db"
 import { fileMetadata } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
+import type { DriveFile, GDriveCredentials } from "@/lib/gdrive/types"
 
 // Re-export types only (these don't add to bundle size)
 export type { GDriveCredentials } from "@/lib/gdrive/types"
@@ -14,6 +15,62 @@ export interface FileAccessResult {
   filename?: string
   requiresPassword: boolean
   isUnlocked?: boolean
+}
+
+export interface GDriveAccessEnv {
+  GDRIVE_SERVICE_ACCOUNT_EMAIL: string
+  GDRIVE_PRIVATE_KEY: string
+  GDRIVE_PRIVATE_KEY_ID: string
+  GDRIVE_ROOT_FOLDER_ID: string
+  GDRIVE_RECORDINGS_FOLDER_ID: string
+  GDRIVE_NEWSLETTERS_FOLDER_ID: string
+  GDRIVE_RESOURCES_FOLDER_ID: string
+  GDRIVE_COMMITTEES_FOLDER_ID: string
+  GDRIVE_SERVICE_RESOURCES_FOLDER_ID: string
+}
+
+const MAX_ANCESTRY_DEPTH = 12
+const MAX_ANCESTRY_NODES = 64
+
+export function getAllowedGDriveRootIds(env: GDriveAccessEnv): string[] {
+  return [
+    env.GDRIVE_ROOT_FOLDER_ID,
+    env.GDRIVE_RECORDINGS_FOLDER_ID,
+    env.GDRIVE_NEWSLETTERS_FOLDER_ID,
+    env.GDRIVE_RESOURCES_FOLDER_ID,
+    env.GDRIVE_COMMITTEES_FOLDER_ID,
+    env.GDRIVE_SERVICE_RESOURCES_FOLDER_ID,
+  ].filter((id, index, ids): id is string => Boolean(id) && ids.indexOf(id) === index)
+}
+
+async function isWithinAllowedDriveRoots(
+  file: DriveFile,
+  credentials: GDriveCredentials,
+  allowedRootIds: string[],
+  getDriveFileMetadata: (
+    credentials: GDriveCredentials,
+    fileId: string
+  ) => Promise<DriveFile>
+): Promise<boolean> {
+  if (allowedRootIds.length === 0) return false
+
+  const allowedRoots = new Set(allowedRootIds)
+  const visited = new Set<string>([file.id])
+  const frontier = (file.parents ?? []).map((id) => ({ id, depth: 1 }))
+
+  while (frontier.length > 0 && visited.size <= MAX_ANCESTRY_NODES) {
+    const current = frontier.shift()!
+    if (allowedRoots.has(current.id)) return true
+    if (current.depth > MAX_ANCESTRY_DEPTH || visited.has(current.id)) continue
+
+    visited.add(current.id)
+    const parent = await getDriveFileMetadata(credentials, current.id)
+    for (const parentId of parent.parents ?? []) {
+      frontier.push({ id: parentId, depth: current.depth + 1 })
+    }
+  }
+
+  return false
 }
 
 /**
@@ -52,7 +109,8 @@ export async function getFileMetadataByDriveIds(driveIds: string[]) {
 export async function validateFileAccess(
   fileId: string,
   credentials: Awaited<ReturnType<typeof getGDriveCredentials>>,
-  unlockToken?: string | null
+  unlockToken: string | null | undefined,
+  allowedRootIds: string[]
 ): Promise<FileAccessResult> {
   try {
     // Dynamic import to avoid bundling at build time
@@ -62,6 +120,19 @@ export async function validateFileAccess(
     // the service account can read it.
     const file = await getDriveFileMetadata(credentials, fileId)
     if (!file) {
+      return { valid: false, requiresPassword: false }
+    }
+
+    // A service-account share is not an authorization boundary. Only files
+    // descending from an explicitly configured Area 36 root may be proxied.
+    if (
+      !(await isWithinAllowedDriveRoots(
+        file,
+        credentials,
+        allowedRootIds,
+        getDriveFileMetadata
+      ))
+    ) {
       return { valid: false, requiresPassword: false }
     }
 
@@ -123,11 +194,7 @@ export async function verifyFilePassword(
  * Get environment variables for Google Drive access
  * Works in both Cloudflare Workers and local development
  */
-export async function getGDriveEnv(): Promise<{
-  GDRIVE_SERVICE_ACCOUNT_EMAIL: string
-  GDRIVE_PRIVATE_KEY: string
-  GDRIVE_PRIVATE_KEY_ID: string
-}> {
+export async function getGDriveEnv(): Promise<GDriveAccessEnv> {
   try {
     const { getCloudflareContext } = await import("@opennextjs/cloudflare")
     const { env } = await getCloudflareContext({ async: true })
@@ -136,6 +203,13 @@ export async function getGDriveEnv(): Promise<{
         GDRIVE_SERVICE_ACCOUNT_EMAIL: env.GDRIVE_SERVICE_ACCOUNT_EMAIL,
         GDRIVE_PRIVATE_KEY: env.GDRIVE_PRIVATE_KEY,
         GDRIVE_PRIVATE_KEY_ID: env.GDRIVE_PRIVATE_KEY_ID,
+        GDRIVE_ROOT_FOLDER_ID: env.GDRIVE_ROOT_FOLDER_ID || "",
+        GDRIVE_RECORDINGS_FOLDER_ID: env.GDRIVE_RECORDINGS_FOLDER_ID || "",
+        GDRIVE_NEWSLETTERS_FOLDER_ID: env.GDRIVE_NEWSLETTERS_FOLDER_ID || "",
+        GDRIVE_RESOURCES_FOLDER_ID: env.GDRIVE_RESOURCES_FOLDER_ID || "",
+        GDRIVE_COMMITTEES_FOLDER_ID: env.GDRIVE_COMMITTEES_FOLDER_ID || "",
+        GDRIVE_SERVICE_RESOURCES_FOLDER_ID:
+          env.GDRIVE_SERVICE_RESOURCES_FOLDER_ID || "",
       }
     }
   } catch {
@@ -146,6 +220,13 @@ export async function getGDriveEnv(): Promise<{
     GDRIVE_SERVICE_ACCOUNT_EMAIL: process.env.GDRIVE_SERVICE_ACCOUNT_EMAIL || "",
     GDRIVE_PRIVATE_KEY: process.env.GDRIVE_PRIVATE_KEY || "",
     GDRIVE_PRIVATE_KEY_ID: process.env.GDRIVE_PRIVATE_KEY_ID || "",
+    GDRIVE_ROOT_FOLDER_ID: process.env.GDRIVE_ROOT_FOLDER_ID || "",
+    GDRIVE_RECORDINGS_FOLDER_ID: process.env.GDRIVE_RECORDINGS_FOLDER_ID || "",
+    GDRIVE_NEWSLETTERS_FOLDER_ID: process.env.GDRIVE_NEWSLETTERS_FOLDER_ID || "",
+    GDRIVE_RESOURCES_FOLDER_ID: process.env.GDRIVE_RESOURCES_FOLDER_ID || "",
+    GDRIVE_COMMITTEES_FOLDER_ID: process.env.GDRIVE_COMMITTEES_FOLDER_ID || "",
+    GDRIVE_SERVICE_RESOURCES_FOLDER_ID:
+      process.env.GDRIVE_SERVICE_RESOURCES_FOLDER_ID || "",
   }
 }
 

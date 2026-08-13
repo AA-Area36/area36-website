@@ -1,4 +1,5 @@
 // Generic edge cache utilities using Cloudflare Cache API
+import { registerBackgroundWork, runSharedSingleFlight } from "@/lib/cache/single-flight"
 
 const CACHE_PREFIX = "edge:"
 const DEFAULT_TTL = 60 * 5 // 5 minutes
@@ -80,39 +81,37 @@ export async function withEdgeCache<T>(
   if (staleWhileRevalidate) {
     const staleData = await getFromCache<T>(`${key}:stale`)
     if (staleData !== null) {
-      const refreshPromise = (async () => {
+      const refreshPromise = runSharedSingleFlight(`edge:${key}`, () => getFromCache<T>(key), async () => {
         try {
           const freshData = await fetcher()
           await Promise.all([
             setInCache(key, freshData, options),
             setInCache(`${key}:stale`, freshData, { ttl: STALE_TTL }),
           ])
+          return freshData
         } catch (error) {
           console.error(`Edge cache background refresh failed for ${key}:`, error)
+          return staleData
         }
-      })()
+      }, { fallback: () => staleData })
 
-      try {
-        const { getCloudflareContext } = await import("@opennextjs/cloudflare")
-        const ctx = await getCloudflareContext({ async: true })
-        if (ctx.ctx?.waitUntil) {
-          ctx.ctx.waitUntil(refreshPromise)
-        }
-      } catch {
-        // Not in Cloudflare context, ignore
+      if (!(await registerBackgroundWork(refreshPromise))) {
+        void refreshPromise.catch(() => undefined)
       }
 
       return { data: staleData, status: "stale" }
     }
   }
 
-  const data = await fetcher()
-  Promise.all([
-    setInCache(key, data, options),
-    setInCache(`${key}:stale`, data, { ttl: STALE_TTL }),
-  ]).catch(() => {
-    // Ignore cache errors
+  const newlyCached = await getFromCache<T>(key)
+  if (newlyCached !== null) return { data: newlyCached, status: "hit" }
+  return runSharedSingleFlight(`edge:${key}`, () => getFromCache<T>(key), async () => {
+    const data = await fetcher()
+    await Promise.all([
+      setInCache(key, data, options),
+      setInCache(`${key}:stale`, data, { ttl: STALE_TTL }),
+    ])
+    return data
   })
-
-  return { data, status: "miss" }
+    .then((data) => ({ data, status: "miss" as const }))
 }

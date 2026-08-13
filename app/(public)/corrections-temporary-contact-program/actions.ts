@@ -90,7 +90,7 @@ export async function submitCorrectionsContactForm(data: CorrectionsContactFormD
   }
 
   const ip = await getClientIp()
-  const rateLimit = checkRateLimit(`corrections:${ip}`, {
+  const rateLimit = await checkRateLimit(`corrections:${ip}`, {
     limit: 5,
     windowMs: 10 * 60 * 1000,
   })

@@ -136,16 +136,19 @@ export function RolesManagementClient({
   const [overrideAccordionOpen, setOverrideAccordionOpen] = React.useState<string[]>([])
 
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Refresh editable assignment drafts when server-owned assignments change.
     setEditRoleByUser(Object.fromEntries(assignments.map((a) => [a.userId, a.roleKey])))
   }, [assignments])
 
   React.useEffect(() => {
     if (!newAssignmentRoleKey || !roleOptions.some((role) => role.roleKey === newAssignmentRoleKey)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Fall back when refreshed role options invalidate the current selection.
       setNewAssignmentRoleKey(defaultAssignmentRole)
     }
   }, [defaultAssignmentRole, newAssignmentRoleKey, roleOptions])
 
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Refresh editable role drafts when server-owned options change.
     setRoleDisplayByKey(Object.fromEntries(roleOptions.map((role) => [role.roleKey, role.displayName])))
     setRolePermissionsByKey(
       Object.fromEntries(roleOptions.map((role) => [role.roleKey, parsePermissions(role.defaultPermissionsJson)]))
@@ -153,6 +156,7 @@ export function RolesManagementClient({
   }, [roleOptions])
 
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Remove per-user drafts that refreshed permissions no longer allow.
     setPermissionByUser((prev) => {
       const next: Record<string, string> = {}
       for (const assignment of assignments) {

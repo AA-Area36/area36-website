@@ -1,11 +1,13 @@
 // Service resources fetching from Google Drive
 
 import { listAllFiles, getGDriveCredentials } from "./client"
-import { getFromCache, setInCache } from "./cache"
+import { withCache } from "./cache"
 import type { DriveFile, GDriveCredentials } from "./types"
 
 export interface ServiceResource {
   id: string
+  /** Original filename from Drive, retained when an admin display name is applied. */
+  fileName?: string
   name: string
   description?: string
   previewUrl: string
@@ -31,6 +33,7 @@ function formatFileSize(bytes?: string): string | undefined {
 function mapDriveFileToServiceResource(file: DriveFile): ServiceResource {
   return {
     id: file.id,
+    fileName: file.name,
     name: file.name.replace(/\.(pdf|doc|docx|xls|xlsx)$/i, ""), // Remove file extension from display name
     description: file.description,
     previewUrl: `/api/files/preview/${file.id}`,
@@ -48,38 +51,28 @@ export async function getServiceResources(
   folderId: string
 ): Promise<ServiceResource[]> {
   const cacheKey = `service-resources-${folderId}`
-  
-  // Try cache first
-  const cached = await getFromCache<ServiceResource[]>(cacheKey)
-  if (cached) {
-    return cached
-  }
 
-  try {
-    const files = await listAllFiles(credentials, folderId, {
-      orderBy: "name",
-    })
-    
-    // Filter to only include PDF and document files
-    const documentFiles = files.filter(
-      (f) =>
-        f.mimeType === "application/pdf" ||
-        f.mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-        f.mimeType === "application/msword" ||
-        f.mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-        f.mimeType === "application/vnd.ms-excel"
-    )
+  return withCache(cacheKey, async () => {
+    try {
+      const files = await listAllFiles(credentials, folderId, {
+        orderBy: "name",
+      })
 
-    const result = documentFiles.map(mapDriveFileToServiceResource)
+      const documentFiles = files.filter(
+        (f) =>
+          f.mimeType === "application/pdf" ||
+          f.mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+          f.mimeType === "application/msword" ||
+          f.mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+          f.mimeType === "application/vnd.ms-excel"
+      )
 
-    // Cache for 5 minutes
-    await setInCache(cacheKey, result, { ttl: 300 })
-    
-    return result
-  } catch (error) {
-    console.error("Error fetching service resources:", error)
-    return []
-  }
+      return documentFiles.map(mapDriveFileToServiceResource)
+    } catch (error) {
+      console.error("Error fetching service resources:", error)
+      return []
+    }
+  }, { ttl: 300 })
 }
 
 /**

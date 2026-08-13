@@ -44,6 +44,7 @@ export function FileMetadataDialog({
   // Load existing metadata when file changes
   React.useEffect(() => {
     if (file && open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Reinitialize the controlled editor when the selected file changes.
       setDisplayName(file.displayName || file.name.replace(/\.[^.]+$/, ""))
       setHasPassword(file.isProtected || false)
       setHasExistingPassword(!!file.isProtected)
@@ -91,7 +92,7 @@ export function FileMetadataDialog({
         })
         onOpenChange(false)
         await onSaved?.(result)
-      } catch (err) {
+      } catch {
         setError("Failed to save metadata")
       }
     })
@@ -105,7 +106,7 @@ export function FileMetadataDialog({
         const result = await deleteFileMetadata(file.id)
         onOpenChange(false)
         await onSaved?.(result)
-      } catch (err) {
+      } catch {
         setError("Failed to delete metadata")
       }
     })

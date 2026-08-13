@@ -1,7 +1,12 @@
 import { signIn } from "@/lib/auth"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card"
 import { AlertCircle } from "lucide-react"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: "Admin Sign In",
+}
 
 export default async function LoginPage({
   searchParams,
@@ -13,10 +18,10 @@ export default async function LoginPage({
   const error = params.error
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-primary/5 to-background p-4">
+    <main id="main-content" tabIndex={-1} className="min-h-screen flex items-center justify-center bg-gradient-to-b from-primary/5 to-background p-4 outline-none">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Admin Sign In</CardTitle>
+          <h1 className="text-2xl font-semibold leading-none tracking-tight">Admin Sign In</h1>
           <CardDescription>
             Sign in with your Area 36 Google account to access available admin tools.
           </CardDescription>
@@ -67,6 +72,6 @@ export default async function LoginPage({
           </p>
         </CardContent>
       </Card>
-    </div>
+    </main>
   )
 }

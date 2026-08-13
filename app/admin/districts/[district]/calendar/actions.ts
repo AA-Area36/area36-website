@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import type { EventType } from "@/lib/db/schema"
 import { invalidateEventCaches } from "@/lib/utils/event-cache"
+import { completeEventFlyerCleanup, enqueueEventFlyerCleanup } from "@/lib/events/flyer-cleanup"
 import {
   parseDate,
   parseEventTypes,
@@ -55,7 +56,7 @@ export async function createDistrictEvent(formData: FormData) {
   const db = await getDb()
   const id = crypto.randomUUID()
 
-  await db.insert(schema.events).values({
+  const insertEvent = db.insert(schema.events).values({
     id,
     title,
     date,
@@ -79,12 +80,14 @@ export async function createDistrictEvent(formData: FormData) {
     recurrenceType: "none",
   })
 
-  await db.insert(schema.eventToTypes).values(
+  const insertTypes = db.insert(schema.eventToTypes).values(
     types.map((t) => ({
       eventId: id,
       type: t as EventType,
-    }))
+    })),
   )
+
+  await db.batch([insertEvent, insertTypes])
 
   revalidateDistrictEventPaths(districtNumber)
   await invalidateEventCaches(districtNumber)
@@ -121,7 +124,7 @@ export async function updateDistrictEvent(formData: FormData) {
     .get()
   if (!event) throw new Error("Event not found")
 
-  await db
+  const updateEventQuery = db
     .update(schema.events)
     .set({
       title,
@@ -142,8 +145,14 @@ export async function updateDistrictEvent(formData: FormData) {
     })
     .where(eq(schema.events.id, eventId))
 
-  await db.delete(schema.eventToTypes).where(eq(schema.eventToTypes.eventId, eventId))
-  await db.insert(schema.eventToTypes).values(types.map((t) => ({ eventId, type: t as EventType })))
+  const deleteTypesQuery = db
+    .delete(schema.eventToTypes)
+    .where(eq(schema.eventToTypes.eventId, eventId))
+  const insertTypesQuery = db
+    .insert(schema.eventToTypes)
+    .values(types.map((t) => ({ eventId, type: t as EventType })))
+
+  await db.batch([updateEventQuery, deleteTypesQuery, insertTypesQuery])
 
   revalidateDistrictEventPaths(districtNumber)
   await invalidateEventCaches(districtNumber)
@@ -160,10 +169,32 @@ export async function deleteDistrictEvent(formData: FormData) {
   if (!eventId) throw new Error("Missing eventId")
 
   const db = await getDb()
-  await db
-    .delete(schema.events)
+  const event = await db
+    .select({ id: schema.events.id })
+    .from(schema.events)
     .where(and(eq(schema.events.id, eventId), eq(schema.events.districtNumber, districtNumber)))
+    .get()
+  if (!event) throw new Error("Event not found")
+
+  await db.batch([
+    enqueueEventFlyerCleanup(db, eventId),
+    db
+      .delete(schema.events)
+      .where(and(eq(schema.events.id, eventId), eq(schema.events.districtNumber, districtNumber))),
+  ])
+
+  let cleanupError: unknown
+  try {
+    await completeEventFlyerCleanup(db, eventId)
+  } catch (error) {
+    console.error("District event deleted with flyer cleanup pending", error)
+    cleanupError = error
+  }
 
   revalidateDistrictEventPaths(districtNumber)
   await invalidateEventCaches(districtNumber)
+
+  if (cleanupError) {
+    throw new Error("Event deleted, but flyer cleanup is pending")
+  }
 }

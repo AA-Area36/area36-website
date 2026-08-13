@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useCallback, useMemo } from "react"
+import { useState, useTransition, useCallback } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useGoogleReCaptcha } from "react-google-recaptcha-v3"
@@ -91,11 +91,15 @@ function ContactForm({ content, header }: { content?: ContentDoc; header?: Conta
     },
   })
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form's watch API is intentionally used for the recipient summary.
   const selectedRecipients = watch("recipients") ?? []
-  const selectedRecipientDetails = useMemo(
-    () => recipients.filter((recipient) => selectedRecipients.includes(recipient.value)),
-    [selectedRecipients]
+  const selectedRecipientDetails = recipients.filter((recipient) =>
+    selectedRecipients.includes(recipient.value),
   )
+  const getErrorProps = (field: keyof ContactFormData) => ({
+    "aria-invalid": errors[field] ? true : undefined,
+    "aria-describedby": errors[field] ? `${field}-error` : undefined,
+  })
 
   const onSubmit = useCallback(async (data: ContactFormData) => {
     setSubmitError(null)
@@ -123,7 +127,7 @@ function ContactForm({ content, header }: { content?: ContentDoc; header?: Conta
         )
       }
     })
-  }, [executeRecaptcha])
+  }, [executeRecaptcha, t])
 
   const handleSendAnother = () => {
     setSubmitted(false)
@@ -154,7 +158,7 @@ function ContactForm({ content, header }: { content?: ContentDoc; header?: Conta
                 <h2 className="text-2xl font-bold text-foreground mb-6">{t("form.title", "Send a Message")}</h2>
 
                 {submitted ? (
-                  <div className="rounded-xl border border-border bg-card p-8 text-center">
+                  <div className="rounded-xl border border-border bg-card p-8 text-center" role="status" aria-live="polite">
                     <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
                       <CheckCircle className="h-6 w-6" aria-hidden="true" />
                     </div>
@@ -172,18 +176,28 @@ function ContactForm({ content, header }: { content?: ContentDoc; header?: Conta
                     </Button>
                   </div>
                 ) : (
-                  <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                  <form
+                    onSubmit={handleSubmit(onSubmit)}
+                    className="space-y-6"
+                    aria-describedby="contact-required-instructions"
+                  >
+                    <p id="contact-required-instructions" className="text-sm text-muted-foreground">
+                      {t("form.requiredInstructions", "Fields marked required must be completed.")}
+                    </p>
+
                     {submitError && (
-                      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
+                      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive" role="alert" aria-live="assertive">
                         {submitError}
                       </div>
                     )}
 
                     <div className="space-y-2">
-                      <Label>
-                        {t("form.recipientsLabel", "Who would you like to contact?")} <span className="text-destructive">*</span>
+                      <Label htmlFor="recipients">
+                        {t("form.recipientsLabel", "Who would you like to contact?")}{" "}
+                        <span className="font-normal text-muted-foreground">({t("form.requiredLabel", "required")})</span>
                       </Label>
                       <MultiSelect
+                        id="recipients"
                         options={recipients.map((recipient) => ({
                           label: recipient.label,
                           value: recipient.value,
@@ -192,9 +206,11 @@ function ContactForm({ content, header }: { content?: ContentDoc; header?: Conta
                         onChange={(value) => setValue("recipients", value, { shouldValidate: true })}
                         placeholder={t("form.recipientsPlaceholder", "Select recipients")}
                         className="w-full"
+                        aria-required="true"
+                        {...getErrorProps("recipients")}
                       />
                       {errors.recipients && (
-                        <p className="text-sm text-destructive">{errors.recipients.message}</p>
+                        <p id="recipients-error" className="text-sm text-destructive">{errors.recipients.message}</p>
                       )}
                       {selectedRecipientDetails.length > 0 && (
                         <div className="rounded-md border border-border bg-muted/20 p-3">
@@ -216,31 +232,34 @@ function ContactForm({ content, header }: { content?: ContentDoc; header?: Conta
                     <div className="grid gap-6 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor="firstName">
-                          {t("form.firstNameLabel", "First Name")} <span className="text-destructive">*</span>
+                          {t("form.firstNameLabel", "First Name")}{" "}
+                          <span className="font-normal text-muted-foreground">({t("form.requiredLabel", "required")})</span>
                         </Label>
-                        <Input id="firstName" {...register("firstName")} />
+                        <Input id="firstName" required {...register("firstName")} {...getErrorProps("firstName")} />
                         {errors.firstName && (
-                          <p className="text-sm text-destructive">{errors.firstName.message}</p>
+                          <p id="firstName-error" className="text-sm text-destructive">{errors.firstName.message}</p>
                         )}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="lastName">
-                          {t("form.lastNameLabel", "Last Name")} <span className="text-destructive">*</span>
+                          {t("form.lastNameLabel", "Last Name")}{" "}
+                          <span className="font-normal text-muted-foreground">({t("form.requiredLabel", "required")})</span>
                         </Label>
-                        <Input id="lastName" {...register("lastName")} />
+                        <Input id="lastName" required {...register("lastName")} {...getErrorProps("lastName")} />
                         {errors.lastName && (
-                          <p className="text-sm text-destructive">{errors.lastName.message}</p>
+                          <p id="lastName-error" className="text-sm text-destructive">{errors.lastName.message}</p>
                         )}
                       </div>
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="email">
-                        {t("form.emailLabel", "Email")} <span className="text-destructive">*</span>
+                        {t("form.emailLabel", "Email")}{" "}
+                        <span className="font-normal text-muted-foreground">({t("form.requiredLabel", "required")})</span>
                       </Label>
-                      <Input id="email" type="email" {...register("email")} />
+                      <Input id="email" type="email" required {...register("email")} {...getErrorProps("email")} />
                       {errors.email && (
-                        <p className="text-sm text-destructive">{errors.email.message}</p>
+                        <p id="email-error" className="text-sm text-destructive">{errors.email.message}</p>
                       )}
                     </div>
 
@@ -251,21 +270,23 @@ function ContactForm({ content, header }: { content?: ContentDoc; header?: Conta
 
                     <div className="space-y-2">
                       <Label htmlFor="subject">
-                        {t("form.subjectLabel", "Subject")} <span className="text-destructive">*</span>
+                        {t("form.subjectLabel", "Subject")}{" "}
+                        <span className="font-normal text-muted-foreground">({t("form.requiredLabel", "required")})</span>
                       </Label>
-                      <Input id="subject" placeholder={t("form.subjectPlaceholder", "Brief subject line")} {...register("subject")} />
+                      <Input id="subject" required placeholder={t("form.subjectPlaceholder", "Brief subject line")} {...register("subject")} {...getErrorProps("subject")} />
                       {errors.subject && (
-                        <p className="text-sm text-destructive">{errors.subject.message}</p>
+                        <p id="subject-error" className="text-sm text-destructive">{errors.subject.message}</p>
                       )}
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="message">
-                        {t("form.messageLabel", "Message")} <span className="text-destructive">*</span>
+                        {t("form.messageLabel", "Message")}{" "}
+                        <span className="font-normal text-muted-foreground">({t("form.requiredLabel", "required")})</span>
                       </Label>
-                      <Textarea id="message" rows={5} className="resize-none" {...register("message")} />
+                      <Textarea id="message" required rows={5} className="resize-none" {...register("message")} {...getErrorProps("message")} />
                       {errors.message && (
-                        <p className="text-sm text-destructive">{errors.message.message}</p>
+                        <p id="message-error" className="text-sm text-destructive">{errors.message.message}</p>
                       )}
                     </div>
 
@@ -282,6 +303,9 @@ function ContactForm({ content, header }: { content?: ContentDoc; header?: Conta
                     <div className="flex items-start gap-2">
                       <Checkbox
                         id="consent"
+                        required
+                        aria-required="true"
+                        {...getErrorProps("consent")}
                         checked={watch("consent")}
                         onCheckedChange={(checked) =>
                           setValue("consent", checked === true ? true : (false as unknown as true), { shouldValidate: true })
@@ -292,10 +316,12 @@ function ContactForm({ content, header }: { content?: ContentDoc; header?: Conta
                           "form.consentText",
                           "I understand that A.A. is a program of anonymity and that my contact information will be kept confidential.",
                         )}
+                        {" "}
+                        <span>({t("form.requiredLabel", "required")})</span>
                       </Label>
                     </div>
                     {errors.consent && (
-                      <p className="text-sm text-destructive">{errors.consent.message}</p>
+                      <p id="consent-error" className="text-sm text-destructive">{errors.consent.message}</p>
                     )}
 
                     <Button type="submit" size="lg" className="w-full sm:w-auto" disabled={isPending}>

@@ -32,7 +32,6 @@ function buildExternalRedirectTarget(redirectUrl: string, pathname: string, sear
 }
 
 export function middleware(request: NextRequest) {
-  const startTime = Date.now()
   const requestId = generateRequestId()
   const path = request.nextUrl.pathname
 
@@ -77,7 +76,7 @@ export function middleware(request: NextRequest) {
       try {
         const mod = await import("@opennextjs/cloudflare")
         const { env } = await mod.getCloudflareContext({ async: true })
-        return await getDistrictSiteForMiddleware(env as any, site.districtNumber)
+        return await getDistrictSiteForMiddleware(env, site.districtNumber)
       } catch {
         return null
       }

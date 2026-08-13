@@ -1,4 +1,4 @@
-import type { EventType, EventFlyer, EventException } from "@/lib/db/schema"
+import type { EventType, EventFlyer } from "@/lib/db/schema"
 import type { EventWithRelations, DisplayEvent, FlyerInfo } from "@/lib/types/recurrence"
 import {
   generateOccurrenceDates,

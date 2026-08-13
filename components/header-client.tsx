@@ -107,19 +107,25 @@ export function HeaderClient({
   >({})
   const hamburgerRef = React.useRef<HTMLButtonElement>(null)
   const mobileMenuRef = React.useRef<HTMLDivElement>(null)
+  const wasMobileMenuOpenRef = React.useRef(false)
 
   // Prevent hydration mismatch with Radix UI auto-generated IDs
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Mount detection intentionally defers Radix UI until hydration completes.
     setMounted(true)
   }, [])
 
   // Close mobile menu on route change (handles back/forward navigation)
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Route navigation closes the mobile navigation drawer.
     setMobileMenuOpen(false)
   }, [pathname])
 
   // Focus management: focus first link when menu opens, return focus when it closes
   React.useEffect(() => {
+    const wasMobileMenuOpen = wasMobileMenuOpenRef.current
+    wasMobileMenuOpenRef.current = mobileMenuOpen
+
     if (mobileMenuOpen) {
       const timer = setTimeout(() => {
         const firstLink = mobileMenuRef.current?.querySelector<HTMLElement>(
@@ -128,8 +134,12 @@ export function HeaderClient({
         firstLink?.focus()
       }, 50)
       return () => clearTimeout(timer)
-    } else {
-      // Return focus to hamburger button when menu closes
+    }
+
+    if (wasMobileMenuOpen) {
+      // Return focus only after the user closes an open menu. Focusing during
+      // initial hydration would pull keyboard and screen-reader users to the
+      // end of the header before they begin navigating the page.
       hamburgerRef.current?.focus()
     }
   }, [mobileMenuOpen])
@@ -380,6 +390,8 @@ export function HeaderClient({
         id="mobile-menu"
         ref={mobileMenuRef}
         aria-label="Mobile navigation"
+        aria-hidden={!mobileMenuOpen}
+        inert={!mobileMenuOpen}
         className={cn(
           "lg:hidden overflow-hidden transition-all duration-300 ease-in-out",
           mobileMenuOpen ? "max-h-[80vh] opacity-100" : "max-h-0 opacity-0",
@@ -412,6 +424,8 @@ export function HeaderClient({
                 </button>
                 <div
                   id={`mobile-group-${itemIndex}`}
+                  aria-hidden={!expandedGroups[item.name]}
+                  inert={!expandedGroups[item.name]}
                   className={cn(
                     "overflow-hidden transition-all duration-200 ease-in-out",
                     expandedGroups[item.name] ? "max-h-[50vh] opacity-100" : "max-h-0 opacity-0",

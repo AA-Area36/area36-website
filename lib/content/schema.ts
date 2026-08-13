@@ -136,7 +136,6 @@ const globalDefaultsEn = {
       ypaa: "YPAA",
       contribute: "Contribute",
       contact: "Contact",
-      oldSite: "Old Site",
     },
   },
   footer: {
@@ -1497,7 +1496,6 @@ export const CONTENT_SCHEMAS: Record<Scope, ContentSchema> = {
           { path: "header.nav.ypaa", label: "YPAA", type: "text" },
           { path: "header.nav.contribute", label: "Contribute", type: "text" },
           { path: "header.nav.contact", label: "Contact", type: "text" },
-          { path: "header.nav.oldSite", label: "Old Site", type: "text" },
         ],
       },
       {

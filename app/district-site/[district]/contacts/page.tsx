@@ -1,9 +1,14 @@
+import type { Metadata } from "next"
 import { Mail, Phone, UsersRound } from "lucide-react"
 import { notFound } from "next/navigation"
 import { getDistrictContacts } from "@/lib/district/queries"
 import { coerceDistrict, resolveDistrictSiteForRender } from "../district-utils"
 
 export const dynamic = "force-dynamic"
+export const metadata: Metadata = {
+  title: "Contacts",
+  description: "District trusted servants and committee chairs.",
+}
 
 export default async function DistrictContactsPage({
   params,

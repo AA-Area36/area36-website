@@ -39,6 +39,13 @@ type TreatmentHeaderContent = {
   backLinkLabel?: string
 }
 
+function errorAttributes(id: string, error: unknown) {
+  return {
+    "aria-invalid": error ? true : undefined,
+    "aria-describedby": error ? `${id}-error` : undefined,
+  }
+}
+
 function NewcomerForm({ t }: { t: (path: string, fallback?: string) => string }) {
   const [submitted, setSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -99,7 +106,7 @@ function NewcomerForm({ t }: { t: (path: string, fallback?: string) => string })
 
   if (submitted) {
     return (
-      <div className="rounded-xl border border-border bg-card p-8 text-center">
+      <div className="rounded-xl border border-border bg-card p-8 text-center" role="status" aria-live="polite">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
           <CheckCircle className="h-6 w-6" aria-hidden="true" />
         </div>
@@ -129,7 +136,7 @@ function NewcomerForm({ t }: { t: (path: string, fallback?: string) => string })
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       {submitError && (
-        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive" role="alert" aria-live="assertive">
           {submitError}
         </div>
       )}
@@ -139,15 +146,15 @@ function NewcomerForm({ t }: { t: (path: string, fallback?: string) => string })
           <Label htmlFor="newcomer-firstName">
             {t("forms.newcomer.firstNameLabel", "First Name")} <span className="text-destructive">*</span>
           </Label>
-          <Input id="newcomer-firstName" {...register("firstName")} />
-          {errors.firstName && <p className="text-sm text-destructive">{errors.firstName.message}</p>}
+          <Input id="newcomer-firstName" {...register("firstName")} {...errorAttributes("newcomer-firstName", errors.firstName)} />
+          {errors.firstName && <p id="newcomer-firstName-error" className="text-sm text-destructive">{errors.firstName.message}</p>}
         </div>
         <div className="space-y-2">
           <Label htmlFor="newcomer-lastName">
             {t("forms.newcomer.lastNameLabel", "Last Name")} <span className="text-destructive">*</span>
           </Label>
-          <Input id="newcomer-lastName" {...register("lastName")} />
-          {errors.lastName && <p className="text-sm text-destructive">{errors.lastName.message}</p>}
+          <Input id="newcomer-lastName" {...register("lastName")} {...errorAttributes("newcomer-lastName", errors.lastName)} />
+          {errors.lastName && <p id="newcomer-lastName-error" className="text-sm text-destructive">{errors.lastName.message}</p>}
         </div>
       </div>
 
@@ -155,8 +162,8 @@ function NewcomerForm({ t }: { t: (path: string, fallback?: string) => string })
         <Label htmlFor="newcomer-phone">
           {t("forms.newcomer.phoneLabel", "Phone")} <span className="text-destructive">*</span>
         </Label>
-        <Input id="newcomer-phone" type="tel" {...register("phone")} />
-        {errors.phone && <p className="text-sm text-destructive">{errors.phone.message}</p>}
+        <Input id="newcomer-phone" type="tel" {...register("phone")} {...errorAttributes("newcomer-phone", errors.phone)} />
+        {errors.phone && <p id="newcomer-phone-error" className="text-sm text-destructive">{errors.phone.message}</p>}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -164,15 +171,15 @@ function NewcomerForm({ t }: { t: (path: string, fallback?: string) => string })
           <Label htmlFor="newcomer-age">
             {t("forms.newcomer.ageLabel", "Age")} <span className="text-destructive">*</span>
           </Label>
-          <Input id="newcomer-age" {...register("age")} />
-          {errors.age && <p className="text-sm text-destructive">{errors.age.message}</p>}
+          <Input id="newcomer-age" {...register("age")} {...errorAttributes("newcomer-age", errors.age)} />
+          {errors.age && <p id="newcomer-age-error" className="text-sm text-destructive">{errors.age.message}</p>}
         </div>
         <div className="space-y-2">
           <Label htmlFor="newcomer-gender">
             {t("forms.newcomer.genderLabel", "Gender")} <span className="text-destructive">*</span>
           </Label>
-          <Input id="newcomer-gender" {...register("gender")} />
-          {errors.gender && <p className="text-sm text-destructive">{errors.gender.message}</p>}
+          <Input id="newcomer-gender" {...register("gender")} {...errorAttributes("newcomer-gender", errors.gender)} />
+          {errors.gender && <p id="newcomer-gender-error" className="text-sm text-destructive">{errors.gender.message}</p>}
         </div>
       </div>
 
@@ -180,8 +187,8 @@ function NewcomerForm({ t }: { t: (path: string, fallback?: string) => string })
         <Label htmlFor="newcomer-dischargeDate">
           {t("forms.newcomer.dischargeDateLabel", "Discharge Date")} <span className="text-destructive">*</span>
         </Label>
-        <Input id="newcomer-dischargeDate" type="date" {...register("dischargeDate")} />
-        {errors.dischargeDate && <p className="text-sm text-destructive">{errors.dischargeDate.message}</p>}
+        <Input id="newcomer-dischargeDate" type="date" {...register("dischargeDate")} {...errorAttributes("newcomer-dischargeDate", errors.dischargeDate)} />
+        {errors.dischargeDate && <p id="newcomer-dischargeDate-error" className="text-sm text-destructive">{errors.dischargeDate.message}</p>}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -189,15 +196,15 @@ function NewcomerForm({ t }: { t: (path: string, fallback?: string) => string })
           <Label htmlFor="newcomer-city">
             {t("forms.newcomer.cityLabel", "City (after discharge)")} <span className="text-destructive">*</span>
           </Label>
-          <Input id="newcomer-city" {...register("city")} />
-          {errors.city && <p className="text-sm text-destructive">{errors.city.message}</p>}
+          <Input id="newcomer-city" {...register("city")} {...errorAttributes("newcomer-city", errors.city)} />
+          {errors.city && <p id="newcomer-city-error" className="text-sm text-destructive">{errors.city.message}</p>}
         </div>
         <div className="space-y-2">
           <Label htmlFor="newcomer-zipCode">
             {t("forms.newcomer.zipCodeLabel", "Zip Code (after discharge)")} <span className="text-destructive">*</span>
           </Label>
-          <Input id="newcomer-zipCode" {...register("zipCode")} />
-          {errors.zipCode && <p className="text-sm text-destructive">{errors.zipCode.message}</p>}
+          <Input id="newcomer-zipCode" {...register("zipCode")} {...errorAttributes("newcomer-zipCode", errors.zipCode)} />
+          {errors.zipCode && <p id="newcomer-zipCode-error" className="text-sm text-destructive">{errors.zipCode.message}</p>}
         </div>
       </div>
 
@@ -205,17 +212,17 @@ function NewcomerForm({ t }: { t: (path: string, fallback?: string) => string })
         <Label htmlFor="newcomer-treatmentFacility">
           {t("forms.newcomer.treatmentFacilityLabel", "Treatment Facility")} <span className="text-destructive">*</span>
         </Label>
-        <Input id="newcomer-treatmentFacility" {...register("treatmentFacility")} />
-        {errors.treatmentFacility && <p className="text-sm text-destructive">{errors.treatmentFacility.message}</p>}
+        <Input id="newcomer-treatmentFacility" {...register("treatmentFacility")} {...errorAttributes("newcomer-treatmentFacility", errors.treatmentFacility)} />
+        {errors.treatmentFacility && <p id="newcomer-treatmentFacility-error" className="text-sm text-destructive">{errors.treatmentFacility.message}</p>}
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="newcomer-treatmentFacilityPhone">
           {t("forms.newcomer.treatmentFacilityPhoneLabel", "Treatment Facility Phone")} <span className="text-destructive">*</span>
         </Label>
-        <Input id="newcomer-treatmentFacilityPhone" type="tel" {...register("treatmentFacilityPhone")} />
+        <Input id="newcomer-treatmentFacilityPhone" type="tel" {...register("treatmentFacilityPhone")} {...errorAttributes("newcomer-treatmentFacilityPhone", errors.treatmentFacilityPhone)} />
         {errors.treatmentFacilityPhone && (
-          <p className="text-sm text-destructive">{errors.treatmentFacilityPhone.message}</p>
+          <p id="newcomer-treatmentFacilityPhone-error" className="text-sm text-destructive">{errors.treatmentFacilityPhone.message}</p>
         )}
       </div>
 
@@ -223,9 +230,9 @@ function NewcomerForm({ t }: { t: (path: string, fallback?: string) => string })
         <Label htmlFor="newcomer-treatmentFacilityAddress">
           {t("forms.newcomer.treatmentFacilityAddressLabel", "Treatment Facility Address")} <span className="text-destructive">*</span>
         </Label>
-        <Input id="newcomer-treatmentFacilityAddress" {...register("treatmentFacilityAddress")} />
+        <Input id="newcomer-treatmentFacilityAddress" {...register("treatmentFacilityAddress")} {...errorAttributes("newcomer-treatmentFacilityAddress", errors.treatmentFacilityAddress)} />
         {errors.treatmentFacilityAddress && (
-          <p className="text-sm text-destructive">{errors.treatmentFacilityAddress.message}</p>
+          <p id="newcomer-treatmentFacilityAddress-error" className="text-sm text-destructive">{errors.treatmentFacilityAddress.message}</p>
         )}
       </div>
 
@@ -310,7 +317,7 @@ function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }
 
   if (submitted) {
     return (
-      <div className="rounded-xl border border-border bg-card p-8 text-center">
+      <div className="rounded-xl border border-border bg-card p-8 text-center" role="status" aria-live="polite">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
           <CheckCircle className="h-6 w-6" aria-hidden="true" />
         </div>
@@ -340,7 +347,7 @@ function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       {submitError && (
-        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive" role="alert" aria-live="assertive">
           {submitError}
         </div>
       )}
@@ -350,15 +357,15 @@ function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }
           <Label htmlFor="volunteer-firstName">
             {t("forms.volunteer.firstNameLabel", "First Name")} <span className="text-destructive">*</span>
           </Label>
-          <Input id="volunteer-firstName" {...register("firstName")} />
-          {errors.firstName && <p className="text-sm text-destructive">{errors.firstName.message}</p>}
+          <Input id="volunteer-firstName" {...register("firstName")} {...errorAttributes("volunteer-firstName", errors.firstName)} />
+          {errors.firstName && <p id="volunteer-firstName-error" className="text-sm text-destructive">{errors.firstName.message}</p>}
         </div>
         <div className="space-y-2">
           <Label htmlFor="volunteer-lastName">
             {t("forms.volunteer.lastNameLabel", "Last Name")} <span className="text-destructive">*</span>
           </Label>
-          <Input id="volunteer-lastName" {...register("lastName")} />
-          {errors.lastName && <p className="text-sm text-destructive">{errors.lastName.message}</p>}
+          <Input id="volunteer-lastName" {...register("lastName")} {...errorAttributes("volunteer-lastName", errors.lastName)} />
+          {errors.lastName && <p id="volunteer-lastName-error" className="text-sm text-destructive">{errors.lastName.message}</p>}
         </div>
       </div>
 
@@ -367,15 +374,15 @@ function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }
           <Label htmlFor="volunteer-phone">
             {t("forms.volunteer.phoneLabel", "Phone")} <span className="text-destructive">*</span>
           </Label>
-          <Input id="volunteer-phone" type="tel" {...register("phone")} />
-          {errors.phone && <p className="text-sm text-destructive">{errors.phone.message}</p>}
+          <Input id="volunteer-phone" type="tel" {...register("phone")} {...errorAttributes("volunteer-phone", errors.phone)} />
+          {errors.phone && <p id="volunteer-phone-error" className="text-sm text-destructive">{errors.phone.message}</p>}
         </div>
         <div className="space-y-2">
           <Label htmlFor="volunteer-email">
             {t("forms.volunteer.emailLabel", "Email")} <span className="text-destructive">*</span>
           </Label>
-          <Input id="volunteer-email" type="email" {...register("email")} />
-          {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
+          <Input id="volunteer-email" type="email" {...register("email")} {...errorAttributes("volunteer-email", errors.email)} />
+          {errors.email && <p id="volunteer-email-error" className="text-sm text-destructive">{errors.email.message}</p>}
         </div>
       </div>
 
@@ -384,15 +391,15 @@ function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }
           <Label htmlFor="volunteer-age">
             {t("forms.volunteer.ageLabel", "Age")} <span className="text-destructive">*</span>
           </Label>
-          <Input id="volunteer-age" {...register("age")} />
-          {errors.age && <p className="text-sm text-destructive">{errors.age.message}</p>}
+          <Input id="volunteer-age" {...register("age")} {...errorAttributes("volunteer-age", errors.age)} />
+          {errors.age && <p id="volunteer-age-error" className="text-sm text-destructive">{errors.age.message}</p>}
         </div>
         <div className="space-y-2">
           <Label htmlFor="volunteer-gender">
             {t("forms.volunteer.genderLabel", "Gender")} <span className="text-destructive">*</span>
           </Label>
-          <Input id="volunteer-gender" {...register("gender")} />
-          {errors.gender && <p className="text-sm text-destructive">{errors.gender.message}</p>}
+          <Input id="volunteer-gender" {...register("gender")} {...errorAttributes("volunteer-gender", errors.gender)} />
+          {errors.gender && <p id="volunteer-gender-error" className="text-sm text-destructive">{errors.gender.message}</p>}
         </div>
       </div>
 
@@ -401,15 +408,15 @@ function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }
           <Label htmlFor="volunteer-city">
             {t("forms.volunteer.cityLabel", "City")} <span className="text-destructive">*</span>
           </Label>
-          <Input id="volunteer-city" {...register("city")} />
-          {errors.city && <p className="text-sm text-destructive">{errors.city.message}</p>}
+          <Input id="volunteer-city" {...register("city")} {...errorAttributes("volunteer-city", errors.city)} />
+          {errors.city && <p id="volunteer-city-error" className="text-sm text-destructive">{errors.city.message}</p>}
         </div>
         <div className="space-y-2">
           <Label htmlFor="volunteer-zipCode">
             {t("forms.volunteer.zipCodeLabel", "Zip Code")} <span className="text-destructive">*</span>
           </Label>
-          <Input id="volunteer-zipCode" {...register("zipCode")} />
-          {errors.zipCode && <p className="text-sm text-destructive">{errors.zipCode.message}</p>}
+          <Input id="volunteer-zipCode" {...register("zipCode")} {...errorAttributes("volunteer-zipCode", errors.zipCode)} />
+          {errors.zipCode && <p id="volunteer-zipCode-error" className="text-sm text-destructive">{errors.zipCode.message}</p>}
         </div>
       </div>
 
@@ -418,15 +425,15 @@ function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }
           <Label htmlFor="volunteer-homeGroup">
             {t("forms.volunteer.homeGroupLabel", "Home Group")} <span className="text-destructive">*</span>
           </Label>
-          <Input id="volunteer-homeGroup" {...register("homeGroup")} />
-          {errors.homeGroup && <p className="text-sm text-destructive">{errors.homeGroup.message}</p>}
+          <Input id="volunteer-homeGroup" {...register("homeGroup")} {...errorAttributes("volunteer-homeGroup", errors.homeGroup)} />
+          {errors.homeGroup && <p id="volunteer-homeGroup-error" className="text-sm text-destructive">{errors.homeGroup.message}</p>}
         </div>
         <div className="space-y-2">
           <Label htmlFor="volunteer-homeGroupCity">
             {t("forms.volunteer.homeGroupCityLabel", "Home Group City")} <span className="text-destructive">*</span>
           </Label>
-          <Input id="volunteer-homeGroupCity" {...register("homeGroupCity")} />
-          {errors.homeGroupCity && <p className="text-sm text-destructive">{errors.homeGroupCity.message}</p>}
+          <Input id="volunteer-homeGroupCity" {...register("homeGroupCity")} {...errorAttributes("volunteer-homeGroupCity", errors.homeGroupCity)} />
+          {errors.homeGroupCity && <p id="volunteer-homeGroupCity-error" className="text-sm text-destructive">{errors.homeGroupCity.message}</p>}
         </div>
       </div>
 
@@ -434,8 +441,8 @@ function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }
         <Label htmlFor="volunteer-sobrietyDate">
           {t("forms.volunteer.sobrietyDateLabel", "Sobriety Date")} <span className="text-destructive">*</span>
         </Label>
-        <Input id="volunteer-sobrietyDate" type="date" {...register("sobrietyDate")} />
-        {errors.sobrietyDate && <p className="text-sm text-destructive">{errors.sobrietyDate.message}</p>}
+        <Input id="volunteer-sobrietyDate" type="date" {...register("sobrietyDate")} {...errorAttributes("volunteer-sobrietyDate", errors.sobrietyDate)} />
+        {errors.sobrietyDate && <p id="volunteer-sobrietyDate-error" className="text-sm text-destructive">{errors.sobrietyDate.message}</p>}
       </div>
 
       <div className="rounded-lg border border-border bg-muted/30 p-3">

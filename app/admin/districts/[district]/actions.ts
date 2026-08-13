@@ -35,7 +35,13 @@ function parseOptionalBoundedInt(value: unknown, min: number, max: number, field
 }
 
 function isMissingMonthlyMeetingColumnsError(err: unknown): boolean {
-  const msg = String((err as any)?.cause?.message ?? (err as any)?.message ?? err).toLowerCase()
+  const msg = (
+    err instanceof Error
+      ? err.cause instanceof Error
+        ? err.cause.message
+        : err.message
+      : String(err)
+  ).toLowerCase()
   return (
     msg.includes("meeting_recurrence_mode") ||
     msg.includes("meeting_contact_for_details") ||

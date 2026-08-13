@@ -2,13 +2,11 @@
 
 import * as React from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useGoogleReCaptcha } from "react-google-recaptcha-v3"
 import { Calendar, CalendarPlus, MapPin, Clock, ExternalLink, Search, Plus, X, Globe, HelpCircle, Repeat, ChevronDown, Check, Video } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -17,30 +15,30 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Checkbox } from "@/components/ui/checkbox"
 import { MultiSelect } from "@/components/multi-select"
 import { DateRangePicker } from "@/components/date-range-picker"
-import { FlyerUpload, type FlyerFile } from "@/components/flyer-upload"
-import { RecurrenceOptions } from "@/components/recurrence-options"
 import { DateRange } from "react-day-picker"
-import type { RecurrenceConfig } from "@/lib/types/recurrence"
-import { submitEvent } from "./actions"
-import { uploadEventFlyer } from "./flyer-actions"
 import { AnnualCalendarSection } from "./annual-calendar-section"
 import type { CalendarFile } from "./calendar-file-actions"
+import { EventDescription } from "./event-description"
 import type { Event, LocationType, EventType, EventFlyer } from "@/lib/db/schema"
 import type { DisplayEvent } from "@/lib/types/recurrence"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
+import { getCalendarCellLabel } from "./calendar-a11y"
 
 // Event with types array and flyers (from junction tables)
 export interface EventWithTypes extends Event {
   types: EventType[]
   flyers: EventFlyer[]
 }
-import { eventTypes as configuredEventTypes, locationTypes } from "@/lib/db/schema"
-import { formatTimeRange, TIMEZONES, DEFAULT_TIMEZONE } from "@/lib/timezone"
+import { eventTypes as configuredEventTypes } from "@/lib/db/schema"
+import { formatTimeRange } from "@/lib/timezone"
+
+const EventSubmissionDialog = React.lazy(() =>
+  import("./event-submission-dialog").then((module) => ({
+    default: module.EventSubmissionDialog,
+  })),
+)
 
 const locationTypeLabels: Record<LocationType, string> = {
   "in-person": "In Person",
@@ -349,7 +347,6 @@ interface EventsClientProps {
 export function EventsClient({ events, calendarFiles, hero }: EventsClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { executeRecaptcha } = useGoogleReCaptcha()
 
   // Get initial values from URL
   const initialSearch = searchParams.get("q") || ""
@@ -368,26 +365,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
   const [currentMonth, setCurrentMonth] = React.useState(new Date())
   const [submitDialogOpen, setSubmitDialogOpen] = React.useState(false)
   const [instructionsDialogOpen, setInstructionsDialogOpen] = React.useState(false)
-  const [isSubmitting, setIsSubmitting] = React.useState(false)
-  const [submitMessage, setSubmitMessage] = React.useState<{ type: "success" | "error"; text: string } | null>(null)
-  const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({})
-  const [selectedTimezone, setSelectedTimezone] = React.useState(DEFAULT_TIMEZONE)
-  const [locationType, setLocationType] = React.useState<LocationType>("in-person")
-  // TBD flags
-  const [timeTBD, setTimeTBD] = React.useState(false)
-  const [addressTBD, setAddressTBD] = React.useState(false)
-  const [meetingLinkTBD, setMeetingLinkTBD] = React.useState(false)
-  // Selected event types for submission form
-  const [submissionEventTypes, setSubmissionEventTypes] = React.useState<string[]>([])
-  // Flyer files for submission form
-  const [flyerFiles, setFlyerFiles] = React.useState<FlyerFile[]>([])
-  // Recurrence config for submission form
-  const [recurrenceConfig, setRecurrenceConfig] = React.useState<RecurrenceConfig>({
-    isRecurring: false,
-    recurrenceType: "none",
-  })
-  // Track the start date for recurrence options
-  const [formStartDate, setFormStartDate] = React.useState("")
+  const [submissionToolsLoaded, setSubmissionToolsLoaded] = React.useState(false)
   // Track which recurring event groups are expanded
   const [expandedGroups, setExpandedGroups] = React.useState<Set<string>>(new Set())
   const [expandedPastGroups, setExpandedPastGroups] = React.useState<Set<string>>(new Set())
@@ -408,7 +386,6 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
   const [pastError, setPastError] = React.useState<string | null>(null)
   const [pastAppliedQueryKey, setPastAppliedQueryKey] = React.useState<string>("")
   const tabsRef = React.useRef<HTMLDivElement>(null)
-  const formRef = React.useRef<HTMLFormElement>(null)
 
   const debouncedUrlSearchQuery = useDebouncedValue(searchQuery, 500)
   const debouncedPastSearchQuery = useDebouncedValue(pastSearchQuery, 500)
@@ -437,22 +414,6 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
       return next
     })
   }
-
-  // Reset form to initial state
-  const resetForm = React.useCallback(() => {
-    formRef.current?.reset()
-    setSubmitMessage(null)
-    setFieldErrors({})
-    setSelectedTimezone(DEFAULT_TIMEZONE)
-    setLocationType("in-person")
-    setTimeTBD(false)
-    setAddressTBD(false)
-    setMeetingLinkTBD(false)
-    setSubmissionEventTypes([])
-    setFlyerFiles([])
-    setRecurrenceConfig({ isRecurring: false, recurrenceType: "none" })
-    setFormStartDate("")
-  }, [])
 
   // Update URL when filters change
   const updateURL = React.useCallback((
@@ -493,10 +454,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
   React.useEffect(() => {
     updateURL(debouncedUrlSearchQuery, selectedTypes, dateRange, showDistrictMeetings)
   }, [
+    dateRange,
     debouncedUrlSearchQuery,
-    selectedTypes.join(","),
-    dateRange?.from?.getTime(),
-    dateRange?.to?.getTime(),
+    selectedTypes,
     showDistrictMeetings,
     updateURL,
   ])
@@ -600,27 +560,30 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
   const districtMeetingsTotalPages = Math.max(1, Math.ceil(districtMeetingGroups.length / SECTION_PAGE_SIZE))
 
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Clamp pagination when the derived page count shrinks.
     setUpcomingPage((p) => Math.min(Math.max(1, p), upcomingTotalPages))
   }, [upcomingTotalPages])
 
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Clamp pagination when the derived page count shrinks.
     setDistrictPage((p) => Math.min(Math.max(1, p), districtTotalPages))
   }, [districtTotalPages])
 
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Clamp pagination when the derived page count shrinks.
     setDistrictMeetingsPage((p) => Math.min(Math.max(1, p), districtMeetingsTotalPages))
   }, [districtMeetingsTotalPages])
 
   // When filters change, reset pagination back to the first page.
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- A filter change intentionally resets all independent pagers.
     setUpcomingPage(1)
     setDistrictPage(1)
     setDistrictMeetingsPage(1)
   }, [
+    dateRange,
     debouncedUrlSearchQuery,
-    selectedTypes.join(","),
-    dateRange?.from?.getTime(),
-    dateRange?.to?.getTime(),
+    selectedTypes,
   ])
 
   const pagedUpcomingGroups = upcomingGroups.slice((upcomingPage - 1) * SECTION_PAGE_SIZE, upcomingPage * SECTION_PAGE_SIZE)
@@ -671,9 +634,8 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
     })
   }, [
     debouncedPastSearchQuery,
-    pastSelectedTypes.join(","),
-    pastDateRange?.from?.getTime(),
-    pastDateRange?.to?.getTime(),
+    pastDateRange,
+    pastSelectedTypes,
   ])
 
   React.useEffect(() => {
@@ -681,6 +643,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
     if (pastAppliedQueryKey === pastQueryKey && pastPages.length > 0) return
 
     let active = true
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- The request lifecycle begins when this query effect starts.
     setPastLoading(true)
     setPastError(null)
 
@@ -715,9 +678,8 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
     pastPages.length,
     requestPastEventsPage,
     debouncedPastSearchQuery,
-    pastSelectedTypes.join(","),
-    pastDateRange?.from?.getTime(),
-    pastDateRange?.to?.getTime(),
+    pastDateRange,
+    pastSelectedTypes,
   ])
 
   const currentPastPage = pastPages[pastPageIndex] || null
@@ -846,90 +808,6 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))
   }
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setIsSubmitting(true)
-    setSubmitMessage(null)
-    setFieldErrors({})
-
-    try {
-      if (!executeRecaptcha) {
-        setSubmitMessage({ type: "error", text: "reCAPTCHA not loaded. Please refresh and try again." })
-        setIsSubmitting(false)
-        return
-      }
-      const recaptchaToken = await executeRecaptcha("submit_event")
-
-      const formData = new FormData(formRef.current!)
-      const data = {
-        title: formData.get("eventTitle") as string,
-        date: formData.get("eventDate") as string,
-        endDate: formData.get("eventEndDate") as string,
-        startTime: formData.get("startTime") as string,
-        endTime: formData.get("endTime") as string,
-        timezone: selectedTimezone,
-        locationType: locationType,
-        address: formData.get("eventAddress") as string,
-        meetingLink: formData.get("eventMeetingLink") as string,
-        types: submissionEventTypes as EventType[],
-        description: formData.get("eventDescription") as string,
-        submitterEmail: formData.get("submitterEmail") as string,
-        flyerUrl: "", // Deprecated - now using flyer uploads
-        recaptchaToken,
-        timeTBD,
-        addressTBD,
-        meetingLinkTBD,
-        // Recurrence fields
-        isRecurring: recurrenceConfig.isRecurring,
-        recurrenceType: recurrenceConfig.recurrenceType,
-        weeklyPattern: recurrenceConfig.weeklyPattern,
-        monthlyPattern: recurrenceConfig.monthlyPattern,
-        recurUntil: recurrenceConfig.recurUntil,
-      }
-
-      const result = await submitEvent(data)
-
-      if (result.success && result.eventId) {
-        // Upload flyers if any were selected
-        if (flyerFiles.length > 0) {
-          for (const flyer of flyerFiles) {
-            if (flyer.file) {
-              const flyerFormData = new FormData()
-              flyerFormData.append("file", flyer.file)
-              if (result.uploadToken) {
-                flyerFormData.append("uploadToken", result.uploadToken)
-              }
-              await uploadEventFlyer(result.eventId, flyerFormData)
-            }
-          }
-        }
-
-        // Reset form but keep the success message visible
-        formRef.current?.reset()
-        setFieldErrors({})
-        setSelectedTimezone(DEFAULT_TIMEZONE)
-        setLocationType("in-person")
-        setTimeTBD(false)
-        setAddressTBD(false)
-        setMeetingLinkTBD(false)
-        setSubmissionEventTypes([])
-        setFlyerFiles([])
-        setRecurrenceConfig({ isRecurring: false, recurrenceType: "none" })
-        setFormStartDate("")
-        setSubmitMessage({ type: "success", text: result.message! })
-      } else {
-        setSubmitMessage({ type: "error", text: result.error! })
-        if (result.fieldErrors) {
-          setFieldErrors(result.fieldErrors)
-        }
-      }
-    } catch (error) {
-      console.error("Event submission error:", error)
-      setSubmitMessage({ type: "error", text: `Error: ${error instanceof Error ? error.message : "Unknown error"}` })
-    }
-
-    setIsSubmitting(false)
-  }
 
   return (
     <>
@@ -1019,6 +897,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                       <div className="flex justify-end">
                         <Button onClick={() => {
                           setInstructionsDialogOpen(false)
+                          setSubmissionToolsLoaded(true)
                           setSubmitDialogOpen(true)
                         }}>
                           <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -1029,307 +908,24 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                   </DialogContent>
                 </Dialog>
 
-                {/* Submit Event Dialog */}
-                <Dialog open={submitDialogOpen} onOpenChange={(open) => {
-                  if (open) {
-                    // Reset form when opening to clear any previous state
-                    resetForm()
-                  }
-                  setSubmitDialogOpen(open)
-                }}>
-                  <DialogTrigger asChild>
-                    <Button>
-                      <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-                      Submit Event
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle>Submit an Event</DialogTitle>
-                      <DialogDescription>
-                        Submit an event for review. Events will be published after approval by an Area administrator.
-                      </DialogDescription>
-                    </DialogHeader>
-                    {submitMessage?.type === "success" ? (
-                      <div className="py-6 text-center">
-                        <div className="mx-auto w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-4">
-                          <svg className="w-6 h-6 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                        </div>
-                        <p className="text-foreground font-medium mb-2">Event Submitted!</p>
-                        <p className="text-sm text-muted-foreground">{submitMessage.text}</p>
-                        <Button className="mt-4" onClick={() => setSubmitDialogOpen(false)}>
-                          Close
-                        </Button>
-                      </div>
-                    ) : (
-                      <form ref={formRef} onSubmit={handleSubmit} className="space-y-4 mt-4">
-                        {submitMessage?.type === "error" && (
-                          <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
-                            {submitMessage.text}
-                          </div>
-                        )}
-                        <div className="space-y-2">
-                          <Label htmlFor="eventTitle">Event Title</Label>
-                          <Input
-                            id="eventTitle"
-                            name="eventTitle"
-                            placeholder="e.g., District 5 Workshop"
-                            required
-                            aria-invalid={!!fieldErrors.title}
-                          />
-                          {fieldErrors.title && (
-                            <p className="text-sm text-destructive">{fieldErrors.title}</p>
-                          )}
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="eventDate">Start Date</Label>
-                            <Input
-                              id="eventDate"
-                              name="eventDate"
-                              type="date"
-                              required
-                              aria-invalid={!!fieldErrors.date}
-                              onChange={(e) => setFormStartDate(e.target.value)}
-                            />
-                            {fieldErrors.date && (
-                              <p className="text-sm text-destructive">{fieldErrors.date}</p>
-                            )}
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="eventEndDate">End Date (Optional)</Label>
-                            <Input
-                              id="eventEndDate"
-                              name="eventEndDate"
-                              type="date"
-                              aria-invalid={!!fieldErrors.endDate}
-                            />
-                            {fieldErrors.endDate && (
-                              <p className="text-sm text-destructive">{fieldErrors.endDate}</p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <Label htmlFor="startTime">Start Time {!timeTBD && "*"}</Label>
-                              <div className="flex items-center gap-2">
-                                <Checkbox
-                                  id="timeTBD"
-                                  checked={timeTBD}
-                                  onCheckedChange={(checked) => setTimeTBD(checked === true)}
-                                />
-                                <Label htmlFor="timeTBD" className="text-sm font-normal cursor-pointer">TBD</Label>
-                              </div>
-                            </div>
-                            <Input
-                              type="time"
-                              id="startTime"
-                              name="startTime"
-                              disabled={timeTBD}
-                              required={!timeTBD}
-                              aria-invalid={!!fieldErrors.startTime}
-                            />
-                            {fieldErrors.startTime && (
-                              <p className="text-sm text-destructive">{fieldErrors.startTime}</p>
-                            )}
-                          </div>
-                          <div className="space-y-2">
-                            <div className="flex items-center h-[24px]">
-                              <Label htmlFor="endTime">End Time</Label>
-                            </div>
-                            <Input
-                              type="time"
-                              id="endTime"
-                              name="endTime"
-                              disabled={timeTBD}
-                              aria-invalid={!!fieldErrors.endTime}
-                            />
-                            {fieldErrors.endTime && (
-                              <p className="text-sm text-destructive">{fieldErrors.endTime}</p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="eventTimezone">Timezone *</Label>
-                          <Select value={selectedTimezone} onValueChange={setSelectedTimezone}>
-                            <SelectTrigger id="eventTimezone" aria-invalid={!!fieldErrors.timezone}>
-                              <SelectValue placeholder="Select timezone" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {TIMEZONES.map((tz) => (
-                                <SelectItem key={tz.value} value={tz.value}>
-                                  {tz.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {fieldErrors.timezone && (
-                            <p className="text-sm text-destructive">{fieldErrors.timezone}</p>
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="locationType">Location Type *</Label>
-                          <Select value={locationType} onValueChange={(value) => setLocationType(value as LocationType)}>
-                            <SelectTrigger id="locationType" aria-invalid={!!fieldErrors.locationType}>
-                              <SelectValue placeholder="Select location type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {locationTypes.map((type) => (
-                                <SelectItem key={type} value={type}>
-                                  {locationTypeLabels[type]}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {fieldErrors.locationType && (
-                            <p className="text-sm text-destructive">{fieldErrors.locationType}</p>
-                          )}
-                        </div>
-                        {(locationType === "in-person" || locationType === "hybrid") && (
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <Label htmlFor="eventAddress">Address {!addressTBD && "*"}</Label>
-                              <div className="flex items-center gap-2">
-                                <Checkbox
-                                  id="addressTBD"
-                                  checked={addressTBD}
-                                  onCheckedChange={(checked) => setAddressTBD(checked === true)}
-                                />
-                                <Label htmlFor="addressTBD" className="text-sm font-normal cursor-pointer">TBD</Label>
-                              </div>
-                            </div>
-                            <Input
-                              id="eventAddress"
-                              name="eventAddress"
-                              placeholder="e.g., 123 Main St, City, MN 55555"
-                              disabled={addressTBD}
-                              aria-invalid={!!fieldErrors.address}
-                            />
-                            {fieldErrors.address ? (
-                              <p className="text-sm text-destructive">{fieldErrors.address}</p>
-                            ) : (
-                              <p className="text-xs text-muted-foreground">
-                                Full street address including city, state, and zip
-                              </p>
-                            )}
-                          </div>
-                        )}
-                        {(locationType === "hybrid" || locationType === "online") && (
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <Label htmlFor="eventMeetingLink">Meeting Link {!meetingLinkTBD && "*"}</Label>
-                              <div className="flex items-center gap-2">
-                                <Checkbox
-                                  id="meetingLinkTBD"
-                                  checked={meetingLinkTBD}
-                                  onCheckedChange={(checked) => setMeetingLinkTBD(checked === true)}
-                                />
-                                <Label htmlFor="meetingLinkTBD" className="text-sm font-normal cursor-pointer">TBD</Label>
-                              </div>
-                            </div>
-                            <Input
-                              id="eventMeetingLink"
-                              name="eventMeetingLink"
-                              type="url"
-                              placeholder="https://zoom.us/j/..."
-                              disabled={meetingLinkTBD}
-                              aria-invalid={!!fieldErrors.meetingLink}
-                            />
-                            {fieldErrors.meetingLink ? (
-                              <p className="text-sm text-destructive">{fieldErrors.meetingLink}</p>
-                            ) : (
-                              <p className="text-xs text-muted-foreground">
-                                Zoom, Google Meet, or other video conference link
-                              </p>
-                            )}
-                          </div>
-                        )}
-                        <div className="space-y-2">
-                          <Label>Event Type(s) *</Label>
-                          <MultiSelect
-                            options={eventTypeOptions}
-                            value={submissionEventTypes}
-                            onChange={setSubmissionEventTypes}
-                            placeholder="Select event type(s)"
-                            aria-invalid={!!fieldErrors.types}
-                          />
-                          {fieldErrors.types && (
-                            <p className="text-sm text-destructive">{fieldErrors.types}</p>
-                          )}
-                          <p className="text-xs text-muted-foreground">
-                            Select one or more event types
-                          </p>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="eventDescription">Description</Label>
-                          <Textarea
-                            id="eventDescription"
-                            name="eventDescription"
-                            placeholder="Describe the event..."
-                            rows={3}
-                            required
-                            aria-invalid={!!fieldErrors.description}
-                          />
-                          {fieldErrors.description && (
-                            <p className="text-sm text-destructive">{fieldErrors.description}</p>
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Event Flyers (Optional)</Label>
-                          <FlyerUpload
-                            value={flyerFiles}
-                            onChange={setFlyerFiles}
-                            maxFiles={5}
-                            disabled={isSubmitting}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="submitterEmail">Your Email</Label>
-                          <Input
-                            id="submitterEmail"
-                            name="submitterEmail"
-                            type="email"
-                            placeholder="For follow-up questions"
-                            required
-                            aria-invalid={!!fieldErrors.submitterEmail}
-                          />
-                          {fieldErrors.submitterEmail && (
-                            <p className="text-sm text-destructive">{fieldErrors.submitterEmail}</p>
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Recurrence (Optional)</Label>
-                          <RecurrenceOptions
-                            value={recurrenceConfig}
-                            onChange={setRecurrenceConfig}
-                            startDate={formStartDate}
-                            disabled={isSubmitting}
-                            errors={{
-                              recurrenceType: fieldErrors.recurrenceType,
-                              weeklyPattern: fieldErrors.weeklyPattern,
-                              monthlyPattern: fieldErrors.monthlyPattern,
-                              recurUntil: fieldErrors.recurUntil,
-                            }}
-                          />
-                        </div>
-                        <div className="text-sm text-muted-foreground text-center py-2">
-                          This form is protected by Google reCAPTCHA v3.
-                        </div>
-                        <div className="flex justify-end gap-3 pt-4">
-                          <Button type="button" variant="outline" onClick={() => setSubmitDialogOpen(false)}>
-                            Cancel
-                          </Button>
-                          <Button type="submit" disabled={isSubmitting}>
-                            {isSubmitting ? "Submitting..." : "Submit for Review"}
-                          </Button>
-                        </div>
-                      </form>
-                    )}
-                  </DialogContent>
-                </Dialog>
+                {/* Submission tooling is loaded only after the visitor requests it. */}
+                <Button
+                  onClick={() => {
+                    setSubmissionToolsLoaded(true)
+                    setSubmitDialogOpen(true)
+                  }}
+                >
+                  <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Submit Event
+                </Button>
+                {submissionToolsLoaded && (
+                  <React.Suspense fallback={null}>
+                    <EventSubmissionDialog
+                      open={submitDialogOpen}
+                      onOpenChange={setSubmitDialogOpen}
+                    />
+                  </React.Suspense>
+                )}
                 <Button asChild variant="outline">
                   <a href="#calendar-subscribe">
                     <Calendar className="mr-2 h-4 w-4" aria-hidden="true" />
@@ -1468,7 +1064,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                 <Button variant="ghost" size="sm" onClick={prevMonth} aria-label="Previous month">
                   ← Previous
                 </Button>
-                <h3 className="text-lg font-semibold text-foreground">
+                <h3 id="events-calendar-heading" className="text-lg font-semibold text-foreground" aria-live="polite">
                   {currentMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
                 </h3>
                 <Button variant="ghost" size="sm" onClick={nextMonth} aria-label="Next month">
@@ -1477,20 +1073,46 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
               </div>
 
               {/* Calendar Grid */}
-              <div className="grid grid-cols-7">
-                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                  <div
-                    key={day}
-                    className="p-2 text-center text-sm font-medium text-muted-foreground border-b border-border bg-muted/30"
-                  >
-                    {day}
+              <div className="grid grid-cols-7" role="table" aria-labelledby="events-calendar-heading">
+                <div role="rowgroup" className="contents">
+                  <div role="row" className="contents">
+                    {[
+                      ["Sun", "Sunday"],
+                      ["Mon", "Monday"],
+                      ["Tue", "Tuesday"],
+                      ["Wed", "Wednesday"],
+                      ["Thu", "Thursday"],
+                      ["Fri", "Friday"],
+                      ["Sat", "Saturday"],
+                    ].map(([shortDay, fullDay]) => (
+                      <div
+                        key={shortDay}
+                        role="columnheader"
+                        aria-label={fullDay}
+                        className="p-2 text-center text-sm font-medium text-muted-foreground border-b border-border bg-muted/30"
+                      >
+                        <span aria-hidden="true">{shortDay}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-                {Array.from({ length: firstDayOfMonth }).map((_, i) => (
-                  <div key={`empty-${i}`} className="p-2 min-h-24 border-b border-r border-border bg-muted/10" />
-                ))}
-                {Array.from({ length: daysInMonth }).map((_, i) => {
-                  const day = i + 1
+                </div>
+                <div role="rowgroup" className="contents">
+                  {Array.from({
+                    length: Math.ceil((firstDayOfMonth + daysInMonth) / 7),
+                  }).map((_, weekIndex) => (
+                    <div key={`week-${weekIndex}`} role="row" className="contents">
+                      {Array.from({ length: 7 }).map((_, weekdayIndex) => {
+                  const day = weekIndex * 7 + weekdayIndex - firstDayOfMonth + 1
+                  if (day < 1 || day > daysInMonth) {
+                    return (
+                      <div
+                        key={`empty-${weekIndex}-${weekdayIndex}`}
+                        role="cell"
+                        aria-label="Outside current month"
+                        className="p-2 min-h-24 border-b border-r border-border bg-muted/10"
+                      />
+                    )
+                  }
                   const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
                   // Filter calendar events based on search and type filters
                   const dayEvents = calendarEvents.filter((e) => {
@@ -1526,12 +1148,18 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                   return (
                     <div
                       key={day}
+                      role="cell"
+                      aria-label={getCalendarCellLabel({
+                        date: new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day),
+                        isToday,
+                        eventTitles: dayEvents.map((event) => event.title),
+                      })}
                       className={`p-2 min-h-24 border-b border-r border-border overflow-visible relative ${isToday ? "bg-primary/5" : ""}`}
                     >
-                      <span className={`text-sm font-medium ${isToday ? "text-primary" : "text-foreground"}`}>
+                      <span aria-hidden="true" className={`text-sm font-medium ${isToday ? "text-primary" : "text-foreground"}`}>
                         {day}
                       </span>
-                      <div className="mt-1 overflow-visible">
+                      <div className="mt-1 overflow-visible" aria-hidden="true">
                         {(() => {
                           // Sort events by their assigned slot
                           const sortedEvents = [...dayEvents].sort((a, b) => {
@@ -1597,7 +1225,10 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                       </div>
                     </div>
                   )
-                })}
+                      })}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -1635,7 +1266,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                               <h2 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                                 {event.title}
                               </h2>
-                              <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{event.description}</p>
+                              <EventDescription description={event.description} />
                             </div>
 
                             <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
@@ -1751,7 +1382,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                 <h2 className="text-xl font-semibold text-foreground">
                                   {firstOccurrence.title}
                                 </h2>
-                                <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{firstOccurrence.description}</p>
+                                <EventDescription description={firstOccurrence.description} />
                               </div>
 
                               <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
@@ -1929,7 +1560,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                               <h4 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                                 {event.title}
                               </h4>
-                              <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{event.description}</p>
+                              <EventDescription description={event.description} />
                             </div>
 
                             <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
@@ -2045,7 +1676,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                 <h4 className="text-xl font-semibold text-foreground">
                                   {firstOccurrence.title}
                                 </h4>
-                                <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{firstOccurrence.description}</p>
+                                <EventDescription description={firstOccurrence.description} />
                               </div>
 
                               <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
@@ -2199,6 +1830,11 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                     District monthly meetings are hidden. Turn on <span className="font-medium text-foreground">District meetings</span> in the filters.
                   </p>
                 </div>
+              ) : districtMeetingLoadError ? (
+                <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-4" role="alert">
+                  <p className="font-medium text-foreground">District meetings are temporarily unavailable.</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Please refresh the page to try again.</p>
+                </div>
               ) : filteredDistrictMeetingEvents.length === 0 ? (
                 <div className="text-center py-8 rounded-xl border border-border bg-card">
                   <Calendar className="mx-auto h-10 w-10 text-muted-foreground" />
@@ -2233,7 +1869,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                               <h4 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                                 {event.title}
                               </h4>
-                              <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{event.description}</p>
+                              <EventDescription description={event.description} />
                             </div>
 
                             <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
@@ -2319,7 +1955,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                 <h4 className="text-xl font-semibold text-foreground">
                                   {firstOccurrence.title}
                                 </h4>
-                                <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{firstOccurrence.description}</p>
+                                <EventDescription description={firstOccurrence.description} />
                               </div>
 
                               <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
@@ -2587,7 +2223,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                     <h4 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                                       {event.title}
                                     </h4>
-                                    <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{event.description}</p>
+                                    <EventDescription description={event.description} />
                                   </div>
 
                                   <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">
@@ -2684,7 +2320,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                       <h4 className="text-xl font-semibold text-foreground">
                                         {firstOccurrence.title}
                                       </h4>
-                                      <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{firstOccurrence.description}</p>
+                                      <EventDescription description={firstOccurrence.description} />
                                     </div>
 
                                     <div className="flex flex-col gap-3 lg:text-right lg:min-w-64">

@@ -13,6 +13,7 @@ import {
   Map,
   Building2,
   ShieldCheck,
+  Vote,
   MoreHorizontal,
   Menu,
   LogOut,
@@ -71,6 +72,7 @@ const secondaryLinks = [
   },
   { href: "/admin/reports", label: "Reports", icon: FileText, requiredPermission: "reports:read" },
   { href: "/admin/district-sites", label: "District Sites", icon: Map, requiredPermission: "district-sites:read" },
+  { href: "/admin/quorum", label: "Quorum", icon: Vote, requiredPermission: "quorum:view" },
   { href: "/admin/corrections", label: "Corrections", icon: Building2, requiredPermission: "corrections:view" },
   { href: "/admin/roles", label: "Role Management", icon: ShieldCheck, requiredPermission: "access:read" },
 ] as const satisfies readonly NavLink[]
@@ -105,6 +107,7 @@ export function AdminNav({
   )
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Refresh the local preview role when the server-provided role changes.
     setViewAsKey(normalizeLocalViewAsKey(initialLocalViewAs))
   }, [initialLocalViewAs])
 

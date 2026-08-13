@@ -153,18 +153,6 @@ function formatNumber(value: unknown): string {
   return "n/a"
 }
 
-function formatBytes(value: unknown): string {
-  if (typeof value !== "number" || !Number.isFinite(value)) return "n/a"
-  const units = ["B", "KB", "MB", "GB", "TB"]
-  let size = value
-  let unitIndex = 0
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024
-    unitIndex++
-  }
-  return `${size.toFixed(2)} ${units[unitIndex]}`
-}
-
 function parseLinkHeader(header: string | null): Record<string, string> {
   if (!header) return {}
   const links: Record<string, string> = {}
@@ -176,23 +164,6 @@ function parseLinkHeader(header: string | null): Record<string, string> {
     }
   }
   return links
-}
-
-async function githubRequest<T>(url: string, token?: string): Promise<T> {
-  const response = await fetch(url, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      "User-Agent": "area36-monthly-report",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  })
-
-  if (!response.ok) {
-    const text = await response.text()
-    throw new Error(`GitHub API error ${response.status}: ${text}`)
-  }
-
-  return (await response.json()) as T
 }
 
 async function fetchGitHubCommits(token: string | undefined, start: Date, end: Date) {
@@ -829,6 +800,11 @@ function escapeHtml(text: string): string {
     .replace(/"/g, "&quot;")
 }
 
+export function renderCommitAuthor(authorName: string, authorDate: string): string {
+  const date = new Date(authorDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  return `${escapeHtml(authorName)} - ${date}`
+}
+
 function renderHtmlReport(data: ReportData) {
   const { monthKey, github, cloudflare, events, drive, uptime, errors, generatedAt } = data
   const monthName = formatMonthName(monthKey)
@@ -1012,7 +988,7 @@ function renderHtmlReport(data: ReportData) {
               <td style="padding: 6px 0; border-bottom: 1px solid #e5e7eb;">
                 <div style="font-weight: 600; color: #111827;">${escapeHtml(c.commit.message.split("\n")[0])}</div>
                 <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">
-                  ${c.commit.author.name} - ${new Date(c.commit.author.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  ${renderCommitAuthor(c.commit.author.name, c.commit.author.date)}
                 </div>
               </td>
             </tr>
@@ -1424,7 +1400,7 @@ async function generateReport(env: Env, options: { useCurrentMonth?: boolean; fo
   }
 }
 
-export default {
+const worker = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
     
@@ -1460,3 +1436,5 @@ export default {
     ctx.waitUntil(generateReport(env).catch((err) => console.error("Scheduled report failed:", err)))
   },
 }
+
+export default worker

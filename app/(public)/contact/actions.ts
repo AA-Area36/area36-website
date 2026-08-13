@@ -47,7 +47,7 @@ export async function submitContactForm(data: ContactFormData) {
   }
 
   const ip = await getClientIp()
-  const rateLimit = checkRateLimit(`contact:${ip}`, {
+  const rateLimit = await checkRateLimit(`contact:${ip}`, {
     limit: 5,
     windowMs: 10 * 60 * 1000,
   })

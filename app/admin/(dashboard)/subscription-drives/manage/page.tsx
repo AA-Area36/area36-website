@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ArrowLeft, Power, Trash2 } from "lucide-react"
+import { ArrowLeft, Power } from "lucide-react"
 import Link from "next/link"
 import type { SubscriptionDrive } from "@/lib/db/schema"
 import { getAllDrives, getDriveStats, endDrive } from "../actions"

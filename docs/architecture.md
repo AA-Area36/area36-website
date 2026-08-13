@@ -1,6 +1,6 @@
 # Area 36 Website Architecture
 
-Last updated: February 21, 2026
+Last updated: August 8, 2026
 
 ## 1. High-Level Overview
 The Area 36 site is a custom Next.js application deployed to Cloudflare Workers (via OpenNext), with:
@@ -53,6 +53,8 @@ Drive folders are used for newsletters, resources, recordings, committee docs, a
 
 ### Google Sheets: lightweight form submission storage
 Temporary public forms can append rows to designated Google Sheets using the Google service account. These forms use reCAPTCHA before appending and should remain limited to low-volume planning workflows.
+
+The quorum workflow also uses one private Google Sheet per event. Drive `appProperties` hold event discovery metadata, while attendee rows and audited count corrections remain in the sheet. No quorum event or attendee table is stored in D1.
 
 ### R2: selected object storage
 R2 is used for app-owned binary artifacts (submission images, flyers/images, monthly report output), not as the primary source for all document libraries.
@@ -138,6 +140,7 @@ Expanded structures:
 | Recording media | `/api/recordings/stream/[fileId]`, `/api/recordings/download/[fileId]` | Streaming/download with folder access checks |
 | Site health | `/api/healthz` | Runtime + DB heartbeat |
 | Reports | `/api/reports/[month]` | Monthly report artifact retrieval |
+| Quorum | `/api/quorum/[eventKey]/summary`, `/api/quorum/[eventKey]/admin/attendees` | Public aggregate totals and protected live attendance administration |
 | Auth | `/api/auth/[...nextauth]` | NextAuth handlers |
 
 ## 9. Admin Capabilities by Area
@@ -150,6 +153,19 @@ Area admin dashboard modules include:
 - Content Studio publishing.
 - District site mode and district admin management.
 - Corrections workflow administration.
+- Quorum event creation, QR distribution, live attendance review, and audited duplicate/voting-seat corrections.
+
+## Quorum operations
+
+- `QUORUM_DRIVE_OWNER_EMAIL` selects the Area account that owns Quorum folders and spreadsheets; it defaults operationally to `webmaster@area36.org`.
+- The owner connects once from Quorum admin through the existing Google login OAuth client using Google's recommended per-file `drive.file` scope. The existing Auth.js account record retains the offline grant.
+- OAuth account grants are stored in each environment's existing Auth.js/D1 account record, so the owner must complete the Quorum Drive connection once in every deployed environment that creates events.
+- The owner grant creates the private `Quorum` folder and new spreadsheets because service accounts do not receive personal Drive storage quota. The folder is shared with the existing service account, which uses a direct service-account Drive token to handle all unauthenticated form submissions, dashboard reads, and admin corrections server-to-server. Drive resource permissions restrict that identity to folders explicitly shared with it.
+- `GDRIVE_QUORUM_FOLDER_ID` is an optional deployment override. When omitted, the app discovers its marked Quorum folder through Drive metadata.
+- Public check-in lives at `/quorum/[eventKey]`; public aggregate totals live at `/quorum/[eventKey]/dashboard`.
+- Personal attendee details are loaded only through a permission-gated, `no-store` API. They are never embedded in public HTML or the public summary payload.
+- A closed event retains its aggregate public dashboard but removes the protected attendee panel. The private spreadsheet remains the detailed archive.
+- `quorum:view` grants private attendee visibility; `quorum:edit` grants provisioning and correction operations.
 
 District admin modules (hosted districts):
 - Dashboard, Calendar, Contacts, Positions, Updates.

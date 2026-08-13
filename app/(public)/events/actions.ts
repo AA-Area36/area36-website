@@ -2,10 +2,11 @@
 
 import { eventSubmissionWithRecurrenceSchema, type EventSubmissionWithRecurrenceData } from "@/lib/schemas/event"
 import { getDb } from "@/lib/db"
-import { events, eventToTypes, type MonthlyPatternType, type RecurrenceType } from "@/lib/db/schema"
+import { events, eventToTypes, type MonthlyPatternType } from "@/lib/db/schema"
 import { serializeWeeklyPattern, serializeMonthlyPatternValue } from "@/lib/utils/recurrence"
 import { createEventUploadToken } from "@/lib/security/upload-token"
 import { checkRateLimit, getClientIp } from "@/lib/security/rate-limit"
+import { eq } from "drizzle-orm"
 
 interface ReCaptchaResponse {
   success: boolean
@@ -17,6 +18,54 @@ interface ReCaptchaResponse {
 }
 
 const RECAPTCHA_SCORE_THRESHOLD = 0.5
+
+type SubmitEventResult =
+  | {
+      success: true
+      eventId: string
+      uploadToken?: string
+      message: string
+    }
+  | {
+      success: false
+      error: string
+      fieldErrors?: Record<string, string>
+    }
+
+async function getExistingSubmission(
+  submissionId: string,
+  submitterEmail: string,
+) {
+  const db = await getDb()
+  const existing = await db
+    .select({
+      id: events.id,
+      submitterEmail: events.submitterEmail,
+    })
+    .from(events)
+    .where(eq(events.submissionKey, submissionId))
+    .get()
+
+  if (
+    !existing ||
+    existing.submitterEmail.toLowerCase() !== submitterEmail.toLowerCase()
+  ) {
+    return null
+  }
+
+  return existing
+}
+
+async function successfulSubmission(eventId: string) {
+  const uploadToken = await createEventUploadToken(eventId)
+  return {
+    success: true as const,
+    eventId,
+    uploadToken: uploadToken ?? undefined,
+    message:
+      "Your event has been submitted and is pending review. You will be notified once it is approved.",
+  }
+}
 
 /**
  * Get reCAPTCHA secret key from Cloudflare context or process.env
@@ -37,7 +86,9 @@ async function getRecaptchaSecretKey(): Promise<string | undefined> {
   return process.env.RECAPTCHA_SECRET_KEY
 }
 
-export async function submitEvent(data: EventSubmissionWithRecurrenceData) {
+export async function submitEvent(
+  data: EventSubmissionWithRecurrenceData,
+): Promise<SubmitEventResult> {
   // Validate the form data
   const result = eventSubmissionWithRecurrenceSchema.safeParse(data)
 
@@ -58,7 +109,7 @@ export async function submitEvent(data: EventSubmissionWithRecurrenceData) {
   }
 
   const ip = await getClientIp()
-  const rateLimit = checkRateLimit(`event:${ip}`, {
+  const rateLimit = await checkRateLimit(`event:${ip}`, {
     limit: 3,
     windowMs: 10 * 60 * 1000,
   })
@@ -132,6 +183,14 @@ export async function submitEvent(data: EventSubmissionWithRecurrenceData) {
   }
 
   try {
+    const existing = await getExistingSubmission(
+      result.data.submissionId,
+      result.data.submitterEmail,
+    )
+    if (existing) {
+      return successfulSubmission(existing.id)
+    }
+
     // Insert event into database
     const db = await getDb()
     const eventId = crypto.randomUUID()
@@ -154,7 +213,7 @@ export async function submitEvent(data: EventSubmissionWithRecurrenceData) {
       }
     }
     
-    await db.insert(events).values({
+    const insertEvent = db.insert(events).values({
       id: eventId,
       title: result.data.title,
       date: result.data.date,
@@ -169,6 +228,7 @@ export async function submitEvent(data: EventSubmissionWithRecurrenceData) {
       type: primaryType, // For backward compatibility
       status: "pending",
       submitterEmail: result.data.submitterEmail,
+      submissionKey: result.data.submissionId,
       flyerUrl: result.data.flyerUrl || null,
       timeTBD: result.data.timeTBD,
       addressTBD: result.data.addressTBD,
@@ -183,24 +243,27 @@ export async function submitEvent(data: EventSubmissionWithRecurrenceData) {
     })
 
     // Insert all event types into the junction table
-    if (result.data.types.length > 0) {
-      await db.insert(eventToTypes).values(
-        result.data.types.map((type) => ({
-          eventId,
-          type,
-        }))
-      )
-    }
+    const insertTypes = db.insert(eventToTypes).values(
+      result.data.types.map((type) => ({
+        eventId,
+        type,
+      })),
+    )
 
-    const uploadToken = await createEventUploadToken(eventId)
+    await db.batch([insertEvent, insertTypes])
 
-    return {
-      success: true,
-      eventId,
-      uploadToken: uploadToken ?? undefined,
-      message: "Your event has been submitted and is pending review. You will be notified once it is approved.",
-    }
+    return successfulSubmission(eventId)
   } catch (error) {
+    // A concurrent retry can lose the unique-key race after both requests
+    // check for an existing submission. Resolve that race as the same success.
+    const existing = await getExistingSubmission(
+      result.data.submissionId,
+      result.data.submitterEmail,
+    ).catch(() => null)
+    if (existing) {
+      return successfulSubmission(existing.id)
+    }
+
     console.error("Event submission error:", error)
     return {
       success: false,

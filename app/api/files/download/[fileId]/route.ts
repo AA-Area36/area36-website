@@ -3,6 +3,7 @@ import {
   validateFileAccess,
   getGDriveEnv,
   getGDriveCredentials,
+  getAllowedGDriveRootIds,
 } from "@/lib/files/access"
 
 // Use nodejs runtime for compatibility with Cloudflare Workers via OpenNext
@@ -69,7 +70,8 @@ async function resolveAccess(
   const { valid, filename, requiresPassword } = await validateFileAccess(
     fileId,
     credentials,
-    unlockToken
+    unlockToken,
+    getAllowedGDriveRootIds(env)
   )
 
   if (!valid) {

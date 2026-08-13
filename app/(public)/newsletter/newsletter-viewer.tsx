@@ -124,6 +124,7 @@ export function NewsletterViewer({ newsletters, years }: NewsletterViewerProps) 
   // Reset to page 1 if current page is out of bounds after filtering
   React.useEffect(() => {
     if (currentPage > totalPages && totalPages > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Clamp pagination after filtering removes the current page.
       setCurrentPage(1)
       updateURL(searchQuery, yearFilter, 1)
     }
@@ -246,20 +247,9 @@ export function NewsletterViewer({ newsletters, years }: NewsletterViewerProps) 
               const isDownloading = loadingAction?.id === newsletter.id && loadingAction.action === "download"
               const isBusy = loadingAction?.id === newsletter.id
               return (
-                <div
+                <article
                   key={newsletter.id}
-                  role="button"
-                  tabIndex={0}
-                  className="group flex cursor-pointer items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
-                  onClick={() => {
-                    void handleDownload(newsletter)
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault()
-                      void handleDownload(newsletter)
-                    }
-                  }}
+                  className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
                 >
                   <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                     <FileText className="h-6 w-6" aria-hidden="true" />
@@ -301,10 +291,7 @@ export function NewsletterViewer({ newsletters, years }: NewsletterViewerProps) 
                       size="icon"
                       className="hidden sm:inline-flex"
                       disabled={!!isBusy}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleView(newsletter)
-                      }}
+                      onClick={() => handleView(newsletter)}
                       aria-label={`View ${newsletter.issue}`}
                     >
                       {isViewing ? (
@@ -319,10 +306,7 @@ export function NewsletterViewer({ newsletters, years }: NewsletterViewerProps) 
                         size="icon"
                         disabled={!!isBusy}
                         aria-label={`Download ${newsletter.issue}`}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          void handleDownload(newsletter)
-                        }}
+                        onClick={() => void handleDownload(newsletter)}
                       >
                         {isDownloading ? (
                           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -332,7 +316,7 @@ export function NewsletterViewer({ newsletters, years }: NewsletterViewerProps) 
                       </Button>
                     )}
                   </div>
-                </div>
+                </article>
               )
             })}
           </div>

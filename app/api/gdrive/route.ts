@@ -2,6 +2,11 @@ import { NextResponse } from "next/server"
 import { getCloudflareContext } from "@opennextjs/cloudflare"
 import { getGDriveCredentials } from "@/lib/gdrive/client"
 import { getAccessToken } from "@/lib/gdrive/auth"
+import {
+  createApiErrorResponse,
+  createApiRequestId,
+  getRedactedErrorMetadata,
+} from "@/lib/api/error-response"
 
 type GDriveEnv = {
   GDRIVE_SERVICE_ACCOUNT_EMAIL?: string
@@ -23,16 +28,22 @@ async function getEnv(): Promise<GDriveEnv> {
 }
 
 export async function GET() {
+  const requestId = createApiRequestId()
   const timestamp = new Date().toISOString()
-  const headers = { "Cache-Control": "no-store" }
+  const headers = {
+    "Cache-Control": "no-store",
+    "X-Request-Id": requestId,
+  }
 
   try {
     const env = await getEnv()
     if (!env.GDRIVE_SERVICE_ACCOUNT_EMAIL || !env.GDRIVE_PRIVATE_KEY || !env.GDRIVE_PRIVATE_KEY_ID) {
-      return NextResponse.json(
-        { ok: false, gdrive: false, error: "GDrive credentials not configured", timestamp },
-        { status: 503, headers }
-      )
+      return createApiErrorResponse({
+        message: "Google Drive is temporarily unavailable.",
+        requestId,
+        status: 503,
+        details: { ok: false, gdrive: false, timestamp },
+      })
     }
 
     const credentials = getGDriveCredentials({
@@ -47,10 +58,16 @@ export async function GET() {
     })
 
     if (!response.ok) {
-      return NextResponse.json(
-        { ok: false, gdrive: false, error: `GDrive probe failed (${response.status})`, timestamp },
-        { status: 503, headers }
-      )
+      console.error("GDrive probe failed", {
+        requestId,
+        upstreamStatus: response.status,
+      })
+      return createApiErrorResponse({
+        message: "Google Drive is temporarily unavailable.",
+        requestId,
+        status: 503,
+        details: { ok: false, gdrive: false, timestamp },
+      })
     }
 
     return NextResponse.json(
@@ -58,14 +75,15 @@ export async function GET() {
       { headers }
     )
   } catch (error) {
-    return NextResponse.json(
-      {
-        ok: false,
-        gdrive: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-        timestamp,
-      },
-      { status: 503, headers }
-    )
+    console.error("GDrive health check failed", {
+      requestId,
+      ...getRedactedErrorMetadata(error),
+    })
+    return createApiErrorResponse({
+      message: "Google Drive is temporarily unavailable.",
+      requestId,
+      status: 503,
+      details: { ok: false, gdrive: false, timestamp },
+    })
   }
 }
