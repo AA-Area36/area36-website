@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest"
 
 const publicForms = [
   "app/(public)/conference-manual-count/conference-manual-count-client.tsx",
-  "app/(public)/area-assembly-4-21-26/area-assembly-client.tsx",
 ]
 
 describe("seasonal public form semantics", () => {

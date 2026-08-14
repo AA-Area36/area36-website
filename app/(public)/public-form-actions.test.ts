@@ -54,7 +54,7 @@ describe("public form side-effect boundaries", () => {
     expect(appendConferenceManualCountMock).not.toHaveBeenCalled()
   })
 
-  it("does not append an assembly registration when the submission is rate limited", async () => {
+  it("does not access rate limits or append after assembly registration closes", async () => {
     await expect(
       submitAreaAssemblyRegistration({
         firstName: "Ada",
@@ -64,7 +64,8 @@ describe("public form side-effect boundaries", () => {
         attendingApril21: false,
         recaptchaToken: "",
       })
-    ).resolves.toMatchObject({ success: false, error: expect.stringContaining("Too many") })
+    ).resolves.toMatchObject({ success: false, error: expect.stringContaining("closed") })
+    expect(checkRateLimitMock).not.toHaveBeenCalled()
     expect(appendAreaAssemblyRegistrationMock).not.toHaveBeenCalled()
   })
 
