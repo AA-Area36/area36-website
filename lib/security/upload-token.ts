@@ -6,6 +6,12 @@ type UploadTokenPayload = {
   exp: number
 }
 
+export type EventUploadTokenClaims = {
+  eventId: string
+  expiresAt: number
+  tokenId: string
+}
+
 const textEncoder = new TextEncoder()
 const textDecoder = new TextDecoder()
 
@@ -75,6 +81,11 @@ async function hmacSign(value: string, secret: string): Promise<string> {
   return base64UrlEncode(new Uint8Array(signature))
 }
 
+async function fingerprintToken(token: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", textEncoder.encode(token))
+  return `v1:${base64UrlEncode(new Uint8Array(digest))}`
+}
+
 export async function createEventUploadToken(
   eventId: string,
   ttlMs = 10 * 60 * 1000
@@ -96,25 +107,29 @@ export async function createEventUploadToken(
 export async function verifyEventUploadToken(
   token: string,
   eventId: string
-): Promise<boolean> {
+): Promise<EventUploadTokenClaims | null> {
   const secret = await getUploadTokenSecret()
-  if (!secret) return false
+  if (!secret) return null
 
   const parts = token.split(".")
-  if (parts.length !== 2) return false
+  if (parts.length !== 2) return null
 
   const [payloadB64, signature] = parts
   const expectedSignature = await hmacSign(payloadB64, secret)
-  if (!timingSafeEqual(signature, expectedSignature)) return false
+  if (!timingSafeEqual(signature, expectedSignature)) return null
 
   try {
     const payloadJson = textDecoder.decode(base64UrlDecode(payloadB64))
     const payload = JSON.parse(payloadJson) as UploadTokenPayload
-    if (!payload || payload.v !== 1) return false
-    if (payload.eventId !== eventId) return false
-    if (payload.exp < Date.now()) return false
-    return true
+    if (!payload || payload.v !== 1) return null
+    if (payload.eventId !== eventId) return null
+    if (payload.exp < Date.now()) return null
+    return {
+      eventId: payload.eventId,
+      expiresAt: payload.exp,
+      tokenId: await fingerprintToken(token),
+    }
   } catch {
-    return false
+    return null
   }
 }

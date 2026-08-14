@@ -35,8 +35,6 @@ export async function recordError(params: RecordErrorParams): Promise<void> {
     const { env } = await getCloudflareContext({ async: true })
     const day = new Date().toISOString().slice(0, 10)
     const lastSeenAt = new Date().toISOString()
-    const message =
-      params.messageOverride ?? (params.error instanceof Error ? params.error.message : String(params.error ?? ""))
     const topStackLine = getTopStackLine(params.error)
     const fingerprintSource = `${params.kind}|${params.route}|${params.error instanceof Error ? params.error.name : ""}|${topStackLine}`
     const fingerprint = await sha256Hex(fingerprintSource)
@@ -44,14 +42,14 @@ export async function recordError(params: RecordErrorParams): Promise<void> {
     await env.DB.prepare(
       `INSERT INTO errors_daily (
         day, error_kind, fingerprint, count, sample_message, sample_route, last_seen_at
-      ) VALUES (?, ?, ?, 1, ?, ?, ?)
+      ) VALUES (?, ?, ?, 1, NULL, ?, ?)
       ON CONFLICT(day, error_kind, fingerprint) DO UPDATE SET
         count = count + 1,
-        sample_message = excluded.sample_message,
+        sample_message = NULL,
         sample_route = excluded.sample_route,
         last_seen_at = excluded.last_seen_at`
     )
-      .bind(day, params.kind, fingerprint, message, params.route, lastSeenAt)
+      .bind(day, params.kind, fingerprint, params.route, lastSeenAt)
       .run()
   } catch {
     // Never allow error logging to throw
