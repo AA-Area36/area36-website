@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState, useTransition } from "react"
+import { useCallback, useEffect, useRef, useState, useTransition } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useGoogleReCaptcha } from "react-google-recaptcha-v3"
@@ -24,6 +24,7 @@ export function AreaAssemblyClient() {
   const [submissionState, setSubmissionState] = useState<SubmissionState>("form")
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const outcomeRef = useRef<HTMLDivElement>(null)
   const { executeRecaptcha } = useGoogleReCaptcha()
 
   const {
@@ -59,6 +60,10 @@ export function AreaAssemblyClient() {
     setSubmitError(null)
     reset()
   }, [reset])
+
+  useEffect(() => {
+    if (submissionState !== "form") outcomeRef.current?.focus()
+  }, [submissionState])
 
   const onSubmit = useCallback(
     async (data: AreaAssemblyRegistrationData) => {
@@ -203,7 +208,13 @@ export function AreaAssemblyClient() {
               </CardHeader>
               <CardContent>
                 {submissionState === "success" ? (
-                  <div className="rounded-xl border border-border bg-card p-2 text-center">
+                  <div
+                    ref={outcomeRef}
+                    role="status"
+                    aria-live="polite"
+                    tabIndex={-1}
+                    className="rounded-xl border border-border bg-card p-2 text-center outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
                     <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
                       <CheckCircle className="h-6 w-6" aria-hidden="true" />
                     </div>
@@ -216,7 +227,12 @@ export function AreaAssemblyClient() {
                     </Button>
                   </div>
                 ) : submissionState === "error" ? (
-                  <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center">
+                  <div
+                    ref={outcomeRef}
+                    role="alert"
+                    tabIndex={-1}
+                    className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
                     <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
                       <TriangleAlert className="h-6 w-6" aria-hidden="true" />
                     </div>
@@ -229,36 +245,47 @@ export function AreaAssemblyClient() {
                     </Button>
                   </div>
                 ) : (
-                  <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+                  <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" aria-describedby="assembly-required-note">
+                    <p id="assembly-required-note" className="text-sm text-muted-foreground">
+                      First name, last initial, and at least one meeting are required.
+                    </p>
                     <div className="space-y-2">
                       <Label htmlFor="firstName">
-                        First name <span className="text-destructive">*</span>
+                        First name <span className="text-destructive" aria-hidden="true">*</span>
                       </Label>
-                      <Input id="firstName" autoComplete="given-name" {...register("firstName")} />
-                      {errors.firstName && <p className="text-sm text-destructive">{errors.firstName.message}</p>}
+                      <Input id="firstName" autoComplete="given-name" required aria-invalid={!!errors.firstName} aria-describedby={errors.firstName ? "firstName-error" : undefined} {...register("firstName")} />
+                      {errors.firstName && <p id="firstName-error" className="text-sm text-destructive">{errors.firstName.message}</p>}
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="lastInitial">
-                        Last initial <span className="text-destructive">*</span>
+                        Last initial <span className="text-destructive" aria-hidden="true">*</span>
                       </Label>
                       <Input
                         id="lastInitial"
                         autoCapitalize="characters"
                         maxLength={1}
                         className="uppercase"
+                        required
+                        aria-invalid={!!errors.lastInitial}
+                        aria-describedby={errors.lastInitial ? "lastInitial-error" : undefined}
                         {...register("lastInitial")}
                       />
-                      {errors.lastInitial && <p className="text-sm text-destructive">{errors.lastInitial.message}</p>}
+                      {errors.lastInitial && <p id="lastInitial-error" className="text-sm text-destructive">{errors.lastInitial.message}</p>}
                     </div>
 
-                    <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
-                      <div>
-                        <p className="text-sm font-medium text-foreground">Which meetings will you attend?</p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          Select one or both dates so the committee can track attendance.
-                        </p>
-                      </div>
+                    <fieldset
+                      className="space-y-3 rounded-lg border border-border bg-muted/20 p-4"
+                      aria-required="true"
+                      aria-invalid={!!(errors.attendingApril18 || errors.attendingApril18InPerson)}
+                      aria-describedby={errors.attendingApril18 || errors.attendingApril18InPerson ? "attendance-error" : "attendance-help"}
+                    >
+                      <legend className="text-sm font-medium text-foreground">
+                        Which meetings will you attend? <span className="text-destructive" aria-hidden="true">*</span>
+                      </legend>
+                      <p id="attendance-help" className="mt-1 text-sm text-muted-foreground">
+                        Select one or both dates so the committee can track attendance.
+                      </p>
 
                       <div className="flex items-start gap-3">
                         <Checkbox
@@ -302,11 +329,11 @@ export function AreaAssemblyClient() {
                       </div>
 
                       {(errors.attendingApril18 || errors.attendingApril18InPerson) && (
-                        <p className="text-sm text-destructive">
+                        <p id="attendance-error" className="text-sm text-destructive">
                           {errors.attendingApril18?.message || errors.attendingApril18InPerson?.message}
                         </p>
                       )}
-                    </div>
+                    </fieldset>
 
                     <div className="rounded-lg border border-border bg-muted/30 p-3">
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">

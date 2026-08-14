@@ -9,6 +9,7 @@ import { getDb } from "@/lib/db"
 import { events } from "@/lib/db/schema"
 import { eq, sql } from "drizzle-orm"
 import { AdminNav } from "@/components/admin-nav"
+import { AdminMain } from "@/components/admin-main"
 
 export default async function DashboardLayout({
   children,
@@ -75,7 +76,7 @@ export default async function DashboardLayout({
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">{children}</main>
+      <AdminMain className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">{children}</AdminMain>
     </div>
   )
 }
