@@ -5,6 +5,9 @@ import { SUPPORTED_LOCALES, type Locale } from "@/lib/i18n/locales"
 import { loadContentDocs } from "./actions"
 import { ContentEditor } from "./content-editor"
 import { cn } from "@/lib/utils"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Content" }
 
 type LocaleState = {
   doc: ContentDoc

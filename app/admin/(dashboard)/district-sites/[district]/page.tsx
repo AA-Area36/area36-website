@@ -3,9 +3,19 @@ import { notFound } from "next/navigation"
 import { getDb, schema } from "@/lib/db"
 import { eq, asc } from "drizzle-orm"
 import { upsertDistrictSite, addDistrictAdmin, removeDistrictAdmin } from "../actions"
+import type { Metadata } from "next"
 
 export const dynamic = "force-dynamic"
 const PROTECTED_SITE_ADMIN_EMAIL = "webmaster@area36.org"
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ district: string }>
+}): Promise<Metadata> {
+  const { district } = await params
+  return { title: `District ${district} Site` }
+}
 
 function coerceDistrict(param: string): number | null {
   const n = Number(param)

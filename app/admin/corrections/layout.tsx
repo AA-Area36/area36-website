@@ -9,6 +9,14 @@ import { events } from "@/lib/db/schema"
 import { eq, sql } from "drizzle-orm"
 import { AdminNav } from "@/components/admin-nav"
 import { AdminMain } from "@/components/admin-main"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: {
+    default: "Corrections Admin | Area 36",
+    template: "%s | Corrections Admin | Area 36",
+  },
+}
 
 export const dynamic = "force-dynamic"
 

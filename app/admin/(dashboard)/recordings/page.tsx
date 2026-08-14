@@ -5,6 +5,9 @@ import { getRecordingFolders, deleteRecordingFolder } from "./actions"
 import { AddFolderDialog } from "./add-folder-dialog"
 import { EditFolderDialog } from "./edit-folder-dialog"
 import { revalidatePath } from "next/cache"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Recordings" }
 
 export const dynamic = "force-dynamic"
 
