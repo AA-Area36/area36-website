@@ -149,6 +149,7 @@ export const CACHE_KEYS = {
   newsletters: "newsletters",
   resources: "resources",
   recordings: "recordings",
+  annualCalendarFiles: "annual-calendar-files",
   newslettersByYear: (year: number) => `newsletters:${year}`,
   resourcesByCategory: (category: string) => `resources:${category}`,
   recordingsByCategory: (category: string) => `recordings:${category}`,

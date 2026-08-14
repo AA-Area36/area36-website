@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useState, useTransition } from "react"
+import { useCallback, useEffect, useRef, useState, useTransition } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useGoogleReCaptcha } from "react-google-recaptcha-v3"
@@ -24,6 +24,7 @@ export function ConferenceManualCountClient() {
   const [submissionState, setSubmissionState] = useState<SubmissionState>("form")
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const outcomeRef = useRef<HTMLDivElement>(null)
   const { executeRecaptcha } = useGoogleReCaptcha()
 
   const {
@@ -47,6 +48,10 @@ export function ConferenceManualCountClient() {
     setSubmitError(null)
     reset()
   }, [reset])
+
+  useEffect(() => {
+    if (submissionState !== "form") outcomeRef.current?.focus()
+  }, [submissionState])
 
   const onSubmit = useCallback(
     async (data: ConferenceManualCountData) => {
@@ -145,7 +150,13 @@ export function ConferenceManualCountClient() {
               </CardHeader>
               <CardContent>
                 {submissionState === "success" ? (
-                  <div className="rounded-xl border border-border bg-card p-6 text-center">
+                  <div
+                    ref={outcomeRef}
+                    role="status"
+                    aria-live="polite"
+                    tabIndex={-1}
+                    className="rounded-xl border border-border bg-card p-6 text-center outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
                     <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
                       <CheckCircle className="h-6 w-6" aria-hidden="true" />
                     </div>
@@ -158,7 +169,12 @@ export function ConferenceManualCountClient() {
                     </Button>
                   </div>
                 ) : submissionState === "error" ? (
-                  <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center">
+                  <div
+                    ref={outcomeRef}
+                    role="alert"
+                    tabIndex={-1}
+                    className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
                     <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
                       <TriangleAlert className="h-6 w-6" aria-hidden="true" />
                     </div>
@@ -171,37 +187,47 @@ export function ConferenceManualCountClient() {
                     </Button>
                   </div>
                 ) : (
-                  <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+                  <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" aria-describedby="manual-required-note">
+                    <p id="manual-required-note" className="text-sm text-muted-foreground">
+                      All fields are required.
+                    </p>
                     <div className="space-y-2">
                       <Label htmlFor="contactName">
-                        Contact name <span className="text-destructive">*</span>
+                        Contact name <span className="text-destructive" aria-hidden="true">*</span>
                       </Label>
-                      <Input id="contactName" autoComplete="name" {...register("contactName")} />
-                      {errors.contactName && <p className="text-sm text-destructive">{errors.contactName.message}</p>}
+                      <Input
+                        id="contactName"
+                        autoComplete="name"
+                        required
+                        aria-invalid={!!errors.contactName}
+                        aria-describedby={errors.contactName ? "contactName-error" : undefined}
+                        {...register("contactName")}
+                      />
+                      {errors.contactName && <p id="contactName-error" className="text-sm text-destructive">{errors.contactName.message}</p>}
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="email">
-                        Email <span className="text-destructive">*</span>
+                        Email <span className="text-destructive" aria-hidden="true">*</span>
                       </Label>
-                      <Input id="email" type="email" autoComplete="email" {...register("email")} />
-                      {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
+                      <Input id="email" type="email" autoComplete="email" required aria-invalid={!!errors.email} aria-describedby={errors.email ? "email-error" : undefined} {...register("email")} />
+                      {errors.email && <p id="email-error" className="text-sm text-destructive">{errors.email.message}</p>}
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="role">
-                        Role <span className="text-destructive">*</span>
+                        Role <span className="text-destructive" aria-hidden="true">*</span>
                       </Label>
-                      <Input id="role" {...register("role")} />
-                      {errors.role && <p className="text-sm text-destructive">{errors.role.message}</p>}
+                      <Input id="role" required aria-invalid={!!errors.role} aria-describedby={errors.role ? "role-error" : undefined} {...register("role")} />
+                      {errors.role && <p id="role-error" className="text-sm text-destructive">{errors.role.message}</p>}
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="manualCount">
-                        Number of Conference Manuals <span className="text-destructive">*</span>
+                        Number of Conference Manuals <span className="text-destructive" aria-hidden="true">*</span>
                       </Label>
-                      <Input id="manualCount" type="number" min={1} inputMode="numeric" {...register("manualCount")} />
-                      {errors.manualCount && <p className="text-sm text-destructive">{errors.manualCount.message}</p>}
+                      <Input id="manualCount" type="number" min={1} inputMode="numeric" required aria-invalid={!!errors.manualCount} aria-describedby={errors.manualCount ? "manualCount-error" : undefined} {...register("manualCount")} />
+                      {errors.manualCount && <p id="manualCount-error" className="text-sm text-destructive">{errors.manualCount.message}</p>}
                     </div>
 
                     <div className="rounded-lg border border-border bg-muted/30 p-3">

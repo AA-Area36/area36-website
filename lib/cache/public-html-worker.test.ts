@@ -11,6 +11,21 @@ const enabledEnv = {
   PUBLIC_HTML_CACHE_HOSTS: "area36.org,www.area36.org",
 }
 
+function districtEnv(mode: "hosted" | "external_redirect" = "hosted", enabled = true) {
+  const first = vi.fn().mockResolvedValue({
+    enabled: enabled ? 1 : 0,
+    mode,
+    redirectUrl: mode === "external_redirect" ? "https://example.test" : null,
+    displayName: "District",
+  })
+  const bind = vi.fn(() => ({ first }))
+  const prepare = vi.fn(() => ({ bind }))
+  return {
+    ...enabledEnv,
+    DB: { prepare } as unknown as D1Database,
+  }
+}
+
 class MemoryCache {
   private readonly entries = new Map<string, Response>()
 
@@ -151,5 +166,72 @@ describe("public HTML Worker cache", () => {
 
     expect(response.headers.get("x-area36-cache")).toBeNull()
     expect(putSpy).not.toHaveBeenCalled()
+  })
+
+  it("caches configured hosted district pages with host-isolated keys", async () => {
+    const cache = new MemoryCache()
+    const pending: Promise<unknown>[] = []
+    const context = {
+      waitUntil(promise: Promise<unknown>) {
+        pending.push(promise)
+      },
+    }
+    const district12 = vi.fn(async () =>
+      new Response("<html>District 12</html>", {
+        headers: { "content-type": "text/html" },
+      })
+    )
+    const district13 = vi.fn(async () =>
+      new Response("<html>District 13</html>", {
+        headers: { "content-type": "text/html" },
+      })
+    )
+
+    const first12 = await serveWithPublicHtmlCache({
+      request: documentRequest("https://d12.area36.org/calendar", { cookie: "a36_locale=en" }),
+      env: districtEnv(),
+      ctx: context,
+      cache,
+      next: district12,
+    })
+    const first13 = await serveWithPublicHtmlCache({
+      request: documentRequest("https://d13.area36.org/calendar", { cookie: "a36_locale=en" }),
+      env: districtEnv(),
+      ctx: context,
+      cache,
+      next: district13,
+    })
+    await Promise.all(pending)
+    const second12 = await serveWithPublicHtmlCache({
+      request: documentRequest("https://d12.area36.org/calendar", { cookie: "a36_locale=en" }),
+      env: districtEnv(),
+      ctx: context,
+      cache,
+      next: district12,
+    })
+
+    expect(first12.headers.get("x-area36-cache")).toBe("MISS")
+    expect(first13.headers.get("x-area36-cache")).toBe("MISS")
+    expect(second12.headers.get("x-area36-cache")).toBe("HIT")
+    expect(await second12.text()).toContain("District 12")
+    expect(district12).toHaveBeenCalledOnce()
+    expect(district13).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    ["disabled district", districtEnv("hosted", false), "https://d14.area36.org/"],
+    ["external redirect district", districtEnv("external_redirect"), "https://d15.area36.org/"],
+    ["district admin", districtEnv(), "https://d16.area36.org/admin"],
+    ["district API", districtEnv(), "https://d17.area36.org/api/events"],
+  ])("bypasses the cache for a %s", async (_label, env, url) => {
+    const response = await serveWithPublicHtmlCache({
+      request: documentRequest(url),
+      env,
+      ctx: { waitUntil: vi.fn() },
+      cache: new MemoryCache(),
+      next: async () => new Response("uncached"),
+    })
+
+    expect(response.headers.get("x-area36-cache")).toBeNull()
   })
 })

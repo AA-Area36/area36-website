@@ -4,6 +4,7 @@ import {
   isLocale,
   LOCALE_COOKIE,
 } from "@/lib/i18n/locales"
+import { getDistrictSiteForMiddleware } from "@/lib/district/sites-middleware"
 
 const EDGE_CACHE_CONTROL =
   "public, max-age=0, s-maxage=300, stale-while-revalidate=3600"
@@ -11,6 +12,7 @@ const EDGE_CACHE_CONTROL =
 type PublicHtmlCacheEnv = {
   PUBLIC_HTML_CACHE_ENABLED?: string
   PUBLIC_HTML_CACHE_HOSTS?: string
+  DB?: D1Database
 }
 
 type CacheContext = {
@@ -97,6 +99,32 @@ export function getPublicHtmlCacheKey(
   })
 }
 
+function districtNumberFromCacheHost(hostname: string): number | null {
+  const match = /^d([1-9]|[12][0-9]|3[0-6])\.area36\.org$/i.exec(hostname)
+  return match ? Number(match[1]) : null
+}
+
+async function getConfiguredPublicHtmlCacheKey(
+  request: Request,
+  env: PublicHtmlCacheEnv,
+): Promise<Request | null> {
+  const directKey = getPublicHtmlCacheKey(request, env)
+  if (directKey) return directKey
+
+  const url = new URL(request.url)
+  const districtNumber = districtNumberFromCacheHost(url.hostname)
+  if (!districtNumber) return null
+
+  const site = await getDistrictSiteForMiddleware(env, districtNumber)
+  if (!site?.enabled || site.mode !== "hosted") return null
+
+  const configuredHosts = env.PUBLIC_HTML_CACHE_HOSTS ?? "area36.org,www.area36.org"
+  return getPublicHtmlCacheKey(request, {
+    ...env,
+    PUBLIC_HTML_CACHE_HOSTS: `${configuredHosts},${url.hostname}`,
+  })
+}
+
 function canStorePublicHtml(response: Response): boolean {
   if (response.status !== 200) return false
   if (!response.headers.get("content-type")?.includes("text/html")) return false
@@ -128,7 +156,7 @@ export async function serveWithPublicHtmlCache({
   cache: CacheStore
   next: () => Promise<Response>
 }): Promise<Response> {
-  const cacheKey = getPublicHtmlCacheKey(request, env)
+  const cacheKey = await getConfiguredPublicHtmlCacheKey(request, env)
   if (!cacheKey) return next()
 
   const cached = await cache.match(cacheKey)

@@ -121,20 +121,9 @@ export function ConferenceMaterialsContent({ materials }: ConferenceMaterialsCon
           const isDownloading = loadingAction?.fileId === doc.id && loadingAction.action === "download"
           const isBusy = loadingAction?.fileId === doc.id
           return (
-          <div
+          <article
             key={doc.id}
-            role="button"
-            tabIndex={0}
-            className="group flex cursor-pointer items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
-            onClick={() => {
-              void handleDownload(doc)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault()
-                void handleDownload(doc)
-              }
-            }}
+            className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
           >
             <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
               {doc.isProtected ? (
@@ -188,7 +177,7 @@ export function ConferenceMaterialsContent({ materials }: ConferenceMaterialsCon
                 )}
               </Button>
             </div>
-          </div>
+          </article>
           )
         })}
       </div>

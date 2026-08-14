@@ -177,20 +177,6 @@ export async function validateFileAccess(
 }
 
 /**
- * Verify a password for a file
- */
-export async function verifyFilePassword(
-  driveId: string,
-  password: string
-): Promise<boolean> {
-  const metadata = await getFileMetadataByDriveId(driveId)
-  if (!metadata || !metadata.password) {
-    return false
-  }
-  return metadata.password === password
-}
-
-/**
  * Get environment variables for Google Drive access
  * Works in both Cloudflare Workers and local development
  */

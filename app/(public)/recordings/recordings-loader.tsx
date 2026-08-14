@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRecordings } from "@/lib/hooks/use-gdrive-files"
-import { GdriveLoader } from "@/components/gdrive-loader"
+import { GdriveError, GdriveLoader } from "@/components/gdrive-loader"
 import { RecordingsClient } from "./recordings-client"
 import { Mic } from "lucide-react"
 import type { CategoryInfo, Recording } from "@/lib/gdrive/types"
@@ -15,20 +15,17 @@ interface RecordingsLoaderProps {
  * Lazy loads recordings from the API and renders the RecordingsClient
  * Unlocked folders must be passed from server for security
  * 
- * GRACEFUL DEGRADATION: If files fail to load, shows empty state message
- * instead of error. This ensures the page remains usable even if GDrive
- * is unavailable.
+ * Keeps a service outage distinct from a legitimate empty archive.
  */
 export function RecordingsLoader({ unlockedFolders }: RecordingsLoaderProps) {
-  const { data, isLoading, error } = useRecordings()
+  const { data, isLoading, error, refetch } = useRecordings()
 
   if (isLoading) {
     return <GdriveLoader message="Loading recordings..." />
   }
 
-  // Graceful degradation: log error but show empty state
-  if (error) {
-    console.error("Failed to load recordings:", error)
+  if (error && !data) {
+    return <GdriveError resourceName="Recordings" onRetry={refetch} />
   }
 
   if (!data) {
