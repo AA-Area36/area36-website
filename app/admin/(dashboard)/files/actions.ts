@@ -86,6 +86,7 @@ async function invalidateFileCaches(): Promise<void> {
       CACHE_KEYS.newsletters,
       CACHE_KEYS.resources,
       CACHE_KEYS.recordings,
+      CACHE_KEYS.annualCalendarFiles,
       "old-conference-reports",
     ]
 

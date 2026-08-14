@@ -11,7 +11,7 @@ import type { DisplayEvent } from "@/lib/types/recurrence"
 import { createRequestLogger } from "@/lib/logger"
 import { recordError } from "@/lib/monitoring/errors"
 import { loadEventRelations } from "@/lib/events/load-event-relations"
-import { getPastEventCandidateStart } from "@/lib/utils/event-query-window"
+import { getPastEventQueryWindows } from "@/lib/utils/event-query-window"
 import { createApiErrorResponse } from "@/lib/api/error-response"
 
 const PAGE_SIZE_DEFAULT = 5
@@ -62,53 +62,47 @@ export async function GET(request: Request) {
     const hardRangeEndStr = toStr && toStr < todayStr ? toStr : todayStr
     const cursorDay = cursor ? cursor.substring(0, 10) : null
     const rangeEndStr = cursorDay && cursorDay < hardRangeEndStr ? cursorDay : hardRangeEndStr
-    const candidateStartStr = getPastEventCandidateStart(rangeEndStr, fromStr)
-
     const db = await log.tracker.time("db.connect", () => getDb())
+    const windows = getPastEventQueryWindows(rangeEndStr, fromStr)
+    const collected: DisplayEvent[] = []
+    const seenSortKeys = new Set<string>()
 
-    // Bound the D1 candidate set before recurrence expansion. A base event can
-    // contribute if it starts by the window end and either starts or continues
-    // into the window.
-    const eventsData = await log.tracker.time("db.events", () =>
-      db
-        .select()
-        .from(events)
-        .where(
-          and(
-            eq(events.status, "approved"),
-            lte(events.date, rangeEndStr),
-            or(
-              and(
-                eq(events.isRecurring, false),
-                or(gte(events.date, candidateStartStr), gte(events.endDate, candidateStartStr))
-              ),
-              and(
-                eq(events.isRecurring, true),
-                or(isNull(events.recurUntil), gte(events.recurUntil, candidateStartStr))
+    for (const window of windows) {
+      // Query, hydrate, and expand only one bounded window at a time. Most pages
+      // stop after the newest window instead of loading ten years of relations.
+      const eventsData = await log.tracker.time("db.events", () =>
+        db
+          .select()
+          .from(events)
+          .where(
+            and(
+              eq(events.status, "approved"),
+              lte(events.date, window.end),
+              or(
+                and(
+                  eq(events.isRecurring, false),
+                  or(gte(events.date, window.start), gte(events.endDate, window.start))
+                ),
+                and(
+                  eq(events.isRecurring, true),
+                  or(isNull(events.recurUntil), gte(events.recurUntil, window.start))
+                )
               )
             )
           )
-        )
-    )
-
-    const eventsWithRelations = await loadEventRelations(db, eventsData, log)
-
-    const rangeEnd = dateEnd(rangeEndStr)
-
-    let yearsBack = 2
-    let filteredSorted: DisplayEvent[] = []
-    while (true) {
-      const rangeStart = fromStr
-        ? dateStart(fromStr)
-        : (() => {
-            const d = dateStart(rangeEndStr)
-            d.setFullYear(d.getFullYear() - yearsBack)
-            return d
-          })()
-
-      const displayEvents = getEventsForDateRange(eventsWithRelations, rangeStart, rangeEnd)
+      )
+      const eventsWithRelations = await loadEventRelations(db, eventsData, log)
+      const displayEvents = getEventsForDateRange(
+        eventsWithRelations,
+        dateStart(window.start),
+        dateEnd(window.end)
+      )
 
       const filtered = displayEvents.filter((e) => {
+        // Assign each event to the window containing its start date. This keeps
+        // multi-day events from being returned by adjacent windows.
+        if (e.date < window.start || e.date > window.end) return false
+
         // Only include events that have fully ended before today.
         const eventEnd = e.endDate || e.date
         if (eventEnd >= todayStr) return false
@@ -129,22 +123,24 @@ export async function GET(request: Request) {
         // Cursor filter (older than last item on previous page).
         if (cursor && eventSortKey(e) >= cursor) return false
 
+        const sortKey = eventSortKey(e)
+        if (seenSortKeys.has(sortKey)) return false
+        seenSortKeys.add(sortKey)
+
         // First page: most recent fully-ended events.
         return true
       })
 
       filtered.sort((a, b) => eventSortKey(b).localeCompare(eventSortKey(a)))
-      filteredSorted = filtered
+      collected.push(...filtered)
 
-      // If we can satisfy this page (and still know there's a next), stop expanding.
-      if (filteredSorted.length >= limit + 1) break
-      if (fromStr) break
-      if (yearsBack >= 10) break
-      yearsBack += 2
+      // One look-ahead item is enough to determine whether a next page exists.
+      if (collected.length >= limit + 1) break
     }
 
-    const page = filteredSorted.slice(0, limit)
-    const nextCursor = filteredSorted.length > limit && page.length > 0 ? eventSortKey(page[page.length - 1]) : null
+    collected.sort((a, b) => eventSortKey(b).localeCompare(eventSortKey(a)))
+    const page = collected.slice(0, limit)
+    const nextCursor = collected.length > limit && page.length > 0 ? eventSortKey(page[page.length - 1]) : null
 
     log.tracker.finish(200)
     return NextResponse.json(

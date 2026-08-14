@@ -27,17 +27,20 @@ export function EventsLoader({ hero }: EventsLoaderProps) {
     const loadData = async () => {
       setLoadState("loading")
       setEvents(null)
+      setCalendarFiles([])
+
+      // Supporting documents load independently and must never hold the core
+      // event calendar behind Drive latency or an upstream failure.
+      void getAnnualCalendarFiles()
+        .then((files) => {
+          if (active) setCalendarFiles(files)
+        })
+        .catch((error) => {
+          console.error("Failed to load annual calendar files:", error)
+        })
 
       try {
-        // Calendar files are optional supporting content; their failure should
-        // not hide an otherwise healthy event calendar.
-        const [eventsResponse, calendarFilesData] = await Promise.all([
-          fetch("/api/events"),
-          getAnnualCalendarFiles().catch((error) => {
-            console.error("Failed to load annual calendar files:", error)
-            return []
-          }),
-        ])
+        const eventsResponse = await fetch("/api/events")
 
         if (!eventsResponse.ok) {
           throw new Error(`Events API error: ${eventsResponse.status}`)
@@ -50,7 +53,6 @@ export function EventsLoader({ hero }: EventsLoaderProps) {
 
         if (active) {
           setEvents(eventsData as DisplayEvent[])
-          setCalendarFiles(calendarFilesData)
           setLoadState("ready")
         }
       } catch (err) {
