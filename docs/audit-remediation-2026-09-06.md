@@ -43,8 +43,8 @@ The existing District 14 change moving its September 2026 meeting from September
 
 - `pnpm typecheck`: passed.
 - `pnpm lint`: passed with zero warnings.
-- `pnpm test:run`: 91 files, 327 tests passed.
-- Targeted date/API suite with `TZ=Pacific/Auckland`: 5 files, 21 tests passed.
+- `pnpm test:run`: 93 files, 344 tests passed.
+- Targeted date/calendar SQL suites with `TZ=America/Chicago` and `TZ=Pacific/Auckland`: 3 files, 21 tests passed in each zone.
 - Fresh Next.js production build and `pnpm exec opennextjs-cloudflare build`: passed.
 - All migrations, including 0029 and 0030, applied to fresh local D1 successfully.
 - `pnpm audit --prod --json`: zero advisories on September 6, 2026.
@@ -60,3 +60,15 @@ DEP-005 is open: ESLint 9 is outside upstream maintenance, but the current Next 
 Use `pnpm deploy:production` for the eventual release so migrations 0029 and 0030 precede Worker deployment. A missing public HTML revision bypasses the outer cache; unavailable shared rate-limit storage denies protected submissions in production. The revision covers database mutations, while separate API/data caches retain their existing invalidation and TTL behavior; direct Google edits are outside its scope. Existing pre-release cached HTML can expire normally within its previous TTL.
 
 Real multi-region Workers latency/capacity, authenticated assistive-technology journeys, and live provider delivery still require observation in the deployed environment. Component, synthetic D1 and loopback browser checks establish the tested behavior described above; they do not establish production capacity or complete WCAG conformance. The existing Next.js middleware deprecation warning also remains pending the compatible OpenNext migration path.
+
+## Independent review follow-up
+
+The follow-up closes all four review findings and the database-test gap:
+
+- Reject unsupported time zones in public and admin event schemas. The calendar feed skips malformed legacy timed events with a diagnostic instead of returning a feed-wide 500 or assigning an invented time zone.
+- An exception's original date must still match the current series boundaries and pattern. Shortening, shifting or rescheduling a series no longer revives orphaned exceptions in public lists or exports; legitimate extended occurrences remain visible.
+- District calendars use the shared relationship batch loader. Calendar exports use its exception-only loader. SQL-backed route/query tests cover 100, 101 and 201 events and enforce D1's 100-parameter ceiling.
+- Calendar export selection includes ongoing final occurrences and valid extended exceptions after the recurrence cutoff. A single event and a recurring event use consistent local date boundaries in range expansion.
+- Rate-limit integration tests apply the actual migration files and execute migration 0029's trigger in real SQLite transactions through a test D1 adapter. Sixteen concurrent requests plus one committed-write/lost-response retry produce exactly sixteen attempt records and increments. Additional cases prove a shared three-request budget, transaction rollback, and window expiry. This tests SQL behavior and the application's retry path; it is not a distributed production D1 stress test.
+
+Final verification includes the full 344-test suite, zero-warning lint, type checking, the Chicago/Auckland suites and a fresh OpenNext production build. No new migration or production data change is required for this follow-up.

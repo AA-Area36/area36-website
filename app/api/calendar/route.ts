@@ -1,8 +1,11 @@
+import { isValidTimeZone } from "@/lib/utils/time-zone"
+import { loadEventExceptions } from "@/lib/events/load-event-relations"
+import { recurringOverlapsStart } from "@/lib/events/recurring-window"
 import { fromZonedTime } from "date-fns-tz"
 import { getDb } from "@/lib/db"
-import { events, eventExceptions, type Event, type EventException } from "@/lib/db/schema"
-import { eq, asc, gte, and, or, isNull, inArray } from "drizzle-orm"
-import { parseWeeklyPattern, parseMonthlyPattern } from "@/lib/utils/recurrence"
+import { events, type Event, type EventException } from "@/lib/db/schema"
+import { eq, asc, gte, and, or, isNull } from "drizzle-orm"
+import { parseWeeklyPattern, parseMonthlyPattern, isOccurrenceDate } from "@/lib/utils/recurrence"
 import { withEdgeCache } from "@/lib/cache/edge-cache"
 import { createRequestLogger } from "@/lib/logger"
 import { recordError } from "@/lib/monitoring/errors"
@@ -111,6 +114,8 @@ export function generateRRule(event: Event): string | null {
     return null
   }
 
+  if (!event.timeTBD && !isValidTimeZone(event.timezone)) return null
+
   const dayNames = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"]
 
   if (event.recurrenceType === "weekly") {
@@ -216,9 +221,8 @@ async function buildCalendar(
   const todayStr = today.toLocaleDateString("en-CA", { timeZone: "America/Chicago" })
 
   // Fetch approved events from today onwards
-  // For recurring events, we need events where either:
-  // - The recurUntil date is >= today (recurring series still active)
-  // - Or it's not recurring and the date/endDate is >= today
+  // Include active series and final occurrences whose normal or edited end
+  // still overlaps today, even when their recurrence cutoff has passed.
   const approvedEvents = await log.tracker.time("db.events", () =>
     db
       .select()
@@ -235,13 +239,10 @@ async function buildCalendar(
                 and(isNull(events.endDate), gte(events.date, todayStr))
               )
             ),
-            // Recurring events: check recurUntil or startDate
+            // Recurring events: include overlapping final occurrences
             and(
               eq(events.isRecurring, true),
-              or(
-                gte(events.recurUntil, todayStr),
-                and(isNull(events.recurUntil), gte(events.date, todayStr))
-              )
+              recurringOverlapsStart(todayStr)
             )
           )
         )
@@ -256,10 +257,7 @@ async function buildCalendar(
 
   const allExceptions: EventException[] = recurringEventIds.length > 0
     ? await log.tracker.time("db.exceptions", () =>
-        db
-          .select()
-          .from(eventExceptions)
-          .where(inArray(eventExceptions.eventId, recurringEventIds))
+        loadEventExceptions(db, recurringEventIds)
       )
     : []
 
@@ -309,9 +307,15 @@ async function buildCalendar(
 
   // Add each event as a VEVENT
   for (const event of approvedEvents) {
+    // Legacy rows can predate validation. Omit an invalid timed event instead
+    // of failing every subscriber's feed or inventing a replacement time zone.
+    if (!event.timeTBD && !isValidTimeZone(event.timezone)) {
+      log.warn("Skipping calendar event with invalid time zone", { eventId: event.id })
+      continue
+    }
     const uid = generateUID(event.id, domain)
     const dtstamp = new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z"
-    const eventExceptionsList = exceptionsByEvent.get(event.id) || []
+    const eventExceptionsList = (exceptionsByEvent.get(event.id) || []).filter((exception) => isOccurrenceDate(event, exception.occurrenceDate))
 
     lines.push("BEGIN:VEVENT")
     lines.push(`UID:${uid}`)

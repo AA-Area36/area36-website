@@ -88,6 +88,13 @@ describe("submitEvent consistency", () => {
     getDbMock.mockImplementation(async () => createDb())
   })
 
+  it("rejects an invalid time zone before rate limiting or persistence", async () => {
+    const result = await submitEvent({ ...validSubmission, timezone: "No/SuchZone" })
+    expect(result.success).toBe(false)
+    expect(getDbMock).not.toHaveBeenCalled()
+    expect(checkRateLimitMock).not.toHaveBeenCalled()
+  })
+
   it("writes the event and its type rows in one D1 batch", async () => {
     const db = createDb()
     getDbMock.mockResolvedValue(db)

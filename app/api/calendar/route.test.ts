@@ -98,3 +98,7 @@ it("includes the final local evening in UTC UNTIL across seasons", () => {
   expect(generateRRule(event)).toContain("UNTIL=20260801T045959Z")
   expect(generateRRule({ ...event, recurUntil: "2026-12-31" })).toContain("UNTIL=20270101T055959Z")
 })
+
+it("does not throw when a legacy recurring event has an invalid time zone", () => {
+  expect(generateRRule({ ...recurringTimeTbdEvent(), timeTBD: false, timezone: "No/SuchZone" })).toBeNull()
+})

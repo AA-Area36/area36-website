@@ -1,3 +1,4 @@
+import { isValidTimeZone } from "@/lib/utils/time-zone"
 import { isDateOnly } from "@/lib/utils/date-only"
 import { z } from "zod"
 import { eventTypes, locationTypes, recurrenceTypes } from "@/lib/db/schema"
@@ -30,7 +31,7 @@ export const eventSubmissionSchema = z.object({
     (val) => (val === "" || val === null ? undefined : val),
     z.string().regex(timeRegex, "Please enter a valid time (HH:MM)").optional()
   ),
-  timezone: z.string().min(1, "Timezone is required"),
+  timezone: z.string().refine(isValidTimeZone, "Select a valid time zone"),
   locationType: z.enum(locationTypes, { errorMap: () => ({ message: "Please select a location type" }) }),
   address: z.preprocess(
     (val) => (val === "" || val === null ? undefined : val),
@@ -259,7 +260,7 @@ export const eventEditSchema = z.object({
   endDate: z.union([dateValue, z.literal("")]).nullish(),
   startTime: z.union([z.string().regex(timeRegex), z.literal("")]).nullish(),
   endTime: z.union([z.string().regex(timeRegex), z.literal("")]).nullish(),
-  timezone: z.string().refine((value) => { try { new Intl.DateTimeFormat("en", { timeZone: value }); return true } catch { return false } }),
+  timezone: z.string().refine(isValidTimeZone, "Select a valid time zone"),
   locationType: z.enum(locationTypes), address: z.string().max(500).nullish(),
   meetingLink: z.union([z.string().url(), z.literal("")]).nullish(),
   flyerUrl: z.union([z.string().url(), z.literal("")]).nullish(),

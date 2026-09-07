@@ -2,6 +2,7 @@ import type { EventType, EventFlyer } from "@/lib/db/schema"
 import type { EventWithRelations, DisplayEvent, FlyerInfo } from "@/lib/types/recurrence"
 import {
   generateOccurrenceDates,
+  isOccurrenceDate,
   getEventDurationDays,
   parseLocalDate,
   getRecurrenceDescription,
@@ -25,8 +26,8 @@ export function getEventsForDateRange(
   for (const event of events) {
     if (!event.isRecurring) {
       // Single event - check if it falls within range
-      const eventDate = new Date(event.date)
-      const eventEndDate = event.endDate ? new Date(event.endDate) : eventDate
+      const eventDate = parseLocalDate(event.date)
+      const eventEndDate = event.endDate ? parseLocalDate(event.endDate) : eventDate
 
       // Event is in range if it starts before range ends AND ends after range starts
       if (eventDate <= rangeEnd && eventEndDate >= rangeStart) {
@@ -40,7 +41,7 @@ export function getEventsForDateRange(
       const occurrenceDates = new Set(generateOccurrenceDates(event, candidateStart, rangeEnd))
       // An edited occurrence may extend beyond the series' normal duration.
       for (const exception of event.exceptions || []) {
-        if (exception.endDate && parseLocalDate(exception.endDate) >= rangeStart && parseLocalDate(exception.occurrenceDate) <= rangeEnd) {
+        if (exception.endDate && isOccurrenceDate(event, exception.occurrenceDate) && parseLocalDate(exception.endDate) >= rangeStart && parseLocalDate(exception.occurrenceDate) <= rangeEnd) {
           occurrenceDates.add(exception.occurrenceDate)
         }
       }

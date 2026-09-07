@@ -84,3 +84,20 @@ it("includes an extended exception after the original duration and series end", 
   expect(result).toMatchObject([{ date: "2026-09-01", endDate: "2026-09-10", isModified: true }])
   expect(getEventsForDateRange([event], new Date(2026, 8, 11), new Date(2026, 8, 12))).toEqual([])
 })
+
+it.each([
+  { recurUntil: "2026-02-01" },
+  { recurrencePattern: "[3]" },
+  { date: "2026-10-01" },
+])("does not revive an exception outside the edited series: %j", (changes) => {
+  const base = recurringEvent()
+  const event = { ...base, date: "2026-01-06", endDate: "2026-01-07", recurrencePattern: "[2]", recurUntil: "2026-09-30", ...changes,
+    exceptions: [{ ...base.exceptions![0], occurrenceDate: "2026-09-01", exceptionType: "modified" as const, endDate: "2026-09-10" }] }
+  const result = getEventsForDateRange([event], new Date(2026, 8, 8), new Date(2026, 8, 9))
+  expect(result.some((row) => row.date === "2026-09-01")).toBe(false)
+})
+
+it("keeps a nonrecurring event on the exact local date boundary", () => {
+  const event = { ...recurringEvent(), isRecurring: false, date: "2026-09-06", endDate: null }
+  expect(getEventsForDateRange([event], new Date(2026, 8, 6), new Date(2026, 8, 6))).toMatchObject([{ date: "2026-09-06" }])
+})

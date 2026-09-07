@@ -36,20 +36,22 @@ async function loadInBatches<T>(ids: string[], query: (batch: string[]) => Promi
 export async function loadEventRelations(
   db: Database,
   eventRows: Event[],
-  log: RequestLog
+  log?: RequestLog
 ): Promise<EventWithRelations[]> {
   if (eventRows.length === 0) return []
+  const time = <T>(name: string, operation: () => Promise<T>) =>
+    log ? log.tracker.time(name, operation) : operation()
 
   const eventIds = eventRows.map((event) => event.id)
   const recurringEventIds = eventRows.filter((event) => event.isRecurring).map((event) => event.id)
 
   const [eventTypesData, flyersData, exceptionsData] = await Promise.all([
-    log.tracker.time("db.eventTypes", () =>
+    time("db.eventTypes", () =>
       loadInBatches(eventIds, (batch) =>
         db.select().from(eventToTypes).where(inArray(eventToTypes.eventId, batch))
       )
     ),
-    log.tracker.time("db.flyers", () =>
+    time("db.flyers", () =>
       loadInBatches(eventIds, (batch) =>
         db.select().from(eventFlyers)
           .where(inArray(eventFlyers.eventId, batch))
@@ -57,11 +59,8 @@ export async function loadEventRelations(
       )
     ),
     recurringEventIds.length > 0
-      ? log.tracker.time("db.exceptions", () =>
-          loadInBatches(recurringEventIds, (batch) =>
-            db.select().from(eventExceptions)
-              .where(inArray(eventExceptions.eventId, batch))
-          )
+      ? time("db.exceptions", () =>
+          loadEventExceptions(db, recurringEventIds)
         )
       : Promise.resolve([]),
   ])
@@ -93,4 +92,11 @@ export async function loadEventRelations(
     flyers: flyersMap.get(event.id) || [],
     exceptions: exceptionsMap.get(event.id) || [],
   }))
+}
+
+/** The calendar feed needs exceptions without fetching unrelated types and flyers. */
+export function loadEventExceptions(db: Database, eventIds: string[]): Promise<EventException[]> {
+  return loadInBatches(eventIds, (batch) =>
+    db.select().from(eventExceptions).where(inArray(eventExceptions.eventId, batch))
+  )
 }

@@ -1,4 +1,4 @@
-import { calendarDayDifference, addCalendarDays } from "./date-only"
+import { calendarDayDifference, addCalendarDays, isDateOnly } from "./date-only"
 import type { Event } from "@/lib/db/schema"
 import type { WeeklyPattern, MonthlyPattern } from "@/lib/types/recurrence"
 
@@ -271,4 +271,11 @@ export function serializeMonthlyPatternValue(pattern: MonthlyPattern): string {
     week: pattern.weekOfMonth,
     day: pattern.dayOfWeek,
   })
+}
+
+/** Exceptions remain attached only to dates that still belong to the edited series. */
+export function isOccurrenceDate(event: Event, value: string): boolean {
+  if (!isDateOnly(value)) return false
+  const day = parseLocalDate(value)
+  return generateOccurrenceDates(event, day, day).includes(value)
 }
