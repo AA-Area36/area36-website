@@ -1,5 +1,6 @@
+import { recurringOverlapsStart } from "@/lib/events/recurring-window"
 import { getDb, schema } from "@/lib/db"
-import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, or } from "drizzle-orm"
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, or } from "drizzle-orm"
 import type { EventException, EventFlyer, EventType } from "@/lib/db/schema"
 import type { EventWithRelations } from "@/lib/types/recurrence"
 import { getEventsForDateRange } from "@/lib/utils/event-queries"
@@ -52,7 +53,7 @@ export async function getDistrictPublicEvents(districtNumber: number) {
             ),
             and(
               eq(schema.events.isRecurring, true),
-              or(isNull(schema.events.recurUntil), gte(schema.events.recurUntil, todayStr))
+              recurringOverlapsStart(todayStr)
             )
           )
         )

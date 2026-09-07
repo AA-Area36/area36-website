@@ -1,5 +1,7 @@
 "use client"
 
+import { toast } from "sonner"
+
 import * as React from "react"
 import { Button } from "@/components/ui/button"
 import {
@@ -64,23 +66,20 @@ export function ManageOccurrencesDialog({ event, exceptions }: ManageOccurrences
     })
   }, [event, exceptionMap])
 
-  const handleCancel = async (occurrenceDate: string) => {
-    setLoadingAction(`cancel-${occurrenceDate}`)
-    await cancelOccurrence(event.id, occurrenceDate)
-    setLoadingAction(null)
+  const runAction = async (key: string, action: () => Promise<{ success: boolean; error?: string }>) => {
+    setLoadingAction(key)
+    try {
+      const result = await action()
+      if (!result.success) toast.error(result.error || "The occurrence could not be updated.")
+    } catch {
+      toast.error("The occurrence could not be updated. Please try again.")
+    } finally {
+      setLoadingAction(null)
+    }
   }
-
-  const handleRestore = async (occurrenceDate: string) => {
-    setLoadingAction(`restore-${occurrenceDate}`)
-    await restoreOccurrence(event.id, occurrenceDate)
-    setLoadingAction(null)
-  }
-
-  const handleRevert = async (occurrenceDate: string) => {
-    setLoadingAction(`revert-${occurrenceDate}`)
-    await revertOccurrence(event.id, occurrenceDate)
-    setLoadingAction(null)
-  }
+  const handleCancel = (date: string) => runAction(`cancel-${date}`, () => cancelOccurrence(event.id, date))
+  const handleRestore = (date: string) => runAction(`restore-${date}`, () => restoreOccurrence(event.id, date))
+  const handleRevert = (date: string) => runAction(`revert-${date}`, () => revertOccurrence(event.id, date))
 
   const formatOccurrenceDate = (dateStr: string) => {
     const date = parseLocalDate(dateStr)

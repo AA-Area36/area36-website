@@ -833,11 +833,11 @@ function renderHtmlReport(data: ReportData) {
             <td style="padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
               <div style="font-weight: 600; color: #111827;">${escapeHtml(event.title)}</div>
               <div style="font-size: 13px; color: #6b7280; margin-top: 2px;">
-                ${formatEventDate(event.date, event.endDate)}
-                ${event.startTime ? ` at ${event.startTime}` : ""}
+                ${escapeHtml(formatEventDate(event.date, event.endDate))}
+                ${event.startTime ? ` at ${escapeHtml(event.startTime)}` : ""}
                 ${event.locationType !== "online" && event.address ? ` - ${escapeHtml(event.address)}` : ""}
               </div>
-              ${event.types.length > 0 ? `<div style="font-size: 12px; color: #1e40af; margin-top: 4px;">${event.types.join(", ")}</div>` : ""}
+              ${event.types.length > 0 ? `<div style="font-size: 12px; color: #1e40af; margin-top: 4px;">${event.types.map(escapeHtml).join(", ")}</div>` : ""}
             </td>
           </tr>
         `

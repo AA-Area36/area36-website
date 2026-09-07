@@ -34,7 +34,7 @@ describe("runSingleFlight", () => {
         ? { first: vi.fn().mockResolvedValue({ owner: args[1] }) }
         : { run: vi.fn().mockResolvedValue({ success: true }) },
     }))
-    getCloudflareContext.mockResolvedValue({ env: { DB: { prepare } } })
+    getCloudflareContext.mockResolvedValue({ env: { DB: { prepare } }, cf: { colo: "MSP" } })
     const task = vi.fn().mockResolvedValue("fresh")
 
     await expect(runSharedSingleFlight("lease-key", async () => null, task)).resolves.toBe("fresh")
@@ -48,7 +48,7 @@ describe("runSingleFlight", () => {
     const prepare = vi.fn(() => ({
       bind: () => ({ first: vi.fn().mockResolvedValue(null) }),
     }))
-    getCloudflareContext.mockResolvedValue({ env: { DB: { prepare } } })
+    getCloudflareContext.mockResolvedValue({ env: { DB: { prepare } }, cf: { colo: "MSP" } })
     const task = vi.fn().mockResolvedValue("fresh")
 
     await expect(runSharedSingleFlight(
@@ -64,10 +64,35 @@ describe("runSingleFlight", () => {
     const prepare = vi.fn(() => ({
       bind: () => ({ first: vi.fn().mockRejectedValue(new Error("D1 unavailable")) }),
     }))
-    getCloudflareContext.mockResolvedValue({ env: { DB: { prepare } } })
+    getCloudflareContext.mockResolvedValue({ env: { DB: { prepare } }, cf: { colo: "MSP" } })
     const task = vi.fn().mockResolvedValue("fresh")
 
     await expect(runSharedSingleFlight("d1-outage", async () => null, task)).resolves.toBe("fresh")
     expect(task).toHaveBeenCalledTimes(1)
+  })
+})
+
+
+describe("regional cache-fill coordination", () => {
+  it("uses distinct leases for independent regional caches, retaining same-region keys", async () => {
+    const leaseKeys: string[] = []
+    const prepare = vi.fn((sql: string) => ({
+      bind: (...args: unknown[]) => sql.includes("INSERT INTO cache_refresh_leases")
+        ? { first: async () => { leaseKeys.push(String(args[0])); return { owner: args[1] } } }
+        : { run: async () => ({ success: true }) },
+    }))
+    for (const colo of ["MSP", "ORD", "MSP"]) {
+      getCloudflareContext.mockResolvedValue({ env: { DB: { prepare } }, cf: { colo } })
+      await expect(runSharedSingleFlight("regional-key", async () => null, async () => colo)).resolves.toBe(colo)
+    }
+    expect(leaseKeys[0]).not.toBe(leaseKeys[1])
+    expect(leaseKeys[0]).toBe(leaseKeys[2])
+  })
+
+  it("never waits on a global lease when the serving region is unavailable", async () => {
+    const prepare = vi.fn()
+    getCloudflareContext.mockResolvedValue({ env: { DB: { prepare } } })
+    await expect(runSharedSingleFlight("unknown-region", async () => null, async () => "fresh")).resolves.toBe("fresh")
+    expect(prepare).not.toHaveBeenCalled()
   })
 })

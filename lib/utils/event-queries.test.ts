@@ -69,3 +69,18 @@ describe("district-compatible event range expansion", () => {
     expect(events.map((event) => event.date)).toEqual(["2026-07-13", "2026-07-27"])
   })
 })
+
+
+it("retains an ongoing multi-day final recurrence but not expired occurrences", () => {
+  const event = { ...recurringEvent(), date: "2026-09-01", endDate: "2026-09-05", recurrencePattern: "[2]", recurUntil: "2026-09-01", exceptions: [] }
+  expect(getEventsForDateRange([event], new Date(2026, 8, 3), new Date(2026, 8, 6)).map((row) => row.date)).toEqual(["2026-09-01"])
+  expect(getEventsForDateRange([event], new Date(2026, 8, 6), new Date(2026, 8, 8))).toEqual([])
+})
+
+it("includes an extended exception after the original duration and series end", () => {
+  const base = recurringEvent()
+  const event = { ...base, date: "2026-09-01", endDate: "2026-09-02", recurrencePattern: "[2]", recurUntil: "2026-09-01", exceptions: [{ ...base.exceptions![0], occurrenceDate: "2026-09-01", exceptionType: "modified" as const, endDate: "2026-09-10" }] }
+  const result = getEventsForDateRange([event], new Date(2026, 8, 8), new Date(2026, 8, 9))
+  expect(result).toMatchObject([{ date: "2026-09-01", endDate: "2026-09-10", isModified: true }])
+  expect(getEventsForDateRange([event], new Date(2026, 8, 11), new Date(2026, 8, 12))).toEqual([])
+})

@@ -1,5 +1,7 @@
 "use server"
 
+import { verifyRecaptcha } from "@/lib/security/recaptcha"
+
 import { getDb } from "@/lib/db"
 import { subscriptionDrives, driveSubmissions, type SubscriptionDrive, type DriveSubmission } from "@/lib/db/schema"
 import { deleteImage, uploadImage } from "@/lib/r2"
@@ -8,35 +10,10 @@ import { revalidatePath } from "next/cache"
 import { checkRateLimit, getClientIp } from "@/lib/security/rate-limit"
 import { persistUploadedObject } from "@/lib/storage/persist-upload"
 
-interface ReCaptchaResponse {
-  success: boolean
-  score?: number
-  action?: string
-  challenge_ts?: string
-  hostname?: string
-  "error-codes"?: string[]
-}
-
-const RECAPTCHA_SCORE_THRESHOLD = 0.5
 
 /**
  * Get reCAPTCHA secret key from Cloudflare context or process.env
  */
-async function getRecaptchaSecretKey(): Promise<string | undefined> {
-  // Try Cloudflare context first (for deployed environment)
-  try {
-    const { getCloudflareContext } = await import("@opennextjs/cloudflare")
-    const { env } = await getCloudflareContext({ async: true })
-    if (env.RECAPTCHA_SECRET_KEY) {
-      return env.RECAPTCHA_SECRET_KEY
-    }
-  } catch {
-    // Not in Cloudflare environment
-  }
-
-  // Fall back to process.env (for local development)
-  return process.env.RECAPTCHA_SECRET_KEY
-}
 
 export async function getActiveDrive(): Promise<SubscriptionDrive | null> {
   const db = await getDb()
@@ -142,66 +119,8 @@ export async function submitDriveConfirmation(formData: FormData) {
     }
   }
 
-  // Skip reCAPTCHA verification in development/localhost
-  const isDevelopment = process.env.NODE_ENV === "development"
-  
-  if (!isDevelopment) {
-    if (!recaptchaToken) {
-      return {
-        success: false,
-        error: "reCAPTCHA verification failed. Please try again.",
-      }
-    }
-
-    // Verify reCAPTCHA token
-    const secretKey = await getRecaptchaSecretKey()
-    if (!secretKey) {
-      console.error("RECAPTCHA_SECRET_KEY is not configured")
-      return {
-        success: false,
-        error: "Server configuration error. Please try again later.",
-      }
-    }
-
-    try {
-      const verifyResponse = await fetch("https://www.google.com/recaptcha/api/siteverify", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams({
-          secret: secretKey,
-          response: recaptchaToken,
-        }),
-      })
-
-      const verifyResult: ReCaptchaResponse = await verifyResponse.json()
-      console.log("reCAPTCHA verify result:", verifyResult)
-
-      if (!verifyResult.success) {
-        console.error("reCAPTCHA verification failed:", verifyResult["error-codes"])
-        return {
-          success: false,
-          error: `reCAPTCHA verification failed: ${verifyResult["error-codes"]?.join(", ") || "unknown error"}`,
-        }
-      }
-
-      // Check the score (v3 returns a score from 0.0 to 1.0)
-      if (verifyResult.score !== undefined && verifyResult.score < RECAPTCHA_SCORE_THRESHOLD) {
-        console.warn("reCAPTCHA score too low:", verifyResult.score)
-        return {
-          success: false,
-          error: "Suspicious activity detected. Please try again or contact us directly.",
-        }
-      }
-    } catch (error) {
-      console.error("reCAPTCHA verification error:", error)
-      return {
-        success: false,
-        error: "reCAPTCHA verification failed. Please try again.",
-      }
-    }
-  }
+  const recaptcha = await verifyRecaptcha(recaptchaToken, "submit_drive_confirmation")
+  if (!recaptcha.success) return { success: false, error: recaptcha.error }
 
   try {
     // Get active drive

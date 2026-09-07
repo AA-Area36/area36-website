@@ -135,6 +135,10 @@ function canStorePublicHtml(response: Response): boolean {
 
 function withCacheStatus(response: Response, status: "HIT" | "MISS"): Response {
   const headers = new Headers(response.headers)
+  // Every navigation must reach this Worker to select the current revision.
+  // Only our explicitly stored Cache API copy receives the five-minute TTL.
+  headers.set("cache-control", "public, max-age=0, must-revalidate")
+  headers.set("cloudflare-cdn-cache-control", "no-store")
   headers.set("x-area36-cache", status)
   return new Response(response.body, {
     status: response.status,
@@ -156,8 +160,30 @@ export async function serveWithPublicHtmlCache({
   cache: CacheStore
   next: () => Promise<Response>
 }): Promise<Response> {
-  const cacheKey = await getConfiguredPublicHtmlCacheKey(request, env)
-  if (!cacheKey) return next()
+  let configuredKey: Request | null
+  try {
+    configuredKey = await getConfiguredPublicHtmlCacheKey(request, env)
+  } catch {
+    return next()
+  }
+  if (!configuredKey) return next()
+
+  // Do not memoize this read: triggers advance the singleton atomically with
+  // every public-content mutation, including deletes and unpublishing.
+  let revision: number | undefined
+  try {
+    const row = await env.DB?.prepare(
+      "SELECT revision FROM public_html_revision WHERE id = 1"
+    ).first<{ revision: number }>()
+    revision = row?.revision
+  } catch {
+    // A missing migration or unavailable D1 must not serve an old snapshot.
+    return next()
+  }
+  if (!Number.isSafeInteger(revision) || revision === undefined || revision < 0) return next()
+  const cacheUrl = new URL(configuredKey.url)
+  cacheUrl.searchParams.set("__a36_cache_revision", String(revision))
+  const cacheKey = new Request(cacheUrl, configuredKey)
 
   const cached = await cache.match(cacheKey)
   if (cached) return withCacheStatus(cached, "HIT")
@@ -178,5 +204,5 @@ export async function serveWithPublicHtmlCache({
     headers,
   })
   ctx.waitUntil(cache.put(cacheKey, cacheableResponse.clone()))
-  return cacheableResponse
+  return withCacheStatus(cacheableResponse, "MISS")
 }

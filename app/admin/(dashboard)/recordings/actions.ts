@@ -19,7 +19,7 @@ export async function getRecordingFolders() {
 
   const db = await log.tracker.time("db.connect", () => getDb())
   const result = await log.tracker.time("db.select", () =>
-    db.select().from(recordingFolders).orderBy(recordingFolders.folderName)
+    db.select({ id: recordingFolders.id, driveId: recordingFolders.driveId, folderName: recordingFolders.folderName }).from(recordingFolders).orderBy(recordingFolders.folderName)
   )
   log.tracker.finish(200)
   return result

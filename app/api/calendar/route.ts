@@ -1,3 +1,4 @@
+import { fromZonedTime } from "date-fns-tz"
 import { getDb } from "@/lib/db"
 import { events, eventExceptions, type Event, type EventException } from "@/lib/db/schema"
 import { eq, asc, gte, and, or, isNull, inArray } from "drizzle-orm"
@@ -121,8 +122,10 @@ export function generateRRule(event: Event): string | null {
 
     if (event.recurUntil) {
       // UNTIL must be in UTC format: YYYYMMDDTHHMMSSZ
-      const untilDate = formatICalDate(event.recurUntil)
-      rrule += event.timeTBD ? `;UNTIL=${untilDate}` : `;UNTIL=${untilDate}T235959Z`
+      const untilDate = event.timeTBD
+        ? formatICalDate(event.recurUntil)
+        : fromZonedTime(`${event.recurUntil}T23:59:59`, event.timezone).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z")
+      rrule += `;UNTIL=${untilDate}`
     }
 
     return rrule
@@ -143,8 +146,10 @@ export function generateRRule(event: Event): string | null {
     }
 
     if (event.recurUntil) {
-      const untilDate = formatICalDate(event.recurUntil)
-      rrule += event.timeTBD ? `;UNTIL=${untilDate}` : `;UNTIL=${untilDate}T235959Z`
+      const untilDate = event.timeTBD
+        ? formatICalDate(event.recurUntil)
+        : fromZonedTime(`${event.recurUntil}T23:59:59`, event.timezone).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z")
+      rrule += `;UNTIL=${untilDate}`
     }
 
     return rrule

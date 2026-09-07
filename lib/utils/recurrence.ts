@@ -1,3 +1,4 @@
+import { calendarDayDifference, addCalendarDays } from "./date-only"
 import type { Event } from "@/lib/db/schema"
 import type { WeeklyPattern, MonthlyPattern } from "@/lib/types/recurrence"
 
@@ -106,18 +107,14 @@ export function formatDate(date: Date): string {
  */
 export function getEventDurationDays(event: Event): number {
   if (!event.endDate) return 0
-  const start = parseLocalDate(event.date)
-  const end = parseLocalDate(event.endDate)
-  return Math.floor((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000))
+  return calendarDayDifference(event.date, event.endDate)
 }
 
 /**
  * Add days to a date string
  */
 export function addDaysToDate(dateStr: string, days: number): string {
-  const date = parseLocalDate(dateStr)
-  date.setDate(date.getDate() + days)
-  return formatDate(date)
+  return addCalendarDays(dateStr, days)
 }
 
 /**

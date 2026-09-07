@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { Calendar, HelpCircle, Plus } from "lucide-react"
 import { EventsClient } from "./events-client"
 import { getAnnualCalendarFiles, type CalendarFile } from "./calendar-file-actions"
 import type { DisplayEvent } from "@/lib/types/recurrence"
@@ -77,20 +78,53 @@ export function EventsLoader({ hero }: EventsLoaderProps) {
         />
       )
     }
-    return <EventsLoading />
+    return <EventsLoading hero={hero} />
   }
 
   return <EventsClient events={events} calendarFiles={calendarFiles} hero={hero} />
 }
 
-function EventsLoading() {
+function EventsLoading({ hero }: { hero: EventsHeroContent }) {
   return (
-    <div
-      className="flex-1 flex items-center justify-center"
-      role="status"
-      aria-live="polite"
-    >
-      <div className="animate-pulse text-muted-foreground">Loading events...</div>
+    <div aria-busy="true">
+      <section className="bg-gradient-to-b from-primary/5 to-background py-16 sm:py-20" aria-labelledby="events-heading">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h1 id="events-heading" className="text-4xl font-bold text-foreground sm:text-5xl">{hero.title}</h1>
+              <p className="mt-4 max-w-2xl text-lg text-muted-foreground">{hero.description}</p>
+            </div>
+            <div className="flex flex-wrap gap-3" aria-hidden="true">
+              <Button disabled variant="outline"><HelpCircle className="mr-2 h-4 w-4" />How to Submit</Button>
+              <Button disabled><Plus className="mr-2 h-4 w-4" />Submit Event</Button>
+              <Button disabled variant="outline"><Calendar className="mr-2 h-4 w-4" />Subscribe</Button>
+            </div>
+          </div>
+        </div>
+      </section>
+      <div className="border-b border-border bg-muted/30 py-4" aria-hidden="true">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 sm:flex-row sm:items-center sm:px-6 lg:px-8">
+          <div className="h-9 w-full max-w-sm flex-1 rounded-md bg-muted" />
+          <div className="h-9 w-full rounded-md bg-muted sm:w-44" />
+          <div className="h-9 w-full rounded-md bg-muted sm:w-44" />
+          <div className="h-9 w-full rounded-md bg-muted sm:w-52" />
+        </div>
+      </div>
+      <section className="py-8 sm:py-12">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <p className="flex h-16 items-center justify-center border-b border-border p-4 text-center text-muted-foreground" role="status" aria-live="polite">Loading events...</p>
+            <div className="grid grid-cols-7 border-b border-border bg-muted/30" aria-hidden="true">
+              {Array.from({ length: 7 }, (_, index) => <div key={index} className="h-9" />)}
+            </div>
+            <div className="grid min-h-[36rem] grid-cols-7" aria-hidden="true">
+              {Array.from({ length: 42 }, (_, index) => (
+                <div key={index} className="min-h-24 border-b border-r border-border bg-muted/10" />
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   )
 }

@@ -98,7 +98,7 @@ function QuickAccessCard({
       <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
         <Icon className="h-6 w-6" aria-hidden="true" />
       </div>
-      <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+      <h2 className="text-lg font-semibold text-foreground">{title}</h2>
       <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{description}</p>
       <ArrowRight
         className="mt-4 h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-primary"

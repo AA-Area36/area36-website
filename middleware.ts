@@ -78,13 +78,19 @@ export function middleware(request: NextRequest) {
         const { env } = await mod.getCloudflareContext({ async: true })
         return await getDistrictSiteForMiddleware(env, site.districtNumber)
       } catch {
-        return null
+        return "unavailable" as const
       }
     })()
 
     // IMPORTANT: Middleware must be sync. Next.js allows returning a Promise from middleware.
     // We'll return a Promise chain here to keep the rest of the logic intact.
     return maybeConfigPromise.then((config) => {
+      if (config === "unavailable") {
+        return new NextResponse("District site temporarily unavailable. Please try again shortly.", {
+          status: 503,
+          headers: { "Retry-After": "30", "Cache-Control": "no-store", "x-request-id": requestId },
+        })
+      }
       if (!config || !config.enabled) {
         const r = NextResponse.redirect(`https://area36.org/districts`, 302)
         r.headers.set("x-request-id", requestId)

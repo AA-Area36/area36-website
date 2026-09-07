@@ -29,7 +29,7 @@ The suite currently verifies these high-risk areas:
   preview MIME handling.
 - Registered recording-folder ancestry, including year subfolders, locked
   boundaries, and cyclic/unregistered trees.
-- Shared D1 rate-limit behavior, production fail-closed handling, and cleanup.
+- Shared D1 rate-limit behavior, idempotent retries, nonproduction isolate fallback and production fail-closed behavior, and cleanup.
 - Authentication redirect host allowlisting and local-admin bypass boundaries.
 - HTTPS and hosted-district middleware routing.
 - Event recurrence expansion, ICS timing, modified multi-day occurrences,
@@ -134,7 +134,7 @@ The intended merge gate is:
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm lint -- --max-warnings=0
+pnpm lint
 pnpm typecheck
 pnpm test:run
 pnpm build

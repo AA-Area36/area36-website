@@ -1,6 +1,11 @@
 import type { DisplayEvent } from "@/lib/types/recurrence"
 import type { DistrictDirectoryEntry } from "@/lib/constants/district-directory"
 
+// One-time schedule changes for directory-generated district meetings.
+const MEETING_DATE_OVERRIDES: Record<string, string> = {
+  "14:2026-09-07": "2026-09-14",
+}
+
 const WEEKDAY_TO_INDEX: Record<string, number> = {
   sunday: 0,
   monday: 1,
@@ -99,8 +104,13 @@ export function buildDistrictMonthlyMeetingOccurrences(
     const monthIndex0 = cursor.getMonth()
 
     for (const { district, pattern } of districtPatterns) {
-      const meetingDate = getNthWeekdayOfMonth(year, monthIndex0, pattern.weekOfMonth, pattern.dayOfWeek)
-      if (!meetingDate) continue
+      const scheduledDate = getNthWeekdayOfMonth(year, monthIndex0, pattern.weekOfMonth, pattern.dayOfWeek)
+      if (!scheduledDate) continue
+      const scheduledDateStr = formatDateYmd(scheduledDate)
+      const overrideDate = MEETING_DATE_OVERRIDES[`${district.number}:${scheduledDateStr}`]
+      const meetingDate = overrideDate
+        ? new Date(`${overrideDate}T00:00:00`)
+        : scheduledDate
       if (meetingDate < rangeStart || meetingDate > rangeEnd) continue
 
       const dateStr = formatDateYmd(meetingDate)
@@ -114,6 +124,7 @@ export function buildDistrictMonthlyMeetingOccurrences(
 
       const descriptionParts: string[] = []
       descriptionParts.push(`${district.name} monthly meeting.`)
+      if (overrideDate) descriptionParts.push(`Rescheduled from ${scheduledDateStr} to ${overrideDate}.`)
       if (district.meetingNote) descriptionParts.push(district.meetingNote)
       if (district.dcmEmail) descriptionParts.push(`Questions: ${district.dcmEmail}`)
       const description = descriptionParts.join("\n")
@@ -121,7 +132,7 @@ export function buildDistrictMonthlyMeetingOccurrences(
       const parentEventId = `district-meeting:${district.number}`
 
       results.push({
-        id: `${parentEventId}:${dateStr}`,
+        id: `${parentEventId}:${scheduledDateStr}`,
         isRecurringInstance: true,
         parentEventId,
         title: `${district.name} Monthly Meeting`,
@@ -142,6 +153,7 @@ export function buildDistrictMonthlyMeetingOccurrences(
         meetingLinkTBD: locationType !== "in-person",
         submitterEmail: "",
         isRecurring: true,
+        isModified: !!overrideDate,
         recurrenceDescription: `Monthly on ${pattern.label}`,
         recurUntil: null,
       })

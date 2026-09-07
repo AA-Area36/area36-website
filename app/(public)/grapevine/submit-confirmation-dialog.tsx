@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState, useTransition } from "react"
+import { useState, useTransition } from "react"
 import { useGoogleReCaptcha } from "react-google-recaptcha-v3"
 import {
   Dialog,
@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Upload, Loader2, CheckCircle, Shield, ImageIcon } from "lucide-react"
+import { Upload, Loader2, CheckCircle, Shield } from "lucide-react"
 import { districtOptions } from "@/lib/constants/districts"
 import { submitDriveConfirmation } from "./actions"
 
@@ -25,7 +25,7 @@ export function SubmitConfirmationDialog() {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [errorField, setErrorField] = useState<string | null>(null)
   const { executeRecaptcha } = useGoogleReCaptcha()
 
   const [formData, setFormData] = useState({
@@ -42,41 +42,62 @@ export function SubmitConfirmationDialog() {
       // Validate file type
       const allowedTypes = ["image/jpeg", "image/png", "image/webp"]
       if (!allowedTypes.includes(file.type)) {
+        setSelectedFile(null)
+        e.target.value = ""
+        setErrorField("confirmationImage")
         setError("Please upload a JPG, PNG, or WebP image.")
         return
       }
 
       // Validate file size (10MB)
       if (file.size > 10 * 1024 * 1024) {
+        setSelectedFile(null)
+        e.target.value = ""
+        setErrorField("confirmationImage")
         setError("File too large. Maximum size is 10MB.")
         return
       }
 
       setSelectedFile(file)
       setError(null)
+      setErrorField(null)
+    } else {
+      setSelectedFile(null)
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    setErrorField(null)
 
     if (!formData.district) {
+      setErrorField("district")
       setError("Please select a district.")
       return
     }
 
-    if (!formData.subscriptionCount || parseInt(formData.subscriptionCount, 10) < 1) {
+    if (!formData.subscriptionCount || !Number.isInteger(Number(formData.subscriptionCount)) || Number(formData.subscriptionCount) < 1 || Number(formData.subscriptionCount) > 1000) {
+      setErrorField("subscriptionCount")
       setError("Please enter a valid subscription count.")
       return
     }
 
+    const emailInput = e.currentTarget.querySelector<HTMLInputElement>("#submitterContact")
+    if (emailInput && !emailInput.validity.valid) {
+      setErrorField("submitterContact")
+      setError("Please enter a valid email address.")
+      return
+    }
+
     if (!selectedFile) {
+      setErrorField("confirmationImage")
       setError("Please upload a confirmation image.")
       return
     }
 
     if (!formData.privacyAcknowledged) {
+      setErrorField("privacyAcknowledged")
       setError("Please acknowledge the privacy notice.")
       return
     }
@@ -121,6 +142,7 @@ export function SubmitConfirmationDialog() {
       })
       setSelectedFile(null)
       setError(null)
+      setErrorField(null)
       setSuccess(false)
     }
   }
@@ -152,7 +174,7 @@ export function SubmitConfirmationDialog() {
             </DialogFooter>
           </>
         ) : (
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} noValidate aria-describedby="drive-required-instructions">
             <DialogHeader>
               <DialogTitle>Submit Subscription Confirmation</DialogTitle>
               <DialogDescription>
@@ -160,8 +182,9 @@ export function SubmitConfirmationDialog() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
+              <p id="drive-required-instructions" className="text-sm text-muted-foreground">Fields marked * are required.</p>
               {error && (
-                <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+                <div id="drive-error" role="alert" className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
                   {error}
                 </div>
               )}
@@ -172,7 +195,7 @@ export function SubmitConfirmationDialog() {
                   value={formData.district}
                   onValueChange={(value) => setFormData((prev) => ({ ...prev, district: value }))}
                 >
-                  <SelectTrigger id="district">
+                  <SelectTrigger id="district" aria-required="true" aria-invalid={errorField === "district"} aria-describedby={errorField === "district" ? "drive-error" : undefined}>
                     <SelectValue placeholder="Select your district" />
                   </SelectTrigger>
                   <SelectContent>
@@ -189,6 +212,10 @@ export function SubmitConfirmationDialog() {
                 <Label htmlFor="subscriptionCount">Number of Subscriptions *</Label>
                 <Input
                   id="subscriptionCount"
+                  required
+                  aria-required="true"
+                  aria-invalid={errorField === "subscriptionCount"}
+                  aria-describedby={errorField === "subscriptionCount" ? "drive-error" : undefined}
                   type="number"
                   min="1"
                   max="1000"
@@ -203,6 +230,8 @@ export function SubmitConfirmationDialog() {
                 <Label htmlFor="submitterContact">Email (optional)</Label>
                 <Input
                   id="submitterContact"
+                  aria-invalid={errorField === "submitterContact"}
+                  aria-describedby={errorField === "submitterContact" ? "drive-error" : undefined}
                   type="email"
                   placeholder="your@email.com"
                   value={formData.submitterContact}
@@ -215,37 +244,30 @@ export function SubmitConfirmationDialog() {
               </div>
 
               <div className="space-y-2">
-                <Label>Confirmation Image *</Label>
-                <div
-                  className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <input
-                    ref={fileInputRef}
+                <Label htmlFor="confirmationImage">Confirmation Image *</Label>
+                <div className="border-2 border-dashed border-border rounded-lg p-6 space-y-3">
+                  <Input
+                    id="confirmationImage"
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
+                    required
+                    disabled={isPending}
                     onChange={handleFileChange}
-                    className="hidden"
+                    aria-invalid={errorField === "confirmationImage"}
+                    aria-describedby={`confirmation-image-help${errorField === "confirmationImage" ? " drive-error" : ""}`}
+                    className="h-auto w-full min-w-0"
                   />
-                  {selectedFile ? (
-                    <div className="space-y-2">
-                      <ImageIcon className="h-8 w-8 mx-auto text-primary" />
-                      <p className="text-sm font-medium">{selectedFile.name}</p>
-                      <p className="text-xs text-muted-foreground">Click to change</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <Upload className="h-8 w-8 mx-auto text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">Click to upload</p>
-                      <p className="text-xs text-muted-foreground">JPG, PNG, or WebP (max 10MB)</p>
-                    </div>
-                  )}
+                  <p id="confirmation-image-help" className="text-xs text-muted-foreground">JPG, PNG, or WebP (max 10MB)</p>
                 </div>
               </div>
 
               <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
                 <Checkbox
                   id="privacyAcknowledged"
+                  required
+                  aria-required="true"
+                  aria-invalid={errorField === "privacyAcknowledged"}
+                  aria-describedby={errorField === "privacyAcknowledged" ? "drive-error" : undefined}
                   checked={formData.privacyAcknowledged}
                   onCheckedChange={(checked) =>
                     setFormData((prev) => ({ ...prev, privacyAcknowledged: checked === true }))

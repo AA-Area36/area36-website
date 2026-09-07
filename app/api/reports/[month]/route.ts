@@ -55,7 +55,8 @@ export async function GET(
   return new NextResponse(object.body, {
     headers: {
       "Content-Type": contentType,
-      "Cache-Control": "public, max-age=300",
+      "Cloudflare-CDN-Cache-Control": "no-store",
+      "Cache-Control": "private, no-store, max-age=0",
     },
   })
 }

@@ -74,3 +74,23 @@ describe("area event deletion", () => {
     expect(invalidateEventCaches).toHaveBeenCalled()
   })
 })
+
+describe("event mutation validation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    auth.mockResolvedValue({ user: { email: "admin@example.com" } })
+  })
+
+  it.each([
+    { date: "2026-02-31" },
+    { endDate: "2026-08-31" },
+    { startTime: '<img src=x onerror="alert(1)">' },
+    { types: ["<b>injected</b>"] },
+  ])("rejects malformed admin edits before database access: %j", async (changes) => {
+    const { updateEvent, updateRecurringEvent } = await import("./actions")
+    const data = { title: "Synthetic event", date: "2026-09-01", timezone: "America/Chicago", locationType: "in-person", types: ["Meeting"], description: "Test", ...changes }
+    expect(await updateEvent("event-1", data as Parameters<typeof updateEvent>[1])).toMatchObject({ success: false })
+    expect(await updateRecurringEvent("event-1", { ...data, scope: "series" } as Parameters<typeof updateRecurringEvent>[1])).toMatchObject({ success: false })
+    expect(getDb).not.toHaveBeenCalled()
+  })
+})

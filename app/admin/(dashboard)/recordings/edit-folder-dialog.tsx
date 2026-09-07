@@ -10,7 +10,7 @@ import { updateRecordingFolder } from "./actions"
 import type { RecordingFolder } from "@/lib/db/schema"
 
 interface EditFolderDialogProps {
-  folder: RecordingFolder
+  folder: Pick<RecordingFolder, "id" | "driveId" | "folderName">
 }
 
 export function EditFolderDialog({ folder }: EditFolderDialogProps) {

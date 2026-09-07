@@ -1,3 +1,4 @@
+import { recurringOverlapsStart } from "@/lib/events/recurring-window"
 import { NextResponse } from "next/server"
 import { getDb } from "@/lib/db"
 import {
@@ -5,7 +6,7 @@ import {
   eventTypes as allowedEventTypes,
   type EventType,
 } from "@/lib/db/schema"
-import { and, eq, gte, isNull, lte, or } from "drizzle-orm"
+import { and, eq, gte, lte, or } from "drizzle-orm"
 import { getEventsForDateRange } from "@/lib/utils/event-queries"
 import type { DisplayEvent } from "@/lib/types/recurrence"
 import { createRequestLogger } from "@/lib/logger"
@@ -85,7 +86,7 @@ export async function GET(request: Request) {
                 ),
                 and(
                   eq(events.isRecurring, true),
-                  or(isNull(events.recurUntil), gte(events.recurUntil, window.start))
+                  recurringOverlapsStart(window.start)
                 )
               )
             )

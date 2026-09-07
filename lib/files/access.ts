@@ -3,7 +3,8 @@
 
 import { isFileUnlocked } from "@/lib/files/session"
 import { getDb } from "@/lib/db"
-import { fileMetadata } from "@/lib/db/schema"
+import { isFolderUnlocked } from "@/lib/recordings/session"
+import { fileMetadata, recordingFolders } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import type { DriveFile, GDriveCredentials } from "@/lib/gdrive/types"
 
@@ -54,14 +55,21 @@ async function isWithinAllowedDriveRoots(
 ): Promise<boolean> {
   if (allowedRootIds.length === 0) return false
 
+  const db = await getDb()
+  const folders = await db.select({ driveId: recordingFolders.driveId }).from(recordingFolders)
+  const registered = new Set(folders.map((folder) => folder.driveId))
+  let withinRoot = false
   const allowedRoots = new Set(allowedRootIds)
   const visited = new Set<string>([file.id])
   const frontier = (file.parents ?? []).map((id) => ({ id, depth: 1 }))
 
   while (frontier.length > 0 && visited.size <= MAX_ANCESTRY_NODES) {
     const current = frontier.shift()!
-    if (allowedRoots.has(current.id)) return true
-    if (current.depth > MAX_ANCESTRY_DEPTH || visited.has(current.id)) continue
+    // A public root never overrides a registered recording-folder lock.
+    if (registered.has(current.id) && !(await isFolderUnlocked(current.id))) return false
+    if (allowedRoots.has(current.id)) withinRoot = true
+    if (current.depth > MAX_ANCESTRY_DEPTH) return false
+    if (visited.has(current.id)) continue
 
     visited.add(current.id)
     const parent = await getDriveFileMetadata(credentials, current.id)
@@ -70,7 +78,8 @@ async function isWithinAllowedDriveRoots(
     }
   }
 
-  return false
+  // Fail closed if the bounded traversal could not establish all boundaries.
+  return withinRoot && frontier.length === 0
 }
 
 /**

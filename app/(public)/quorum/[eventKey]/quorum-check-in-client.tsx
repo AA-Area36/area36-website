@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { useMemo, useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import { Controller, useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -18,6 +18,9 @@ import { quorumRegistrationSchema, type QuorumRegistrationInput } from "@/lib/sc
 import { submitQuorumRegistration } from "./actions"
 
 export function QuorumCheckInClient({ event }: { event: PublicQuorumEvent }) {
+  const eventKey = event.eventKey
+  const submissionInFlight = useRef(false)
+  const errorSummaryRef = useRef<HTMLDivElement>(null)
   const [submitted, setSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -40,6 +43,11 @@ export function QuorumCheckInClient({ event }: { event: PublicQuorumEvent }) {
       recaptchaToken: "",
     },
   })
+  const fieldErrorProps = (name: keyof QuorumRegistrationInput, id: string) => ({
+    "aria-required": true as const,
+    "aria-invalid": !!form.formState.errors[name],
+    "aria-describedby": form.formState.errors[name] ? `${id}-error` : undefined,
+  })
   // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch drives conditional role fields.
   const servicePosition = form.watch("servicePosition")
   const needsPositionDetail = servicePosition === "area_officer" || servicePosition === "area_committee_chair"
@@ -53,23 +61,50 @@ export function QuorumCheckInClient({ event }: { event: PublicQuorumEvent }) {
     [event.eventDate],
   )
 
-  const onSubmit = form.handleSubmit((data) => {
+  const focusErrors = () => {
+    requestAnimationFrame(() => errorSummaryRef.current?.focus())
+  }
+
+  const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (submissionInFlight.current) return
+    submissionInFlight.current = true
     setSubmitError(null)
+
+    // Validate user-entered fields before requesting a security token. The
+    // server schema also requires the token, which is acquired only on submit.
+    const fields = (Object.keys(form.getValues()) as (keyof QuorumRegistrationInput)[])
+      .filter((name) => name !== "recaptchaToken")
+    if (!(await form.trigger(fields))) {
+      submissionInFlight.current = false
+      focusErrors()
+      return
+    }
+
     startTransition(async () => {
       try {
-        const token = executeRecaptcha ? await executeRecaptcha("quorum_check_in") : "development"
-        const result = await submitQuorumRegistration(event.eventKey, { ...data, recaptchaToken: token })
-        if (result.success) {
-          setSubmitted(true)
-          form.reset()
-        } else {
-          setSubmitError(result.error)
+        if (!executeRecaptcha) {
+          setSubmitError("Security verification is still loading. Please try again.")
+          return
         }
+        const token = await executeRecaptcha("quorum_check_in")
+        form.setValue("recaptchaToken", token)
+        await form.handleSubmit(async (data) => {
+          const result = await submitQuorumRegistration(eventKey, data)
+          if (result.success) {
+            setSubmitted(true)
+            form.reset()
+          } else {
+            setSubmitError(result.error)
+          }
+        }, focusErrors)()
       } catch {
         setSubmitError("We could not save your check-in. Please try again.")
+      } finally {
+        submissionInFlight.current = false
       }
     })
-  })
+  }
 
   if (submitted) {
     return (
@@ -122,10 +157,21 @@ export function QuorumCheckInClient({ event }: { event: PublicQuorumEvent }) {
                 </Button>
               </div>
             ) : (
-              <form onSubmit={onSubmit} className="space-y-8">
+              <form onSubmit={onSubmit} noValidate className="space-y-8" aria-describedby="quorum-required-instructions">
+                <p id="quorum-required-instructions" className="text-sm text-muted-foreground">All fields shown are required.</p>
+                {Object.keys(form.formState.errors).length > 0 && (
+                  <div ref={errorSummaryRef} tabIndex={-1} role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+                    <p className="font-semibold">Please correct the following before checking in:</p>
+                    <ul className="mt-2 list-disc space-y-1 pl-5">
+                      {Object.entries(form.formState.errors).map(([name, error]) => (
+                        <li key={name}>{error.message}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <FormSection number="01" title="Service representation">
                   <Field id="quorum-name" label="First and last name" error={form.formState.errors.name?.message}>
-                    <Input id="quorum-name" autoComplete="name" {...form.register("name")} />
+                    <Input id="quorum-name" autoComplete="name" required {...fieldErrorProps("name", "quorum-name")} {...form.register("name")} />
                   </Field>
                   <div className="grid gap-5 sm:grid-cols-2">
                     <Field id="quorum-district" label="District" error={form.formState.errors.district?.message}>
@@ -134,7 +180,7 @@ export function QuorumCheckInClient({ event }: { event: PublicQuorumEvent }) {
                         name="district"
                         render={({ field }) => (
                           <Select name={field.name} value={field.value} onValueChange={field.onChange}>
-                            <SelectTrigger id="quorum-district" className="h-10 w-full" onBlur={field.onBlur} aria-invalid={!!form.formState.errors.district}>
+                            <SelectTrigger id="quorum-district" className="h-10 w-full" onBlur={field.onBlur} {...fieldErrorProps("district", "quorum-district")} >
                               <SelectValue placeholder="Choose a district" />
                             </SelectTrigger>
                             <SelectContent>
@@ -147,7 +193,7 @@ export function QuorumCheckInClient({ event }: { event: PublicQuorumEvent }) {
                       />
                     </Field>
                     <Field id="quorum-home-group" label="Home group" error={form.formState.errors.homeGroup?.message}>
-                      <Input id="quorum-home-group" {...form.register("homeGroup")} />
+                      <Input id="quorum-home-group" required {...fieldErrorProps("homeGroup", "quorum-home-group")} {...form.register("homeGroup")} />
                     </Field>
                   </div>
                   <Field id="quorum-service-position" label="Service position" error={form.formState.errors.servicePosition?.message}>
@@ -156,7 +202,7 @@ export function QuorumCheckInClient({ event }: { event: PublicQuorumEvent }) {
                       name="servicePosition"
                       render={({ field }) => (
                         <Select name={field.name} value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger id="quorum-service-position" className="h-10 w-full" onBlur={field.onBlur} aria-invalid={!!form.formState.errors.servicePosition}>
+                          <SelectTrigger id="quorum-service-position" className="h-10 w-full" onBlur={field.onBlur} {...fieldErrorProps("servicePosition", "quorum-service-position")} >
                             <SelectValue placeholder="Choose a service position" />
                           </SelectTrigger>
                           <SelectContent>
@@ -173,7 +219,7 @@ export function QuorumCheckInClient({ event }: { event: PublicQuorumEvent }) {
                         label={servicePosition === "area_officer" ? "Area office" : "Committee name"}
                         error={form.formState.errors.positionDetail?.message}
                       >
-                        <Input id="quorum-position-detail" {...form.register("positionDetail")} />
+                        <Input id="quorum-position-detail" required {...fieldErrorProps("positionDetail", "quorum-position-detail")} {...form.register("positionDetail")} />
                       </Field>
                       <Field id="quorum-representation" label="Representation" error={form.formState.errors.representation?.message}>
                         <Controller
@@ -181,7 +227,7 @@ export function QuorumCheckInClient({ event }: { event: PublicQuorumEvent }) {
                           name="representation"
                           render={({ field }) => (
                             <Select name={field.name} value={field.value} onValueChange={field.onChange}>
-                              <SelectTrigger id="quorum-representation" className="h-10 w-full" onBlur={field.onBlur} aria-invalid={!!form.formState.errors.representation}>
+                              <SelectTrigger id="quorum-representation" className="h-10 w-full" onBlur={field.onBlur} {...fieldErrorProps("representation", "quorum-representation")} >
                                 <SelectValue placeholder="Choose representation" />
                               </SelectTrigger>
                               <SelectContent>
@@ -199,24 +245,24 @@ export function QuorumCheckInClient({ event }: { event: PublicQuorumEvent }) {
                 <FormSection number="02" title="Contact information">
                   <div className="grid gap-5 sm:grid-cols-2">
                     <Field id="quorum-email" label="Personal email" error={form.formState.errors.email?.message}>
-                      <Input id="quorum-email" type="email" autoComplete="email" {...form.register("email")} />
+                      <Input id="quorum-email" type="email" autoComplete="email" required {...fieldErrorProps("email", "quorum-email")} {...form.register("email")} />
                     </Field>
                     <Field id="quorum-phone" label="Phone number" error={form.formState.errors.phone?.message}>
-                      <Input id="quorum-phone" type="tel" autoComplete="tel" {...form.register("phone")} />
+                      <Input id="quorum-phone" type="tel" autoComplete="tel" required {...fieldErrorProps("phone", "quorum-phone")} {...form.register("phone")} />
                     </Field>
                   </div>
                   <Field id="quorum-street-address" label="Street address" error={form.formState.errors.streetAddress?.message}>
-                    <Input id="quorum-street-address" autoComplete="street-address" {...form.register("streetAddress")} />
+                    <Input id="quorum-street-address" autoComplete="street-address" required {...fieldErrorProps("streetAddress", "quorum-street-address")} {...form.register("streetAddress")} />
                   </Field>
                   <div className="grid gap-5 sm:grid-cols-[1fr_120px_140px]">
                     <Field id="quorum-city" label="City" error={form.formState.errors.city?.message}>
-                      <Input id="quorum-city" autoComplete="address-level2" {...form.register("city")} />
+                      <Input id="quorum-city" autoComplete="address-level2" required {...fieldErrorProps("city", "quorum-city")} {...form.register("city")} />
                     </Field>
                     <Field id="quorum-state" label="State" error={form.formState.errors.state?.message}>
-                      <Input id="quorum-state" autoComplete="address-level1" {...form.register("state")} />
+                      <Input id="quorum-state" autoComplete="address-level1" required {...fieldErrorProps("state", "quorum-state")} {...form.register("state")} />
                     </Field>
                     <Field id="quorum-zip" label="ZIP" error={form.formState.errors.zip?.message}>
-                      <Input id="quorum-zip" inputMode="numeric" autoComplete="postal-code" {...form.register("zip")} />
+                      <Input id="quorum-zip" inputMode="numeric" autoComplete="postal-code" required {...fieldErrorProps("zip", "quorum-zip")} {...form.register("zip")} />
                     </Field>
                   </div>
                 </FormSection>
@@ -231,7 +277,7 @@ export function QuorumCheckInClient({ event }: { event: PublicQuorumEvent }) {
                       name="newsletterDelivery"
                       render={({ field }) => (
                         <Select name={field.name} value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger id="quorum-newsletter-delivery" className="h-10 w-full" onBlur={field.onBlur} aria-invalid={!!form.formState.errors.newsletterDelivery}>
+                          <SelectTrigger id="quorum-newsletter-delivery" className="h-10 w-full" onBlur={field.onBlur} {...fieldErrorProps("newsletterDelivery", "quorum-newsletter-delivery")} >
                             <SelectValue placeholder="Choose a delivery option" />
                           </SelectTrigger>
                           <SelectContent>
@@ -273,5 +319,5 @@ function FormSection({ number, title, children }: { number: string; title: strin
 }
 
 function Field({ id, label, error, children }: { id: string; label: string; error?: string; children: React.ReactNode }) {
-  return <div className="space-y-2"><Label htmlFor={id}>{label} <span className="text-destructive">*</span></Label>{children}{error && <p className="text-sm text-destructive">{error}</p>}</div>
+  return <div className="space-y-2"><Label htmlFor={id}>{label} <span aria-hidden="true" className="text-destructive">*</span></Label>{children}{error && <p id={`${id}-error`} className="text-sm text-destructive">{error}</p>}</div>
 }

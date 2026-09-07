@@ -1,5 +1,7 @@
 "use server"
 
+import { verifyRecaptcha } from "@/lib/security/recaptcha"
+
 import { eq } from "drizzle-orm"
 import { getCloudflareContext } from "@opennextjs/cloudflare"
 import { getDb } from "@/lib/db"
@@ -11,76 +13,12 @@ import {
 } from "@/lib/schemas/corrections-tcp"
 import { checkRateLimit, getClientIp } from "@/lib/security/rate-limit"
 
-interface ReCaptchaResponse {
-  success: boolean
-  score?: number
-  action?: string
-  challenge_ts?: string
-  hostname?: string
-  "error-codes"?: string[]
-}
-
-const RECAPTCHA_SCORE_THRESHOLD = 0.5
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase()
 }
 
-async function getRecaptchaSecretKey(): Promise<string | undefined> {
-  try {
-    const { env } = await getCloudflareContext({ async: true })
-    if (env.RECAPTCHA_SECRET_KEY) {
-      return env.RECAPTCHA_SECRET_KEY
-    }
-  } catch {
-    // Not in Cloudflare environment
-  }
-  return process.env.RECAPTCHA_SECRET_KEY
-}
 
-async function verifyRecaptcha(token: string): Promise<{ success: boolean; error?: string }> {
-  const isDevelopment = process.env.NODE_ENV === "development"
-
-  if (isDevelopment) {
-    return { success: true }
-  }
-
-  if (!token) {
-    return { success: false, error: "reCAPTCHA token is missing. Please try again." }
-  }
-
-  const secretKey = await getRecaptchaSecretKey()
-
-  if (!secretKey) {
-    console.error("RECAPTCHA_SECRET_KEY is not configured")
-    return { success: false, error: "Server configuration error. Please try again later." }
-  }
-
-  try {
-    const verifyResponse = await fetch("https://www.google.com/recaptcha/api/siteverify", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ secret: secretKey, response: token }),
-    })
-
-    const verifyResult: ReCaptchaResponse = await verifyResponse.json()
-
-    if (!verifyResult.success) {
-      console.error("reCAPTCHA verification failed:", verifyResult["error-codes"])
-      return { success: false, error: "reCAPTCHA verification failed. Please try again." }
-    }
-
-    if (verifyResult.score !== undefined && verifyResult.score < RECAPTCHA_SCORE_THRESHOLD) {
-      console.warn("reCAPTCHA score too low:", verifyResult.score)
-      return { success: false, error: "Suspicious activity detected. Please try again." }
-    }
-
-    return { success: true }
-  } catch (error) {
-    console.error("reCAPTCHA verification error:", error)
-    return { success: false, error: "reCAPTCHA verification failed. Please try again." }
-  }
-}
 
 export async function submitCorrectionsContactForm(data: CorrectionsContactFormData) {
   const result = correctionsContactFormSchema.safeParse(data)
@@ -98,7 +36,7 @@ export async function submitCorrectionsContactForm(data: CorrectionsContactFormD
     return { success: false, error: "Too many submissions. Please try again later." }
   }
 
-  const recaptchaResult = await verifyRecaptcha(result.data.recaptchaToken)
+  const recaptchaResult = await verifyRecaptcha(result.data.recaptchaToken, "corrections_volunteer_form")
   if (!recaptchaResult.success) {
     return { success: false, error: recaptchaResult.error }
   }
@@ -107,7 +45,6 @@ export async function submitCorrectionsContactForm(data: CorrectionsContactFormD
 
   try {
     const db = await getDb()
-    const now = new Date().toISOString()
 
     const existing = await db
       .select({ id: correctionsContacts.id })
@@ -116,31 +53,7 @@ export async function submitCorrectionsContactForm(data: CorrectionsContactFormD
       .get()
 
     if (existing) {
-      await db
-        .update(correctionsContacts)
-        .set({
-          firstName: result.data.firstName.trim(),
-          lastName: result.data.lastName.trim(),
-          gender: result.data.gender.trim(),
-          streetAddress: result.data.streetAddress?.trim() || null,
-          city: result.data.city.trim(),
-          county: result.data.county?.trim() || null,
-          state: result.data.state?.trim() || null,
-          zipCode: result.data.zipCode?.trim() || null,
-          email: result.data.email.trim(),
-          emailNormalized: normalizedEmail,
-          sobrietyDate: result.data.sobrietyDate,
-          phonePrimary: result.data.phonePrimary?.trim() || null,
-          phoneSecondary: result.data.phoneSecondary?.trim() || null,
-          birthYear: Number(result.data.birthYear),
-          isSpanishSpeaking: result.data.isSpanishSpeaking,
-          otherLanguages: result.data.otherLanguages?.trim() || null,
-          homeGroup: result.data.homeGroup?.trim() || null,
-          notes: result.data.notes?.trim() || null,
-          active: true,
-          updatedAt: now,
-        })
-        .where(eq(correctionsContacts.id, existing.id))
+      return { success: true, message: "If a sign-up already exists, its details have been kept. Contact the Corrections TCP Coordinator to request changes." }
     } else {
       await db.insert(correctionsContacts).values({
         id: crypto.randomUUID(),
@@ -166,6 +79,8 @@ export async function submitCorrectionsContactForm(data: CorrectionsContactFormD
       })
     }
 
+    let notified = false
+    try {
     const { env } = await getCloudflareContext({ async: true })
     const credentials = getGmailCredentials(env)
 
@@ -201,14 +116,21 @@ This form was submitted via the Area 36 Corrections Temporary Contact Program pa
         replyTo: result.data.email,
       })
 
+      notified = emailResult.success
       if (!emailResult.success) {
         console.error(`Failed to send corrections form to ${recipient}:`, emailResult.error)
       }
     }
+    } catch {
+      // The saved sign-up remains available to the coordinator; do not invite a duplicate write.
+      notified = false
+    }
 
     return {
       success: true,
-      message: "Your volunteer sign up has been submitted. The Corrections TCP Coordinator will contact you shortly.",
+      message: notified
+        ? "Your volunteer sign up has been saved and the Corrections TCP Coordinator has been notified."
+        : "Your volunteer sign up has been saved, but we could not notify the coordinator. Please contact ctcp@area36.org; you do not need to submit again.",
     }
   } catch (error) {
     console.error("Corrections contact form submission error:", error)

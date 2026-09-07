@@ -91,3 +91,10 @@ describe("calendar event timing", () => {
     ).toBe("2026-07-23")
   })
 })
+
+
+it("includes the final local evening in UTC UNTIL across seasons", () => {
+  const event = { ...recurringTimeTbdEvent(), timeTBD: false, startTime: "19:00" }
+  expect(generateRRule(event)).toContain("UNTIL=20260801T045959Z")
+  expect(generateRRule({ ...event, recurUntil: "2026-12-31" })).toContain("UNTIL=20270101T055959Z")
+})

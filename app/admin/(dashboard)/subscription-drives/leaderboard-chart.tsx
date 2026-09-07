@@ -41,7 +41,7 @@ export function LeaderboardChart({ leaderboard }: LeaderboardChartProps) {
         <CardDescription>Top districts by subscription count (approved + pending)</CardDescription>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="h-[320px] w-full">
+        <ChartContainer role="group" aria-label="Subscription counts for the top ten districts; exact values follow in the table" config={chartConfig} className="h-[320px] w-full">
           <BarChart
             data={chartData}
             layout="vertical"
@@ -74,6 +74,29 @@ export function LeaderboardChart({ leaderboard }: LeaderboardChartProps) {
             />
           </BarChart>
         </ChartContainer>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full text-sm">
+            <caption className="pb-3 text-left font-medium">Subscription counts by district</caption>
+            <thead>
+              <tr className="border-b">
+                <th scope="col" className="p-2 text-left">District</th>
+                <th scope="col" className="p-2 text-right">Approved</th>
+                <th scope="col" className="p-2 text-right">Pending</th>
+                <th scope="col" className="p-2 text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {leaderboard.map((entry) => (
+                <tr key={entry.district} className="border-b last:border-0">
+                  <th scope="row" className="p-2 text-left font-medium">District {entry.district}</th>
+                  <td className="p-2 text-right">{entry.approved}</td>
+                  <td className="p-2 text-right">{entry.pending}</td>
+                  <td className="p-2 text-right">{entry.approved + entry.pending}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </CardContent>
     </Card>
   )

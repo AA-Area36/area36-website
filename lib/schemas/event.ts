@@ -1,8 +1,9 @@
+import { isDateOnly } from "@/lib/utils/date-only"
 import { z } from "zod"
 import { eventTypes, locationTypes, recurrenceTypes } from "@/lib/db/schema"
 
 const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/
-const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+const dateValue = z.string().refine(isDateOnly, "Enter a valid calendar date (YYYY-MM-DD)")
 
 // Helper for multi-select event types - accepts array of valid event types
 const eventTypesArray = z.array(z.enum(eventTypes)).min(1, "Please select at least one event type")
@@ -17,16 +18,10 @@ const optionalUrl = z.preprocess(
   z.string().url("Please enter a valid URL").optional()
 )
 
-// Helper to handle optional string fields - empty string becomes undefined  
-const optionalString = z.preprocess(
-  (val) => (val === "" || val === null ? undefined : val),
-  z.string().optional()
-)
-
 export const eventSubmissionSchema = z.object({
   title: z.string().min(1, "Title is required").max(200, "Title must be 200 characters or less"),
-  date: z.string().min(1, "Date is required"),
-  endDate: optionalString,
+  date: dateValue,
+  endDate: z.preprocess((v) => v === "" || v === null ? undefined : v, dateValue.optional()),
   startTime: z.preprocess(
     (val) => (val === "" || val === null ? undefined : val),
     z.string().regex(timeRegex, "Please enter a valid time (HH:MM)").optional()
@@ -52,7 +47,7 @@ export const eventSubmissionSchema = z.object({
   timeTBD: z.boolean().default(false),
   addressTBD: z.boolean().default(false),
   meetingLinkTBD: z.boolean().default(false),
-}).refine(
+}).refine((data) => !data.endDate || data.endDate >= data.date, { message: "End date must be on or after start date", path: ["endDate"] }).refine(
   (data) => {
     // Start time is required unless TBD
     if (!data.timeTBD && !data.startTime) {
@@ -148,7 +143,7 @@ export const recurrenceConfigSchema = z.object({
   recurrenceType: z.enum(recurrenceTypes).default("none"),
   weeklyPattern: weeklyPatternSchema.optional(),
   monthlyPattern: monthlyPatternSchema.optional(),
-  recurUntil: z.string().regex(dateRegex, "Invalid date format").optional(),
+  recurUntil: dateValue.optional(),
 })
 
 export type RecurrenceConfigData = z.infer<typeof recurrenceConfigSchema>
@@ -240,13 +235,13 @@ export type EventSubmissionWithRecurrenceData = z.infer<typeof eventSubmissionWi
 // Exception creation schema (for modifying/cancelling individual occurrences)
 export const eventExceptionSchema = z.object({
   eventId: z.string().min(1),
-  occurrenceDate: z.string().regex(dateRegex, "Invalid date format"),
+  occurrenceDate: dateValue,
   exceptionType: z.enum(["cancelled", "modified"]),
   // For modified exceptions - all optional (null = use parent value)
   title: z.string().optional(),
   startTime: z.string().regex(timeRegex).optional().nullable(),
   endTime: z.string().regex(timeRegex).optional().nullable(),
-  endDate: z.string().regex(dateRegex).optional().nullable(),
+  endDate: dateValue.optional().nullable(),
   locationType: z.enum(locationTypes).optional(),
   address: z.string().optional().nullable(),
   meetingLink: z.string().url().optional().nullable(),
@@ -257,3 +252,38 @@ export const eventExceptionSchema = z.object({
 })
 
 export type EventExceptionData = z.infer<typeof eventExceptionSchema>
+
+
+export const eventEditSchema = z.object({
+  title: z.string().min(1).max(200), date: dateValue,
+  endDate: z.union([dateValue, z.literal("")]).nullish(),
+  startTime: z.union([z.string().regex(timeRegex), z.literal("")]).nullish(),
+  endTime: z.union([z.string().regex(timeRegex), z.literal("")]).nullish(),
+  timezone: z.string().refine((value) => { try { new Intl.DateTimeFormat("en", { timeZone: value }); return true } catch { return false } }),
+  locationType: z.enum(locationTypes), address: z.string().max(500).nullish(),
+  meetingLink: z.union([z.string().url(), z.literal("")]).nullish(),
+  flyerUrl: z.union([z.string().url(), z.literal("")]).nullish(),
+  description: z.string().max(2000), types: eventTypesArray,
+  timeTBD: z.boolean().optional(), addressTBD: z.boolean().optional(), meetingLinkTBD: z.boolean().optional(),
+}).passthrough().refine((data) => !data.endDate || data.endDate >= data.date, { message: "End date must be on or after start date", path: ["endDate"] })
+
+export const recurringEventEditSchema = eventEditSchema.and(z.object({
+  scope: z.enum(["series", "occurrence"]),
+  occurrenceDate: dateValue.optional(),
+  isRecurring: z.boolean().optional(),
+  recurrenceType: z.enum(recurrenceTypes).optional(),
+  weeklyPattern: weeklyPatternSchema.optional(),
+  monthlyPattern: monthlyPatternSchema.optional(),
+  recurUntil: z.union([dateValue, z.literal("")]).nullish(),
+})).superRefine((data, ctx) => {
+  const issue = (path: string, message: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message })
+  if (data.scope === "occurrence") {
+    if (!data.occurrenceDate) issue("occurrenceDate", "Occurrence date is required")
+    if (data.endDate && data.occurrenceDate && data.endDate < data.occurrenceDate) issue("endDate", "End date must be on or after the occurrence date")
+  } else if (data.isRecurring) {
+    if (!data.recurrenceType || data.recurrenceType === "none") issue("recurrenceType", "Select a recurrence pattern")
+    if (data.recurrenceType === "weekly" && !data.weeklyPattern) issue("weeklyPattern", "Select days of the week")
+    if (data.recurrenceType === "monthly" && !data.monthlyPattern) issue("monthlyPattern", "Configure the monthly pattern")
+    if (!data.recurUntil || data.recurUntil <= data.date) issue("recurUntil", "Recurring end date must be after the start date")
+  }
+})

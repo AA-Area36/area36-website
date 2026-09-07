@@ -1,5 +1,7 @@
 "use client"
 
+import { addCalendarDays } from "@/lib/utils/date-only"
+
 import * as React from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Calendar, CalendarPlus, MapPin, Clock, ExternalLink, Search, Plus, X, Globe, HelpCircle, Repeat, ChevronDown, Check, Video } from "lucide-react"
@@ -735,9 +737,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
             break
           }
           // Move to next day
-          const d = new Date(currentDate + "T00:00:00")
-          d.setDate(d.getDate() + 1)
-          currentDate = d.toISOString().substring(0, 10)
+          currentDate = addCalendarDays(currentDate, 1)
         }
       }
       
@@ -754,9 +754,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
         }
         daySlots.get(currentDate)!.add(slot)
         // Move to next day
-        const d = new Date(currentDate + "T00:00:00")
-        d.setDate(d.getDate() + 1)
-        currentDate = d.toISOString().substring(0, 10)
+        currentDate = addCalendarDays(currentDate, 1)
       }
     }
     
@@ -924,6 +922,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                   value={selectedTypes}
                   onChange={handleTypesChange}
                   placeholder="Event type"
+                  aria-label="Filter upcoming events by type"
                   className="w-full sm:w-44"
                 />
                 <Button
@@ -1027,9 +1026,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                 <Button variant="ghost" size="sm" onClick={prevMonth} aria-label="Previous month">
                   ← Previous
                 </Button>
-                <h3 id="events-calendar-heading" className="text-lg font-semibold text-foreground" aria-live="polite">
+                <h2 id="events-calendar-heading" className="text-lg font-semibold text-foreground" aria-live="polite">
                   {currentMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-                </h3>
+                </h2>
                 <Button variant="ghost" size="sm" onClick={nextMonth} aria-label="Next month">
                   Next →
                 </Button>
@@ -1051,9 +1050,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                       <div
                         key={shortDay}
                         role="columnheader"
-                        aria-label={fullDay}
                         className="p-2 text-center text-sm font-medium text-muted-foreground border-b border-border bg-muted/30"
                       >
+                        <span className="sr-only">{fullDay}</span>
                         <span aria-hidden="true">{shortDay}</span>
                       </div>
                     ))}
@@ -1197,7 +1196,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
 
             {/* Events List */}
             <div className="space-y-6">
-              <h3 className="text-xl font-semibold text-foreground">Upcoming Events</h3>
+              <h2 className="text-xl font-semibold text-foreground">Upcoming Events</h2>
               {filteredEvents.length === 0 ? (
                 <div className="text-center py-12 rounded-xl border border-border bg-card">
                   <Calendar className="mx-auto h-12 w-12 text-muted-foreground" />
@@ -1224,9 +1223,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                   </Badge>
                                 ))}
                               </div>
-                              <h2 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
+                              <h3 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                                 {event.title}
-                              </h2>
+                              </h3>
                               <EventDescription description={event.description} />
                             </div>
 
@@ -1338,9 +1337,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                     {group.recurrenceDescription}
                                   </Badge>
                                 </div>
-                                <h2 className="text-xl font-semibold text-foreground">
+                                <h3 className="text-xl font-semibold text-foreground">
                                   {firstOccurrence.title}
-                                </h2>
+                                </h3>
                                 <EventDescription description={firstOccurrence.description} />
                               </div>
 
@@ -1481,9 +1480,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
 
             {/* District Events */}
             <div className="mt-12 pt-8 border-t border-border">
-              <h3 id="district-events-heading" className="text-xl font-semibold text-foreground mb-6">
+              <h2 id="district-events-heading" className="text-xl font-semibold text-foreground mb-6">
                 District Events
-              </h3>
+              </h2>
 
               {filteredDistrictEvents.length === 0 ? (
                 <div className="text-center py-8 rounded-xl border border-border bg-card">
@@ -1514,9 +1513,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                   </Badge>
                                 ))}
                               </div>
-                              <h4 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
+                              <h3 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                                 {event.title}
-                              </h4>
+                              </h3>
                               <EventDescription description={event.description} />
                             </div>
 
@@ -1628,9 +1627,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                     {group.recurrenceDescription}
                                   </Badge>
                                 </div>
-                                <h4 className="text-xl font-semibold text-foreground">
+                                <h3 className="text-xl font-semibold text-foreground">
                                   {firstOccurrence.title}
-                                </h4>
+                                </h3>
                                 <EventDescription description={firstOccurrence.description} />
                               </div>
 
@@ -1771,9 +1770,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
 
             {/* District Monthly Meetings */}
             <div className="mt-12 pt-8 border-t border-border">
-              <h3 id="district-monthly-meetings-heading" className="text-xl font-semibold text-foreground mb-2">
+              <h2 id="district-monthly-meetings-heading" className="text-xl font-semibold text-foreground mb-2">
                 District Monthly Meetings
-              </h3>
+              </h2>
               <p className="text-sm text-muted-foreground mb-6">
                 Recurring monthly district meetings, generated from the Districts content.
               </p>
@@ -1819,9 +1818,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                   Monthly
                                 </Badge>
                               </div>
-                              <h4 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
+                              <h3 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                                 {event.title}
-                              </h4>
+                              </h3>
                               <EventDescription description={event.description} />
                             </div>
 
@@ -1903,9 +1902,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                     {group.recurrenceDescription}
                                   </Badge>
                                 </div>
-                                <h4 className="text-xl font-semibold text-foreground">
+                                <h3 className="text-xl font-semibold text-foreground">
                                   {firstOccurrence.title}
-                                </h4>
+                                </h3>
                                 <EventDescription description={firstOccurrence.description} />
                               </div>
 
@@ -2022,7 +2021,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
 
             {/* Calendar Subscription */}
             <div id="calendar-subscribe" className="mt-12 rounded-xl border border-border bg-muted/30 p-6 scroll-mt-24">
-              <h3 className="font-semibold text-foreground mb-4">Subscribe to Calendar</h3>
+              <h2 className="font-semibold text-foreground mb-4">Subscribe to Calendar</h2>
               <p className="text-sm text-muted-foreground mb-4">
                 Add Area 36 events directly to your calendar application.
               </p>
@@ -2071,7 +2070,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                 aria-expanded={pastOpen}
               >
                 <div>
-                  <h3 className="text-lg font-semibold text-foreground">Past Events</h3>
+                  <h2 className="text-lg font-semibold text-foreground">Past Events</h2>
                   <p className="text-sm text-muted-foreground mt-1">
                     View recent past events. This section starts collapsed to keep the page focused on upcoming items.
                   </p>
@@ -2104,6 +2103,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                         />
                       </div>
                       <MultiSelect
+                        aria-label="Filter past events by type"
                         options={eventTypeOptions}
                         value={pastSelectedTypes}
                         onChange={setPastSelectedTypes}
@@ -2169,9 +2169,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                         </Badge>
                                       )}
                                     </div>
-                                    <h4 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
+                                    <h3 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                                       {event.title}
-                                    </h4>
+                                    </h3>
                                     <EventDescription description={event.description} />
                                   </div>
 
@@ -2264,9 +2264,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                           {group.recurrenceDescription}
                                         </Badge>
                                       </div>
-                                      <h4 className="text-xl font-semibold text-foreground">
+                                      <h3 className="text-xl font-semibold text-foreground">
                                         {firstOccurrence.title}
-                                      </h4>
+                                      </h3>
                                       <EventDescription description={firstOccurrence.description} />
                                     </div>
 

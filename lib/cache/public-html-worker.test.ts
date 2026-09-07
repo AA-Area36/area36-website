@@ -9,6 +9,7 @@ import {
 const enabledEnv = {
   PUBLIC_HTML_CACHE_ENABLED: "1",
   PUBLIC_HTML_CACHE_HOSTS: "area36.org,www.area36.org",
+  DB: { prepare: () => ({ first: async () => ({ revision: 0 }) }) } as unknown as D1Database,
 }
 
 function districtEnv(mode: "hosted" | "external_redirect" = "hosted", enabled = true) {
@@ -19,7 +20,9 @@ function districtEnv(mode: "hosted" | "external_redirect" = "hosted", enabled = 
     displayName: "District",
   })
   const bind = vi.fn(() => ({ first }))
-  const prepare = vi.fn(() => ({ bind }))
+  const prepare = vi.fn((sql: string) => sql.includes("public_html_revision")
+    ? { first: async () => ({ revision: 0 }) }
+    : { bind })
   return {
     ...enabledEnv,
     DB: { prepare } as unknown as D1Database,
@@ -141,7 +144,8 @@ describe("public HTML Worker cache", () => {
     })
 
     expect(first.headers.get("x-area36-cache")).toBe("MISS")
-    expect(first.headers.get("cache-control")).toContain("s-maxage=300")
+    expect(first.headers.get("cache-control")).toBe("public, max-age=0, must-revalidate")
+    expect(first.headers.get("cloudflare-cdn-cache-control")).toBe("no-store")
     expect(second.headers.get("x-area36-cache")).toBe("HIT")
     expect(await second.text()).toContain('lang="es"')
     expect(next).toHaveBeenCalledOnce()
@@ -233,5 +237,63 @@ describe("public HTML Worker cache", () => {
     })
 
     expect(response.headers.get("x-area36-cache")).toBeNull()
+  })
+})
+
+
+describe("public HTML publishing revisions", () => {
+  it("re-renders every locale and host after an atomic content revision change", async () => {
+    let revision = 1
+    const env = {
+      ...enabledEnv,
+      DB: { prepare: () => ({ first: async () => ({ revision }) }) } as unknown as D1Database,
+    }
+    const cache = new MemoryCache()
+    const pending: Promise<unknown>[] = []
+    const next = vi.fn(async () => new Response(`<html>revision ${revision}</html>`, {
+      headers: { "content-type": "text/html" },
+    }))
+    const read = async (host: string, locale: string) => {
+      const response = await serveWithPublicHtmlCache({
+        request: documentRequest(`https://${host}/about`, { cookie: `a36_locale=${locale}` }),
+        env, cache, next, ctx: { waitUntil: (promise) => { pending.push(promise) } },
+      })
+      await Promise.all(pending)
+      return response
+    }
+    for (const host of ["area36.org", "www.area36.org"]) {
+      for (const locale of ["en", "es"]) {
+        expect((await read(host, locale)).headers.get("x-area36-cache")).toBe("MISS")
+        expect((await read(host, locale)).headers.get("x-area36-cache")).toBe("HIT")
+      }
+    }
+    revision++
+    for (const host of ["area36.org", "www.area36.org"]) {
+      for (const locale of ["en", "es"]) {
+        const response = await read(host, locale)
+        expect(response.headers.get("x-area36-cache")).toBe("MISS")
+        expect(await response.text()).toContain("revision 2")
+      }
+    }
+    expect(next).toHaveBeenCalledTimes(8)
+  })
+
+  it.each(["missing row", "missing migration", "missing binding"])("bypasses stored HTML with a %s", async (condition) => {
+    const cache = new MemoryCache()
+    const match = vi.spyOn(cache, "match")
+    const put = vi.spyOn(cache, "put")
+    const first = async () => {
+      if (condition === "missing migration") throw new Error("no such table")
+      return null
+    }
+    const response = await serveWithPublicHtmlCache({
+      request: documentRequest("https://area36.org/about"),
+      env: { ...enabledEnv, DB: condition === "missing binding" ? undefined : { prepare: () => ({ first }) } as unknown as D1Database },
+      cache, ctx: { waitUntil: vi.fn() },
+      next: async () => new Response("current content", { headers: { "content-type": "text/html" } }),
+    })
+    expect(await response.text()).toBe("current content")
+    expect(match).not.toHaveBeenCalled()
+    expect(put).not.toHaveBeenCalled()
   })
 })

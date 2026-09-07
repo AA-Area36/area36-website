@@ -51,7 +51,12 @@ export async function submitQuorumRegistration(eventKey: string, data: QuorumReg
       isAlternate,
       seatKey,
     })
-    await invalidateEdgeCache(`quorum:summary:${parsedEventKey.data}`)
+    try {
+      await invalidateEdgeCache(`quorum:summary:${parsedEventKey.data}`)
+    } catch (error) {
+      // Attendance is durable already; a cache failure must not invite another check-in.
+      console.error("Quorum summary refresh pending", getRedactedErrorMetadata(error))
+    }
     return { success: true as const }
   } catch (error) {
     console.error("Quorum check-in failed", getRedactedErrorMetadata(error))

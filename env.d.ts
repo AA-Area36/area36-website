@@ -65,8 +65,8 @@ declare global {
 }
 
 declare module "@opennextjs/cloudflare" {
-  export function getCloudflareContext(options?: { async: true }): Promise<{ env: CloudflareEnv; ctx: ExecutionContext }>
-  export function getCloudflareContext(options?: { async?: false }): { env: CloudflareEnv; ctx: ExecutionContext }
+  export function getCloudflareContext(options?: { async: true }): Promise<{ env: CloudflareEnv; ctx: ExecutionContext; cf: IncomingRequestCfProperties | undefined }>
+  export function getCloudflareContext(options?: { async?: false }): { env: CloudflareEnv; ctx: ExecutionContext; cf: IncomingRequestCfProperties | undefined }
 }
 
 export {}

@@ -43,13 +43,13 @@ describe("local admin bypass boundary", () => {
     await expect(isLocalAdminBypassEnabled()).resolves.toBe(true)
   })
 
-  it("limits the fallback to loopback hosts", async () => {
+  it("denies even a loopback host without explicit opt-in", async () => {
     vi.stubEnv("NODE_ENV", "test")
     vi.stubEnv("LOCAL_ADMIN_BYPASS", "")
     headersMock.mockResolvedValueOnce(
       new Headers({ host: "127.0.0.1:3000" }),
     )
-    await expect(isLocalAdminBypassEnabled()).resolves.toBe(true)
+    await expect(isLocalAdminBypassEnabled()).resolves.toBe(false)
 
     headersMock.mockResolvedValueOnce(new Headers({ host: "preview.example" }))
     await expect(isLocalAdminBypassEnabled()).resolves.toBe(false)

@@ -1,9 +1,11 @@
+import { parseLocalDate } from "@/lib/utils/recurrence"
+import { recurringOverlapsStart } from "@/lib/events/recurring-window"
 import { NextResponse } from "next/server"
 import { getDb } from "@/lib/db"
 import {
   events,
 } from "@/lib/db/schema"
-import { eq, asc, gt, gte, and, or, isNull } from "drizzle-orm"
+import { eq, asc, gt, and, or, isNull } from "drizzle-orm"
 import { getEventsForDateRange } from "@/lib/utils/event-queries"
 import type { DisplayEvent } from "@/lib/types/recurrence"
 import { withEdgeCache } from "@/lib/cache/edge-cache"
@@ -47,7 +49,7 @@ async function buildApprovedEvents(
       ),
       and(
         eq(events.isRecurring, true),
-        or(isNull(events.recurUntil), gte(events.recurUntil, todayStr))
+        recurringOverlapsStart(todayStr)
       )
     ),
   ]
@@ -66,9 +68,9 @@ async function buildApprovedEvents(
   const recurringEventIds = eventsData.filter((e) => e.isRecurring).map((e) => e.id)
   const eventsWithRelations = await loadEventRelations(db, eventsData, log)
 
-  const rangeStart = new Date(todayStr)
+  const rangeStart = parseLocalDate(todayStr)
   rangeStart.setDate(rangeStart.getDate() - 1)
-  const rangeEnd = new Date(todayStr)
+  const rangeEnd = parseLocalDate(todayStr)
   rangeEnd.setFullYear(rangeEnd.getFullYear() + 1)
 
   const endOp = log.tracker.startOperation("events.range")

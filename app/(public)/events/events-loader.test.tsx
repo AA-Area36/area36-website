@@ -41,6 +41,16 @@ describe("EventsLoader", () => {
     vi.restoreAllMocks()
   })
 
+  it("keeps the page heading and calendar space available while events load", () => {
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise(() => undefined)))
+    render(<EventsLoader hero={hero} />)
+    expect(screen.getByRole("heading", { level: 1, name: hero.title })).toBeVisible()
+    expect(screen.getByText(hero.description)).toBeVisible()
+    expect(screen.getByRole("status")).toHaveTextContent("Loading events...")
+    expect(screen.getByRole("button", { name: "Submit Event", hidden: true })).toBeDisabled()
+    expect(screen.queryByTestId("events-client")).not.toBeInTheDocument()
+  })
+
   it("preserves a successful empty response as a legitimate empty calendar", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response([])))
 

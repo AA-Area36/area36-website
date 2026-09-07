@@ -2,6 +2,8 @@ import type { EventType, EventFlyer } from "@/lib/db/schema"
 import type { EventWithRelations, DisplayEvent, FlyerInfo } from "@/lib/types/recurrence"
 import {
   generateOccurrenceDates,
+  getEventDurationDays,
+  parseLocalDate,
   getRecurrenceDescription,
 } from "./recurrence"
 import { buildExceptionMap, mergeEventWithException } from "./exceptions"
@@ -32,7 +34,16 @@ export function getEventsForDateRange(
       }
     } else {
       // Recurring event - generate occurrences
-      const occurrenceDates = generateOccurrenceDates(event, rangeStart, rangeEnd)
+      // Include starts before the window when a multi-day occurrence still overlaps it.
+      const candidateStart = new Date(rangeStart)
+      candidateStart.setDate(candidateStart.getDate() - Math.max(0, getEventDurationDays(event)))
+      const occurrenceDates = new Set(generateOccurrenceDates(event, candidateStart, rangeEnd))
+      // An edited occurrence may extend beyond the series' normal duration.
+      for (const exception of event.exceptions || []) {
+        if (exception.endDate && parseLocalDate(exception.endDate) >= rangeStart && parseLocalDate(exception.occurrenceDate) <= rangeEnd) {
+          occurrenceDates.add(exception.occurrenceDate)
+        }
+      }
       const exceptionMap = buildExceptionMap(event.exceptions || [])
       const recurrenceDescription = getRecurrenceDescription(event)
 
@@ -45,7 +56,9 @@ export function getEventsForDateRange(
         }
 
         const occurrence = mergeEventWithException(event, occurrenceDate, exception)
-        result.push(convertOccurrenceToDisplayEvent(occurrence, event, recurrenceDescription))
+        if (parseLocalDate(occurrence.date) <= rangeEnd && parseLocalDate(occurrence.endDate || occurrence.date) >= rangeStart) {
+          result.push(convertOccurrenceToDisplayEvent(occurrence, event, recurrenceDescription))
+        }
       }
     }
   }

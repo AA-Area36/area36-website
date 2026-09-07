@@ -40,8 +40,10 @@ export async function verifyRecaptcha(
     })
     const result = (await response.json()) as ReCaptchaResponse
     if (
+      !response.ok ||
       !result.success ||
       typeof result.score !== "number" ||
+      !Number.isFinite(result.score) ||
       result.score < SCORE_THRESHOLD ||
       result.action !== expectedAction
     ) {
