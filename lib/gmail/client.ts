@@ -52,16 +52,28 @@ function base64UrlEncode(str: string): string {
 /**
  * Create an RFC 2822 formatted email message
  */
-function createEmailMessage(
+export function createEmailMessage(
   from: string,
   to: string,
   subject: string,
-  params: EmailParams
+  params: Pick<EmailParams, "body" | "textBody" | "htmlBody" | "replyTo">
 ): string {
+  // Header values are single-line data, never raw RFC 2822 structure.
+  for (const value of [from, to, subject, params.replyTo ?? ""]) {
+    if (/[\r\n\x00-\x1f\x7f]/.test(value)) throw new Error("Invalid email header")
+  }
+  const encodedSubject = Array.from(subject).reduce<string[]>((chunks, char) => {
+    if (!chunks.length || new TextEncoder().encode(chunks[chunks.length - 1] + char).length > 42) chunks.push(char)
+    else chunks[chunks.length - 1] += char
+    return chunks
+  }, []).map((chunk) => {
+    const bytes = new TextEncoder().encode(chunk)
+    return `=?UTF-8?B?${btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(""))}?=`
+  }).join("\r\n ")
   const headers = [
     `From: ${from}`,
     `To: ${to}`,
-    `Subject: ${subject}`,
+    `Subject: ${encodedSubject}`,
     "MIME-Version: 1.0",
   ]
 
@@ -105,8 +117,6 @@ export async function sendEmail(
   retryOn401 = true
 ): Promise<SendEmailResult> {
   try {
-    const accessToken = await getAccessToken(credentials)
-
     // Create the email message in RFC 2822 format
     const emailMessage = createEmailMessage(
       credentials.senderEmail,
@@ -114,6 +124,8 @@ export async function sendEmail(
       params.subject,
       params
     )
+
+    const accessToken = await getAccessToken(credentials)
 
     // Encode as base64url
     const encodedMessage = base64UrlEncode(emailMessage)

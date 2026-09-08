@@ -4,13 +4,10 @@ import * as React from "react"
 import { Accessibility, ZoomIn, ZoomOut, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 
 export function AccessibilityMenu({ aslHref = "/resources#asl" }: { aslHref?: string }) {
   const [fontSize, setFontSize] = React.useState(100)
@@ -33,18 +30,25 @@ export function AccessibilityMenu({ aslHref = "/resources#asl" }: { aslHref?: st
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <Popover>
+      <PopoverTrigger asChild>
         <Button variant="ghost" size="icon" aria-label="Accessibility options">
           <Accessibility className="h-5 w-5" aria-hidden="true" />
         </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel>Accessibility</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <div className="px-2 py-2">
-          <p className="text-sm text-muted-foreground mb-2">Text Size: {fontSize}%</p>
-          <div className="flex items-center gap-2">
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="w-64"
+        aria-labelledby="accessibility-options-heading"
+      >
+        <h2 id="accessibility-options-heading" className="font-medium">
+          Accessibility
+        </h2>
+        <div className="mt-3 border-y py-3">
+          <p id="text-size-value" className="mb-2 text-sm text-muted-foreground">
+            Text Size: {fontSize}%
+          </p>
+          <div className="flex items-center gap-2" aria-describedby="text-size-value">
             <Button
               variant="outline"
               size="sm"
@@ -68,13 +72,13 @@ export function AccessibilityMenu({ aslHref = "/resources#asl" }: { aslHref?: st
             </Button>
           </div>
         </div>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <a href={aslHref} className="cursor-pointer">
-            ASL Resources
-          </a>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        <a
+          href={aslHref}
+          className="mt-3 inline-flex rounded-sm text-sm font-medium underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+        >
+          ASL Resources
+        </a>
+      </PopoverContent>
+    </Popover>
   )
 }

@@ -1,7 +1,7 @@
 "use client"
 
 import { useCommittees } from "@/lib/hooks/use-gdrive-files"
-import { GdriveLoader } from "@/components/gdrive-loader"
+import { GdriveError, GdriveLoader } from "@/components/gdrive-loader"
 import { CommitteesContent } from "./committees-content"
 import type { CommitteeData } from "./page"
 import type { CommitteeFiles } from "@/lib/gdrive/committees"
@@ -22,20 +22,22 @@ interface CommitteesLoaderProps {
  * is unavailable.
  */
 export function CommitteesLoader({ committees, content }: CommitteesLoaderProps) {
-  const { data, isLoading, error } = useCommittees()
+  const { data, isLoading, error, refetch } = useCommittees()
   const { t } = createTranslator(content ?? {})
 
   if (isLoading) {
     return <GdriveLoader message={t("committeeUi.loadingFilesLabel", "Loading committee files...")} />
   }
 
-  // Graceful degradation: log error but show committees without files
-  if (error) {
-    console.error("Failed to load committee files:", error)
-  }
-
   // Even if no files or error, show the committees with their static info
   const committeeFiles: CommitteeFiles = data || {}
 
-  return <CommitteesContent committees={committees} committeeFiles={committeeFiles} content={content} />
+  return (
+    <>
+      {error && !data ? (
+        <GdriveError resourceName="Committee files" onRetry={refetch} />
+      ) : null}
+      <CommitteesContent committees={committees} committeeFiles={committeeFiles} content={content} />
+    </>
+  )
 }

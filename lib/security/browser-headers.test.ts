@@ -5,9 +5,11 @@ import {
 } from "./browser-headers"
 
 function createHeaders(): Headers {
-  return new Headers(
-    BROWSER_SECURITY_HEADERS.map(({ key, value }) => [key, value] as const),
-  )
+  const headers = new Headers()
+  for (const { key, value } of BROWSER_SECURITY_HEADERS) {
+    headers.set(key, value)
+  }
+  return headers
 }
 
 describe("browser security headers", () => {

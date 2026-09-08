@@ -20,23 +20,30 @@ export function GdriveLoader({ message = "Loading files..." }: GdriveLoaderProps
 }
 
 interface GdriveErrorProps {
-  error: string
-  onRetry?: () => void
+  resourceName?: string
+  onRetry?: () => void | Promise<void>
 }
 
 /**
  * Error state for GDrive content
  */
-export function GdriveError({ error, onRetry }: GdriveErrorProps) {
+export function GdriveError({ resourceName = "files", onRetry }: GdriveErrorProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <AlertCircle className="h-8 w-8 text-destructive mb-4" />
-      <p className="text-sm text-muted-foreground mb-4">
-        Failed to load files: {error}
+    <div
+      className="flex flex-col items-center justify-center py-12 text-center"
+      role="alert"
+      aria-live="assertive"
+    >
+      <AlertCircle className="h-8 w-8 text-destructive mb-4" aria-hidden="true" />
+      <h2 className="text-lg font-semibold text-foreground mb-2">
+        {resourceName} are temporarily unavailable
+      </h2>
+      <p className="text-sm text-muted-foreground mb-4 max-w-md">
+        We could not load this content. Please try again in a moment.
       </p>
       {onRetry && (
-        <Button variant="outline" size="sm" onClick={onRetry}>
-          <RefreshCw className="h-4 w-4 mr-2" />
+        <Button variant="outline" size="sm" onClick={() => void onRetry()}>
+          <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
           Try Again
         </Button>
       )}

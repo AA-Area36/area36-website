@@ -1,7 +1,8 @@
+import { recurringOverlapsStart } from "@/lib/events/recurring-window"
 import { getDb, schema } from "@/lib/db"
-import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, or } from "drizzle-orm"
-import type { EventException, EventFlyer, EventType } from "@/lib/db/schema"
-import type { EventWithRelations } from "@/lib/types/recurrence"
+import { and, asc, desc, eq, gt, isNotNull, isNull, or } from "drizzle-orm"
+import { loadEventRelations } from "@/lib/events/load-event-relations"
+import { parseLocalDate } from "@/lib/utils/recurrence"
 import { getEventsForDateRange } from "@/lib/utils/event-queries"
 import { recordError } from "@/lib/monitoring/errors"
 
@@ -52,7 +53,7 @@ export async function getDistrictPublicEvents(districtNumber: number) {
             ),
             and(
               eq(schema.events.isRecurring, true),
-              or(isNull(schema.events.recurUntil), gte(schema.events.recurUntil, todayStr))
+              recurringOverlapsStart(todayStr)
             )
           )
         )
@@ -61,48 +62,9 @@ export async function getDistrictPublicEvents(districtNumber: number) {
       .all()
 
     if (events.length === 0) return []
-    const eventIds = events.map((event) => event.id)
-    const recurringIds = events.filter((event) => event.isRecurring).map((event) => event.id)
-    const [typeRows, flyerRows, exceptionRows] = await Promise.all([
-      db.select().from(schema.eventToTypes).where(inArray(schema.eventToTypes.eventId, eventIds)).all(),
-      db
-        .select()
-        .from(schema.eventFlyers)
-        .where(inArray(schema.eventFlyers.eventId, eventIds))
-        .orderBy(schema.eventFlyers.order)
-        .all(),
-      recurringIds.length > 0
-        ? db.select().from(schema.eventExceptions).where(inArray(schema.eventExceptions.eventId, recurringIds)).all()
-        : Promise.resolve([] as EventException[]),
-    ])
-
-    const typesByEvent = new Map<string, EventType[]>()
-    for (const row of typeRows) {
-      const values = typesByEvent.get(row.eventId) ?? []
-      values.push(row.type)
-      typesByEvent.set(row.eventId, values)
-    }
-    const flyersByEvent = new Map<string, EventFlyer[]>()
-    for (const row of flyerRows) {
-      const values = flyersByEvent.get(row.eventId) ?? []
-      values.push(row)
-      flyersByEvent.set(row.eventId, values)
-    }
-    const exceptionsByEvent = new Map<string, EventException[]>()
-    for (const row of exceptionRows) {
-      const values = exceptionsByEvent.get(row.eventId) ?? []
-      values.push(row)
-      exceptionsByEvent.set(row.eventId, values)
-    }
-
-    const eventsWithRelations: EventWithRelations[] = events.map((event) => ({
-      ...event,
-      types: typesByEvent.get(event.id) ?? (event.type ? [event.type] : []),
-      flyers: flyersByEvent.get(event.id) ?? [],
-      exceptions: exceptionsByEvent.get(event.id) ?? [],
-    }))
-    const rangeStart = new Date(todayStr)
-    const rangeEnd = new Date(todayStr)
+    const eventsWithRelations = await loadEventRelations(db, events)
+    const rangeStart = parseLocalDate(todayStr)
+    const rangeEnd = parseLocalDate(todayStr)
     rangeEnd.setFullYear(rangeEnd.getFullYear() + 1)
     return getEventsForDateRange(eventsWithRelations, rangeStart, rangeEnd)
   } catch (error) {

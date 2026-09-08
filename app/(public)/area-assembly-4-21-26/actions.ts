@@ -18,6 +18,11 @@ interface ReCaptchaResponse {
 }
 
 const RECAPTCHA_SCORE_THRESHOLD = 0.5
+export const AREA_ASSEMBLY_REGISTRATION_CLOSES_AT = Date.parse("2026-04-22T05:00:00.000Z")
+
+export function isAreaAssemblyRegistrationClosed(now = Date.now()): boolean {
+  return now >= AREA_ASSEMBLY_REGISTRATION_CLOSES_AT
+}
 
 async function getRecaptchaSecretKey(): Promise<string | undefined> {
   try {
@@ -78,6 +83,13 @@ async function verifyRecaptcha(token: string): Promise<{ success: boolean; error
 }
 
 export async function submitAreaAssemblyRegistration(data: AreaAssemblyRegistrationData) {
+  if (isAreaAssemblyRegistrationClosed()) {
+    return {
+      success: false,
+      error: "Registration for the April 2026 Area Assembly is closed.",
+    }
+  }
+
   const result = areaAssemblyRegistrationSchema.safeParse(data)
   if (!result.success) {
     return {

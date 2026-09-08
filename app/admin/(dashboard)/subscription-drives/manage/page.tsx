@@ -7,6 +7,9 @@ import type { SubscriptionDrive } from "@/lib/db/schema"
 import { getAllDrives, getDriveStats, endDrive } from "../actions"
 import { CreateDriveDialog } from "./create-drive-dialog"
 import { EditDriveDialog } from "./edit-drive-dialog"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Manage Subscription Drives" }
 
 export const dynamic = "force-dynamic"
 

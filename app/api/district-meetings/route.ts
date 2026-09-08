@@ -1,3 +1,5 @@
+import { isDateOnly, calendarDayDifference } from "@/lib/utils/date-only"
+import { parseLocalDate, formatDate } from "@/lib/utils/recurrence"
 import { NextResponse } from "next/server"
 import { getContent } from "@/lib/content/repo"
 import { getAtPath } from "@/lib/content/t"
@@ -10,7 +12,9 @@ function parseCookie(header: string | null, name: string): string | null {
   if (!header) return null
   for (const part of header.split(";")) {
     const [k, ...rest] = part.trim().split("=")
-    if (k === name) return decodeURIComponent(rest.join("="))
+    if (k === name) {
+      try { return decodeURIComponent(rest.join("=")) } catch { return null }
+    }
   }
   return null
 }
@@ -21,16 +25,6 @@ function getLocaleFromRequest(request: Request): Locale {
   return detectLocaleFromAcceptLanguage(request.headers.get("accept-language"))
 }
 
-function parseYmd(value: string | null): Date | null {
-  if (!value) return null
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
-  const [y, m, d] = value.split("-").map((n) => Number(n))
-  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null
-  // Stable date-only representation (UTC midnight) to avoid timezone drift.
-  const dt = new Date(Date.UTC(y, m - 1, d))
-  if (Number.isNaN(dt.getTime())) return null
-  return dt
-}
 
 function isDistrictDirectory(value: unknown): value is DistrictDirectoryEntry[] {
   return (
@@ -51,17 +45,22 @@ export async function GET(request: Request) {
   const url = new URL(request.url)
   const locale = getLocaleFromRequest(request)
 
-  const start = parseYmd(url.searchParams.get("start"))
-  const end = parseYmd(url.searchParams.get("end"))
-
-  // Default range: yesterday through one year from today (America/Chicago is handled client-side).
-  const rangeStart = start ?? new Date(Date.now() - 24 * 60 * 60 * 1000)
-  const rangeEnd = end ?? new Date(new Date().setFullYear(new Date().getFullYear() + 1))
+  const now = new Date()
+  const defaultStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
+  const defaultEnd = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate())
+  const start = url.searchParams.get("start") ?? formatDate(defaultStart)
+  const end = url.searchParams.get("end") ?? formatDate(defaultEnd)
+  if (!isDateOnly(start) || !isDateOnly(end) || end < start || calendarDayDifference(start, end) > 731) {
+    return NextResponse.json({ error: "Use valid start and end dates spanning at most two years." }, { status: 400 })
+  }
+  // Generator and request bounds both use local calendar midnights (including DST).
+  const rangeStart = parseLocalDate(start)
+  const rangeEnd = parseLocalDate(end)
 
   const content = await getContent("districts", locale).catch(async () => getContent("districts", DEFAULT_LOCALE))
   const directoryRaw = getAtPath(content, "directory")
   const directory: DistrictDirectoryEntry[] = isDistrictDirectory(directoryRaw) ? directoryRaw : []
 
   const events = buildDistrictMonthlyMeetingOccurrences(rangeStart, rangeEnd, directory)
-  return NextResponse.json(events)
+  return NextResponse.json(events, { headers: { "Cache-Control": "private, max-age=60", Vary: "Cookie, Accept-Language" } })
 }

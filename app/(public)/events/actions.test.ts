@@ -3,11 +3,13 @@ import type { EventSubmissionWithRecurrenceData } from "@/lib/schemas/event"
 
 const {
   batchMock,
+  checkRateLimitMock,
   createEventUploadTokenMock,
   existingSubmissionMock,
   getDbMock,
 } = vi.hoisted(() => ({
   batchMock: vi.fn(),
+  checkRateLimitMock: vi.fn(),
   createEventUploadTokenMock: vi.fn(),
   existingSubmissionMock: vi.fn(),
   getDbMock: vi.fn(),
@@ -21,7 +23,7 @@ vi.mock("@/lib/db", () => ({
 }))
 
 vi.mock("@/lib/security/rate-limit", () => ({
-  checkRateLimit: vi.fn().mockResolvedValue({ ok: true }),
+  checkRateLimit: checkRateLimitMock,
   getClientIp: vi.fn().mockResolvedValue("127.0.0.1"),
 }))
 
@@ -75,9 +77,22 @@ describe("submitEvent consistency", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubEnv("NODE_ENV", "development")
+    checkRateLimitMock.mockResolvedValue({
+      ok: true,
+      remaining: 2,
+      resetAt: Date.now() + 60_000,
+      source: "d1",
+    })
     existingSubmissionMock.mockResolvedValue(undefined)
     createEventUploadTokenMock.mockResolvedValue("upload-token")
     getDbMock.mockImplementation(async () => createDb())
+  })
+
+  it("rejects an invalid time zone before rate limiting or persistence", async () => {
+    const result = await submitEvent({ ...validSubmission, timezone: "No/SuchZone" })
+    expect(result.success).toBe(false)
+    expect(getDbMock).not.toHaveBeenCalled()
+    expect(checkRateLimitMock).not.toHaveBeenCalled()
   })
 
   it("writes the event and its type rows in one D1 batch", async () => {
@@ -105,5 +120,35 @@ describe("submitEvent consistency", () => {
       eventId: "existing-event",
     })
     expect(batchMock).not.toHaveBeenCalled()
+  })
+
+  it("reports a genuine rate-limit breach as too many submissions", async () => {
+    checkRateLimitMock.mockResolvedValue({
+      ok: false,
+      remaining: 0,
+      resetAt: Date.now() + 60_000,
+      source: "d1",
+    })
+
+    await expect(submitEvent(validSubmission)).resolves.toEqual({
+      success: false,
+      error: "Too many submissions. Please try again later.",
+    })
+    expect(getDbMock).not.toHaveBeenCalled()
+  })
+
+  it("does not misreport total limiter failure as user over-submission", async () => {
+    checkRateLimitMock.mockResolvedValue({
+      ok: false,
+      remaining: 0,
+      resetAt: Date.now() + 60_000,
+      source: "unavailable",
+    })
+
+    await expect(submitEvent(validSubmission)).resolves.toEqual({
+      success: false,
+      error: "Submission service is temporarily unavailable. Please try again shortly.",
+    })
+    expect(getDbMock).not.toHaveBeenCalled()
   })
 })

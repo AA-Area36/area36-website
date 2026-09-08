@@ -1,6 +1,7 @@
 "use server"
 
-import { getCloudflareContext } from "@opennextjs/cloudflare"
+import { verifyRecaptcha } from "@/lib/security/recaptcha"
+
 import {
   conferenceManualCountSchema,
   type ConferenceManualCountData,
@@ -8,74 +9,8 @@ import {
 import { appendConferenceManualCount } from "@/lib/google/sheets"
 import { checkRateLimit, getClientIp } from "@/lib/security/rate-limit"
 
-interface ReCaptchaResponse {
-  success: boolean
-  score?: number
-  action?: string
-  challenge_ts?: string
-  hostname?: string
-  "error-codes"?: string[]
-}
 
-const RECAPTCHA_SCORE_THRESHOLD = 0.5
 
-async function getRecaptchaSecretKey(): Promise<string | undefined> {
-  try {
-    const { env } = await getCloudflareContext({ async: true })
-    if (env.RECAPTCHA_SECRET_KEY) {
-      return env.RECAPTCHA_SECRET_KEY
-    }
-  } catch {
-    // Not in Cloudflare environment.
-  }
-
-  return process.env.RECAPTCHA_SECRET_KEY
-}
-
-async function verifyRecaptcha(token: string): Promise<{ success: boolean; error?: string }> {
-  if (process.env.NODE_ENV === "development") {
-    return { success: true }
-  }
-
-  if (!token) {
-    return { success: false, error: "reCAPTCHA token is missing. Please refresh and try again." }
-  }
-
-  const secretKey = await getRecaptchaSecretKey()
-  if (!secretKey) {
-    console.error("RECAPTCHA_SECRET_KEY is not configured")
-    return { success: false, error: "Server configuration error. Please try again later." }
-  }
-
-  try {
-    const verifyResponse = await fetch("https://www.google.com/recaptcha/api/siteverify", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        secret: secretKey,
-        response: token,
-      }),
-    })
-
-    const verifyResult: ReCaptchaResponse = await verifyResponse.json()
-    if (!verifyResult.success) {
-      console.error("reCAPTCHA verification failed:", verifyResult["error-codes"])
-      return { success: false, error: "reCAPTCHA verification failed. Please try again." }
-    }
-
-    if (verifyResult.score !== undefined && verifyResult.score < RECAPTCHA_SCORE_THRESHOLD) {
-      console.warn("reCAPTCHA score too low:", verifyResult.score)
-      return { success: false, error: "Suspicious activity detected. Please try again." }
-    }
-
-    return { success: true }
-  } catch (error) {
-    console.error("reCAPTCHA verification error:", error)
-    return { success: false, error: "reCAPTCHA verification failed. Please try again." }
-  }
-}
 
 export async function submitConferenceManualCount(data: ConferenceManualCountData) {
   const result = conferenceManualCountSchema.safeParse(data)
@@ -98,7 +33,7 @@ export async function submitConferenceManualCount(data: ConferenceManualCountDat
     }
   }
 
-  const recaptchaResult = await verifyRecaptcha(result.data.recaptchaToken)
+  const recaptchaResult = await verifyRecaptcha(result.data.recaptchaToken, "conference_manual_count")
   if (!recaptchaResult.success) {
     return {
       success: false,

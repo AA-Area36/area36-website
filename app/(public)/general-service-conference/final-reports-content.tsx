@@ -85,20 +85,7 @@ function DriveReportItem({
   const isBusy = loadingAction?.id === report.id
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      className="group flex cursor-pointer items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
-      onClick={() => {
-        void onDownload(report)
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault()
-          void onDownload(report)
-        }
-      }}
-    >
+    <article className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md">
       <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
         <FileText className="h-6 w-6" aria-hidden="true" />
       </div>
@@ -147,7 +134,7 @@ function DriveReportItem({
           )}
         </Button>
       </div>
-    </div>
+    </article>
   )
 }
 

@@ -14,7 +14,8 @@
     "test:coverage": "vitest run --coverage",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
-    "deploy": "opennextjs-cloudflare build && pnpm db:migrate:remote && wrangler deploy",
+    "deploy": "pnpm run deploy:production",
+    "deploy:production": "opennextjs-cloudflare build && pnpm db:migrate:remote && wrangler deploy",
     "deploy:uptime": "wrangler deploy -c workers/uptime/wrangler.jsonc",
     "deploy:monthly-report": "wrangler deploy -c workers/monthly-report/wrangler.jsonc"
   },
@@ -90,9 +91,10 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
     "drizzle-kit": "^0.31.8",
+    "esbuild": "^0.28.1",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.10",
-    "fflate": "0.8.2",
+    "fflate": "0.8.3",
     "happy-dom": "^20.9.0",
     "postcss": "^8.5.26",
     "tailwindcss": "^4.1.18",
@@ -104,6 +106,8 @@
   "pnpm": {
     "overrides": {
       "@babel/core@7.29.0": "7.29.6",
+      "browserslist@4.28.1": "4.28.9",
+      "fflate@0.8.2": "0.8.3",
       "nanoid@3.3.11": "3.3.18",
       "postcss@8.4.31": "8.5.26",
       "postcss@8.5.10": "8.5.26",

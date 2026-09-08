@@ -16,6 +16,18 @@ import type { createRequestLogger } from "@/lib/logger"
 type Database = DrizzleD1Database<typeof schema>
 type RequestLog = ReturnType<typeof createRequestLogger>
 
+// D1 allows at most 100 bound parameters per statement. Process each relation
+// in sequential batches; the three relation loaders together use at most three
+// concurrent queries, regardless of the number of selected events.
+async function loadInBatches<T>(ids: string[], query: (batch: string[]) => PromiseLike<T[]>): Promise<T[]> {
+  const rows: T[] = []
+  const uniqueIds = [...new Set(ids)]
+  for (let offset = 0; offset < uniqueIds.length; offset += 100) {
+    rows.push(...await query(uniqueIds.slice(offset, offset + 100)))
+  }
+  return rows
+}
+
 /**
  * Loads event relations only for the selected base events. Keeping this query
  * scoped prevents a cache miss on a public event route from reading every
@@ -24,30 +36,31 @@ type RequestLog = ReturnType<typeof createRequestLogger>
 export async function loadEventRelations(
   db: Database,
   eventRows: Event[],
-  log: RequestLog
+  log?: RequestLog
 ): Promise<EventWithRelations[]> {
   if (eventRows.length === 0) return []
+  const time = <T>(name: string, operation: () => Promise<T>) =>
+    log ? log.tracker.time(name, operation) : operation()
 
   const eventIds = eventRows.map((event) => event.id)
   const recurringEventIds = eventRows.filter((event) => event.isRecurring).map((event) => event.id)
 
   const [eventTypesData, flyersData, exceptionsData] = await Promise.all([
-    log.tracker.time("db.eventTypes", () =>
-      db.select().from(eventToTypes).where(inArray(eventToTypes.eventId, eventIds))
+    time("db.eventTypes", () =>
+      loadInBatches(eventIds, (batch) =>
+        db.select().from(eventToTypes).where(inArray(eventToTypes.eventId, batch))
+      )
     ),
-    log.tracker.time("db.flyers", () =>
-      db
-        .select()
-        .from(eventFlyers)
-        .where(inArray(eventFlyers.eventId, eventIds))
-        .orderBy(eventFlyers.order)
+    time("db.flyers", () =>
+      loadInBatches(eventIds, (batch) =>
+        db.select().from(eventFlyers)
+          .where(inArray(eventFlyers.eventId, batch))
+          .orderBy(eventFlyers.order)
+      )
     ),
     recurringEventIds.length > 0
-      ? log.tracker.time("db.exceptions", () =>
-          db
-            .select()
-            .from(eventExceptions)
-            .where(inArray(eventExceptions.eventId, recurringEventIds))
+      ? time("db.exceptions", () =>
+          loadEventExceptions(db, recurringEventIds)
         )
       : Promise.resolve([]),
   ])
@@ -79,4 +92,11 @@ export async function loadEventRelations(
     flyers: flyersMap.get(event.id) || [],
     exceptions: exceptionsMap.get(event.id) || [],
   }))
+}
+
+/** The calendar feed needs exceptions without fetching unrelated types and flyers. */
+export function loadEventExceptions(db: Database, eventIds: string[]): Promise<EventException[]> {
+  return loadInBatches(eventIds, (batch) =>
+    db.select().from(eventExceptions).where(inArray(eventExceptions.eventId, batch))
+  )
 }

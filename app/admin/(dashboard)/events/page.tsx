@@ -7,6 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Calendar, Clock, MapPin, Mail, ExternalLink, Check, Trash2, Video, Globe, Repeat } from "lucide-react"
 import type { Event, LocationType } from "@/lib/db/schema"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Events" }
 
 // Event with types array, flyers, and exceptions (from junction/related tables)
 interface EventWithTypes extends Event {

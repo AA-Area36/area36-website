@@ -1,10 +1,13 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Trash2, FolderLock, Key } from "lucide-react"
+import { Trash2, FolderLock } from "lucide-react"
 import { getRecordingFolders, deleteRecordingFolder } from "./actions"
 import { AddFolderDialog } from "./add-folder-dialog"
 import { EditFolderDialog } from "./edit-folder-dialog"
 import { revalidatePath } from "next/cache"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Recordings" }
 
 export const dynamic = "force-dynamic"
 
@@ -61,10 +64,7 @@ export default async function AdminRecordingsPage() {
                       <p className="text-sm text-muted-foreground">
                         Drive ID: <code className="bg-muted px-1 rounded text-xs">{folder.driveId}</code>
                       </p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Key className="h-3 w-3 text-muted-foreground" />
-                        <code className="bg-muted px-2 py-0.5 rounded text-sm font-mono">{folder.password}</code>
-                      </div>
+
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -91,7 +91,7 @@ export default async function AdminRecordingsPage() {
           <p>1. Add a folder by providing its Google Drive folder ID and a password.</p>
           <p>2. Only folders registered here will appear on the public recordings page.</p>
           <p>3. Users must enter the correct password to access recordings in each folder.</p>
-          <p>4. Once unlocked, the folder remains accessible for 24 hours.</p>
+          <p>4. Once unlocked, the folder remains accessible for 7 days.</p>
         </CardContent>
       </Card>
     </div>

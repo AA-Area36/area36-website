@@ -98,7 +98,8 @@ export interface ErrorSummary {
     errorKind: string
     fingerprint: string
     count: number
-    sampleMessage: string | null
+    /** Present only in legacy private artifacts; never render in the public projection. */
+    sampleMessage?: string | null
     sampleRoute: string | null
   }[]
 }
@@ -119,6 +120,20 @@ export interface ReportData {
   }
   uptime: UptimeRow[]
   errors: ErrorSummary
+}
+
+export function redactPublicReportDiagnostics(data: ReportData): ReportData {
+  return {
+    ...data,
+    errors: {
+      ...data.errors,
+      topErrors: data.errors.topErrors.map((row) => {
+        const sanitized = { ...row }
+        delete sanitized.sampleMessage
+        return sanitized
+      }),
+    },
+  }
 }
 
 // Legacy format support (old reports only have counts)

@@ -77,7 +77,7 @@ export function DocumentsSection() {
             {documents.map((doc) => (
               <div
                 key={doc.id}
-                className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
+                className="group flex min-w-0 items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md"
               >
                 <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <FileText className="h-6 w-6" aria-hidden="true" />

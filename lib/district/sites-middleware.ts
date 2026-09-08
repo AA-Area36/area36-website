@@ -26,10 +26,7 @@ export async function getDistrictSiteForMiddleware(env: { DB?: D1Database }, dis
   const cached = cache.get(districtNumber)
   if (cached && cached.expiresAt > nowMs()) return cached.value
 
-  if (!env?.DB) {
-    cache.set(districtNumber, { value: null, expiresAt: nowMs() + CACHE_TTL_MS })
-    return null
-  }
+  if (!env?.DB) throw new Error("District configuration unavailable")
 
   try {
     const row = await env.DB
@@ -56,9 +53,7 @@ export async function getDistrictSiteForMiddleware(env: { DB?: D1Database }, dis
     cache.set(districtNumber, { value, expiresAt: nowMs() + CACHE_TTL_MS })
     return value
   } catch {
-    // Local dev / unmigrated DB: treat as not configured.
-    cache.set(districtNumber, { value: null, expiresAt: nowMs() + CACHE_TTL_MS })
-    return null
+    // Never cache an outage as a missing district.
+    throw new Error("District configuration unavailable")
   }
 }
-

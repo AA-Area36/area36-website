@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm"
 import { getCloudflareContext } from "@opennextjs/cloudflare"
 import { getDb } from "@/lib/db"
 import { reportsMonthly } from "@/lib/db/schema"
+import { requireAreaAdminSession } from "@/lib/auth/guards"
 
 const MONTH_RE = /^\d{4}-\d{2}$/
 
@@ -10,6 +11,11 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ month: string }> }
 ) {
+  const session = await requireAreaAdminSession()
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   const { month } = await params
   if (!MONTH_RE.test(month)) {
     return NextResponse.json({ error: "Invalid month format. Use YYYY-MM." }, { status: 400 })
@@ -49,7 +55,8 @@ export async function GET(
   return new NextResponse(object.body, {
     headers: {
       "Content-Type": contentType,
-      "Cache-Control": "public, max-age=300",
+      "Cloudflare-CDN-Cache-Control": "no-store",
+      "Cache-Control": "private, no-store, max-age=0",
     },
   })
 }

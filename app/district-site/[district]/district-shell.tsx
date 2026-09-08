@@ -183,7 +183,7 @@ export function DistrictShell({ districtNumber, title, previewMode = false, chil
               </div>
               <p className="mt-4 max-w-md text-sm leading-6 text-muted-foreground">
                 For help with alcohol, visit the{" "}
-                <a href={MEETING_FINDER_URL} className="text-primary hover:underline">
+                <a href={MEETING_FINDER_URL} className="text-primary underline underline-offset-4">
                   AA Meeting Finder
                 </a>{" "}
                 or call the AA Hotline.
@@ -191,7 +191,7 @@ export function DistrictShell({ districtNumber, title, previewMode = false, chil
             </div>
 
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">District</h4>
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">District</h2>
               <ul className="mt-3 space-y-2">
                 {navigation.map((item) => (
                   <li key={item.href}>
@@ -204,7 +204,7 @@ export function DistrictShell({ districtNumber, title, previewMode = false, chil
             </div>
 
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Resources</h4>
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Resources</h2>
               <ul className="mt-3 space-y-2">
                 <li>
                   <a href="https://area36.org" className="text-sm text-muted-foreground transition-colors hover:text-foreground">

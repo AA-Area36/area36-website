@@ -1,5 +1,7 @@
 "use client"
 
+import { addCalendarDays } from "@/lib/utils/date-only"
+
 import * as React from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Calendar, CalendarPlus, MapPin, Clock, ExternalLink, Search, Plus, X, Globe, HelpCircle, Repeat, ChevronDown, Check, Video } from "lucide-react"
@@ -25,6 +27,7 @@ import type { Event, LocationType, EventType, EventFlyer } from "@/lib/db/schema
 import type { DisplayEvent } from "@/lib/types/recurrence"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 import { getCalendarCellLabel } from "./calendar-a11y"
+import { parseEventDateRange } from "./event-date-range"
 
 // Event with types array and flyers (from junction tables)
 export interface EventWithTypes extends Event {
@@ -79,45 +82,6 @@ const SECTION_PAGE_SIZE = 5
 
 function buildMapsHref(address: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
-}
-
-function getPrimaryEventHref(
-  event: Pick<DisplayEvent, "locationType" | "meetingLink" | "address">
-): string | null {
-  // Online wins for Hybrid, per requirement.
-  if ((event.locationType === "online" || event.locationType === "hybrid") && event.meetingLink) {
-    return event.meetingLink
-  }
-  if ((event.locationType === "in-person" || event.locationType === "hybrid") && event.address) {
-    return buildMapsHref(event.address)
-  }
-  return null
-}
-
-function isFromInteractiveElement(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false
-  // Avoid hijacking clicks on links, buttons, form controls, etc.
-  // Important: do not include `[role="link"]` here; the card container itself uses it.
-  return !!target.closest('a,button,input,textarea,select,summary,label,[role="button"],[data-no-card-link]')
-}
-
-function getEventCardLinkProps(href: string | null) {
-  if (!href) return {}
-
-  return {
-    role: "link" as const,
-    tabIndex: 0,
-    onClick: (e: React.MouseEvent) => {
-      if (isFromInteractiveElement(e.target)) return
-      window.open(href, "_blank", "noopener,noreferrer")
-    },
-    onKeyDown: (e: React.KeyboardEvent) => {
-      if (e.key !== "Enter" && e.key !== " ") return
-      if (isFromInteractiveElement(e.target)) return
-      e.preventDefault()
-      window.open(href, "_blank", "noopener,noreferrer")
-    },
-  }
 }
 
 // Generate Google Calendar URL for individual events
@@ -354,9 +318,10 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
   const initialDateFrom = searchParams.get("from")
   const initialDateTo = searchParams.get("to")
   const initialShowDistrictMeetings = searchParams.get("districtMeetings") !== "0"
-  const initialDateRange: DateRange | undefined = initialDateFrom
-    ? { from: parseLocalDate(initialDateFrom), to: initialDateTo ? parseLocalDate(initialDateTo) : undefined }
-    : undefined
+  const initialDateRange: DateRange | undefined = parseEventDateRange(
+    initialDateFrom,
+    initialDateTo
+  )
 
   const [searchQuery, setSearchQuery] = React.useState(initialSearch)
   const [selectedTypes, setSelectedTypes] = React.useState<string[]>(initialTypes)
@@ -772,9 +737,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
             break
           }
           // Move to next day
-          const d = new Date(currentDate + "T00:00:00")
-          d.setDate(d.getDate() + 1)
-          currentDate = d.toISOString().substring(0, 10)
+          currentDate = addCalendarDays(currentDate, 1)
         }
       }
       
@@ -791,9 +754,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
         }
         daySlots.get(currentDate)!.add(slot)
         // Move to next day
-        const d = new Date(currentDate + "T00:00:00")
-        d.setDate(d.getDate() + 1)
-        currentDate = d.toISOString().substring(0, 10)
+        currentDate = addCalendarDays(currentDate, 1)
       }
     }
     
@@ -961,6 +922,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                   value={selectedTypes}
                   onChange={handleTypesChange}
                   placeholder="Event type"
+                  aria-label="Filter upcoming events by type"
                   className="w-full sm:w-44"
                 />
                 <Button
@@ -1064,9 +1026,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                 <Button variant="ghost" size="sm" onClick={prevMonth} aria-label="Previous month">
                   ← Previous
                 </Button>
-                <h3 id="events-calendar-heading" className="text-lg font-semibold text-foreground" aria-live="polite">
+                <h2 id="events-calendar-heading" className="text-lg font-semibold text-foreground" aria-live="polite">
                   {currentMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-                </h3>
+                </h2>
                 <Button variant="ghost" size="sm" onClick={nextMonth} aria-label="Next month">
                   Next →
                 </Button>
@@ -1088,9 +1050,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                       <div
                         key={shortDay}
                         role="columnheader"
-                        aria-label={fullDay}
                         className="p-2 text-center text-sm font-medium text-muted-foreground border-b border-border bg-muted/30"
                       >
+                        <span className="sr-only">{fullDay}</span>
                         <span aria-hidden="true">{shortDay}</span>
                       </div>
                     ))}
@@ -1234,7 +1196,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
 
             {/* Events List */}
             <div className="space-y-6">
-              <h3 className="text-xl font-semibold text-foreground">Upcoming Events</h3>
+              <h2 className="text-xl font-semibold text-foreground">Upcoming Events</h2>
               {filteredEvents.length === 0 ? (
                 <div className="text-center py-12 rounded-xl border border-border bg-card">
                   <Calendar className="mx-auto h-12 w-12 text-muted-foreground" />
@@ -1246,12 +1208,10 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                   {pagedUpcomingGroups.map((group) => {
                     if (group.type === "single" && group.event) {
                       const event = group.event
-                      const primaryHref = getPrimaryEventHref(event)
                       return (
                         <article
                           key={event.id}
-                          className={`group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md ${primaryHref ? "cursor-pointer" : ""}`}
-                          {...getEventCardLinkProps(primaryHref)}
+                          className="group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md"
                         >
                           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                             <div className="flex-1">
@@ -1263,9 +1223,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                   </Badge>
                                 ))}
                               </div>
-                              <h2 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
+                              <h3 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                                 {event.title}
-                              </h2>
+                              </h3>
                               <EventDescription description={event.description} />
                             </div>
 
@@ -1353,7 +1313,6 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                       const firstOccurrence = group.occurrences[0]
                       const remainingOccurrences = group.occurrences.slice(1)
                       const isExpanded = expandedGroups.has(group.parentEventId)
-                      const primaryHref = getPrimaryEventHref(firstOccurrence)
 
                       return (
                         <article
@@ -1362,8 +1321,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                         >
                           {/* Main event card (first occurrence) */}
                           <div
-                            className={`p-6 transition-all hover:bg-muted/30 ${primaryHref ? "cursor-pointer" : ""}`}
-                            {...getEventCardLinkProps(primaryHref)}
+                            className="p-6 transition-all hover:bg-muted/30"
                           >
                             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                               <div className="flex-1">
@@ -1379,9 +1337,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                     {group.recurrenceDescription}
                                   </Badge>
                                 </div>
-                                <h2 className="text-xl font-semibold text-foreground">
+                                <h3 className="text-xl font-semibold text-foreground">
                                   {firstOccurrence.title}
-                                </h2>
+                                </h3>
                                 <EventDescription description={firstOccurrence.description} />
                               </div>
 
@@ -1522,9 +1480,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
 
             {/* District Events */}
             <div className="mt-12 pt-8 border-t border-border">
-              <h3 id="district-events-heading" className="text-xl font-semibold text-foreground mb-6">
+              <h2 id="district-events-heading" className="text-xl font-semibold text-foreground mb-6">
                 District Events
-              </h3>
+              </h2>
 
               {filteredDistrictEvents.length === 0 ? (
                 <div className="text-center py-8 rounded-xl border border-border bg-card">
@@ -1540,12 +1498,10 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                   {pagedDistrictGroups.map((group) => {
                     if (group.type === "single" && group.event) {
                       const event = group.event
-                      const primaryHref = getPrimaryEventHref(event)
                       return (
                         <article
                           key={event.id}
-                          className={`group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md ${primaryHref ? "cursor-pointer" : ""}`}
-                          {...getEventCardLinkProps(primaryHref)}
+                          className="group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md"
                         >
                           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                             <div className="flex-1">
@@ -1557,9 +1513,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                   </Badge>
                                 ))}
                               </div>
-                              <h4 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
+                              <h3 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                                 {event.title}
-                              </h4>
+                              </h3>
                               <EventDescription description={event.description} />
                             </div>
 
@@ -1647,7 +1603,6 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                       const firstOccurrence = group.occurrences[0]
                       const remainingOccurrences = group.occurrences.slice(1)
                       const isExpanded = expandedGroups.has(group.parentEventId)
-                      const primaryHref = getPrimaryEventHref(firstOccurrence)
 
                       return (
                         <article
@@ -1656,8 +1611,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                         >
                           {/* Main event card (first occurrence) */}
                           <div
-                            className={`p-6 transition-all hover:bg-muted/30 ${primaryHref ? "cursor-pointer" : ""}`}
-                            {...getEventCardLinkProps(primaryHref)}
+                            className="p-6 transition-all hover:bg-muted/30"
                           >
                             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                               <div className="flex-1">
@@ -1673,9 +1627,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                     {group.recurrenceDescription}
                                   </Badge>
                                 </div>
-                                <h4 className="text-xl font-semibold text-foreground">
+                                <h3 className="text-xl font-semibold text-foreground">
                                   {firstOccurrence.title}
-                                </h4>
+                                </h3>
                                 <EventDescription description={firstOccurrence.description} />
                               </div>
 
@@ -1816,9 +1770,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
 
             {/* District Monthly Meetings */}
             <div className="mt-12 pt-8 border-t border-border">
-              <h3 id="district-monthly-meetings-heading" className="text-xl font-semibold text-foreground mb-2">
+              <h2 id="district-monthly-meetings-heading" className="text-xl font-semibold text-foreground mb-2">
                 District Monthly Meetings
-              </h3>
+              </h2>
               <p className="text-sm text-muted-foreground mb-6">
                 Recurring monthly district meetings, generated from the Districts content.
               </p>
@@ -1845,12 +1799,10 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                   {pagedDistrictMeetingGroups.map((group) => {
                     if (group.type === "single" && group.event) {
                       const event = group.event
-                      const primaryHref = getPrimaryEventHref(event)
                       return (
                         <article
                           key={event.id}
-                          className={`group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md ${primaryHref ? "cursor-pointer" : ""}`}
-                          {...getEventCardLinkProps(primaryHref)}
+                          className="group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md"
                         >
                           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                             <div className="flex-1">
@@ -1866,9 +1818,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                   Monthly
                                 </Badge>
                               </div>
-                              <h4 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
+                              <h3 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                                 {event.title}
-                              </h4>
+                              </h3>
                               <EventDescription description={event.description} />
                             </div>
 
@@ -1927,7 +1879,6 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                       const firstOccurrence = group.occurrences[0]
                       const remainingOccurrences = group.occurrences.slice(1)
                       const isExpanded = expandedGroups.has(group.parentEventId)
-                      const primaryHref = getPrimaryEventHref(firstOccurrence)
 
                       return (
                         <article
@@ -1935,8 +1886,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                           className="rounded-xl border border-border bg-card overflow-hidden"
                         >
                           <div
-                            className={`p-6 transition-all hover:bg-muted/30 ${primaryHref ? "cursor-pointer" : ""}`}
-                            {...getEventCardLinkProps(primaryHref)}
+                            className="p-6 transition-all hover:bg-muted/30"
                           >
                             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                               <div className="flex-1">
@@ -1952,9 +1902,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                     {group.recurrenceDescription}
                                   </Badge>
                                 </div>
-                                <h4 className="text-xl font-semibold text-foreground">
+                                <h3 className="text-xl font-semibold text-foreground">
                                   {firstOccurrence.title}
-                                </h4>
+                                </h3>
                                 <EventDescription description={firstOccurrence.description} />
                               </div>
 
@@ -2071,7 +2021,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
 
             {/* Calendar Subscription */}
             <div id="calendar-subscribe" className="mt-12 rounded-xl border border-border bg-muted/30 p-6 scroll-mt-24">
-              <h3 className="font-semibold text-foreground mb-4">Subscribe to Calendar</h3>
+              <h2 className="font-semibold text-foreground mb-4">Subscribe to Calendar</h2>
               <p className="text-sm text-muted-foreground mb-4">
                 Add Area 36 events directly to your calendar application.
               </p>
@@ -2120,7 +2070,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                 aria-expanded={pastOpen}
               >
                 <div>
-                  <h3 className="text-lg font-semibold text-foreground">Past Events</h3>
+                  <h2 className="text-lg font-semibold text-foreground">Past Events</h2>
                   <p className="text-sm text-muted-foreground mt-1">
                     View recent past events. This section starts collapsed to keep the page focused on upcoming items.
                   </p>
@@ -2153,6 +2103,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                         />
                       </div>
                       <MultiSelect
+                        aria-label="Filter past events by type"
                         options={eventTypeOptions}
                         value={pastSelectedTypes}
                         onChange={setPastSelectedTypes}
@@ -2197,12 +2148,10 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                         {groupEventsDescending(currentPastPage?.events ?? []).map((group) => {
                           if (group.type === "single" && group.event) {
                             const event = group.event
-                            const primaryHref = getPrimaryEventHref(event)
                             return (
                               <article
                                 key={event.id}
-                                className={`group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md ${primaryHref ? "cursor-pointer" : ""}`}
-                                {...getEventCardLinkProps(primaryHref)}
+                                className="group rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/30 hover:shadow-md"
                               >
                                 <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                                   <div className="flex-1">
@@ -2220,9 +2169,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                         </Badge>
                                       )}
                                     </div>
-                                    <h4 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
+                                    <h3 className="text-xl font-semibold text-foreground group-hover:text-primary transition-colors">
                                       {event.title}
-                                    </h4>
+                                    </h3>
                                     <EventDescription description={event.description} />
                                   </div>
 
@@ -2292,7 +2241,6 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                             const firstOccurrence = group.occurrences[0]
                             const remainingOccurrences = group.occurrences.slice(1)
                             const isExpanded = expandedPastGroups.has(group.parentEventId)
-                            const primaryHref = getPrimaryEventHref(firstOccurrence)
 
                             return (
                               <article
@@ -2300,8 +2248,7 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                 className="rounded-xl border border-border bg-card overflow-hidden"
                               >
                                 <div
-                                  className={`p-6 transition-all hover:bg-muted/30 ${primaryHref ? "cursor-pointer" : ""}`}
-                                  {...getEventCardLinkProps(primaryHref)}
+                                  className="p-6 transition-all hover:bg-muted/30"
                                 >
                                   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                                     <div className="flex-1">
@@ -2317,9 +2264,9 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
                                           {group.recurrenceDescription}
                                         </Badge>
                                       </div>
-                                      <h4 className="text-xl font-semibold text-foreground">
+                                      <h3 className="text-xl font-semibold text-foreground">
                                         {firstOccurrence.title}
-                                      </h4>
+                                      </h3>
                                       <EventDescription description={firstOccurrence.description} />
                                     </div>
 

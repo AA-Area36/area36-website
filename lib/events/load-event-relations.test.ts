@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
+import { drizzle } from "drizzle-orm/d1"
 import {
   eventExceptions,
   eventFlyers,
@@ -140,5 +141,41 @@ describe("loadEventRelations", () => {
     expect(loadedEvent.types).toEqual(["District"])
     expect(loadedEvent.flyers.map((flyer) => flyer.id)).toEqual(["flyer-1"])
     expect(loadedEvent.exceptions?.map((exception) => exception.id)).toEqual(["exception-1"])
+  })
+})
+
+
+describe("D1 relation parameter budget", () => {
+  it.each([99, 100, 101, 201])("hydrates all %i rows without exceeding D1's parameter limit", async (count) => {
+    const queries: { sql: string; ids: string[] }[] = []
+    let active = 0
+    let maxActive = 0
+    const db = drizzle({
+      prepare: (sql: string) => ({
+        bind: (...ids: string[]) => ({
+          raw: async () => {
+            if (ids.length > 100) throw new Error("D1 parameter limit exceeded")
+            queries.push({ sql, ids })
+            maxActive = Math.max(maxActive, ++active)
+            await Promise.resolve()
+            active--
+            return sql.includes('"event_to_types"') ? ids.map((id) => [id, "District"]) : []
+          },
+        }),
+      }),
+    } as unknown as D1Database)
+    const rows = Array.from({ length: count }, (_, index) => ({
+      ...baseEvent(), id: `event-${index}`, isRecurring: index % 2 === 0,
+    }))
+
+    const result = await loadEventRelations(db as never, rows, requestLog() as never)
+
+    expect(result.map((row) => row.id)).toEqual(rows.map((row) => row.id))
+    expect(result.every((row) => row.types.length === 1 && row.types[0] === "District")).toBe(true)
+    expect(maxActive).toBeLessThanOrEqual(3)
+    expect(queries.filter((query) => query.sql.includes('"event_to_types"')).flatMap((query) => query.ids))
+      .toEqual(rows.map((row) => row.id))
+    expect(queries.filter((query) => query.sql.includes('"event_exceptions"')).flatMap((query) => query.ids))
+      .toEqual(rows.filter((row) => row.isRecurring).map((row) => row.id))
   })
 })

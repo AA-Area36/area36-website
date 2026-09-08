@@ -47,15 +47,15 @@ describe("getDistrictPublicEvents", () => {
     vi.setSystemTime(new Date("2026-07-11T12:00:00Z"))
     const select = vi.fn()
       .mockReturnValueOnce({ from: () => ({ where: () => ({ orderBy: () => ({ all: async () => [weeklyEvent()] }) }) }) })
-      .mockReturnValueOnce({ from: () => ({ where: () => ({ all: async () => [{ eventId: "weekly", type: "District" }] }) }) })
-      .mockReturnValueOnce({ from: () => ({ where: () => ({ orderBy: () => ({ all: async () => [] }) }) }) })
-      .mockReturnValueOnce({ from: () => ({ where: () => ({ all: async () => [{
+      .mockReturnValueOnce({ from: () => ({ where: async () => [{ eventId: "weekly", type: "District" }] }) })
+      .mockReturnValueOnce({ from: () => ({ where: () => ({ orderBy: async () => [] }) }) })
+      .mockReturnValueOnce({ from: () => ({ where: async () => [{
         id: "cancelled", eventId: "weekly", occurrenceDate: "2026-07-20",
         exceptionType: "cancelled", title: null, startTime: null, endTime: null,
         endDate: null, locationType: null, address: null, meetingLink: null,
         description: null, timeTBD: null, addressTBD: null, meetingLinkTBD: null,
         createdAt: "2026-07-01", createdBy: null,
-      }] }) }) })
+      }] }) })
     getDb.mockResolvedValue({ select })
 
     const events = await getDistrictPublicEvents(24)

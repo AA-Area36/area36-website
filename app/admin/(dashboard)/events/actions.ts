@@ -1,5 +1,6 @@
 "use server"
 
+import { eventEditSchema, recurringEventEditSchema } from "@/lib/schemas/event"
 import { auth } from "@/lib/auth"
 import { getDb } from "@/lib/db"
 import { events, eventToTypes, eventExceptions, type LocationType, type EventType, type MonthlyPatternType, type RecurrenceType } from "@/lib/db/schema"
@@ -160,6 +161,9 @@ export async function updateEvent(eventId: string, data: UpdateEventData): Promi
     return { success: false, error: "Unauthorized" }
   }
 
+  const parsed = eventEditSchema.safeParse(data)
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid event" }
+
   try {
     const db = await getDb()
     
@@ -228,6 +232,9 @@ export async function updateRecurringEvent(
   if (!session?.user?.email) {
     return { success: false, error: "Unauthorized" }
   }
+
+  const parsed = recurringEventEditSchema.safeParse(data)
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid event" }
 
   try {
     const db = await getDb()

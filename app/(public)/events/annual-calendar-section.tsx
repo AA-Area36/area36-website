@@ -118,20 +118,9 @@ export function AnnualCalendarSection({ files }: AnnualCalendarSectionProps) {
           const isDownloading = loadingAction?.fileId === file.id && loadingAction.action === "download"
           const isBusy = loadingAction?.fileId === file.id
           return (
-          <div
+          <article
             key={file.id}
-            role="button"
-            tabIndex={0}
-            className="group flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-card p-3 transition-all hover:border-primary/30 hover:shadow-sm"
-            onClick={() => {
-              void handleDownload(file)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault()
-                void handleDownload(file)
-              }
-            }}
+            className="group flex items-center gap-3 rounded-lg border border-border bg-card p-3 transition-all hover:border-primary/30 hover:shadow-sm"
           >
             <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
               {file.isProtected ? (
@@ -186,7 +175,7 @@ export function AnnualCalendarSection({ files }: AnnualCalendarSectionProps) {
                 )}
               </Button>
             </div>
-          </div>
+          </article>
           )
         })}
       </div>

@@ -8,7 +8,13 @@ import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { requireAreaAdminSession } from "@/lib/auth/guards"
 import { verifyEventUploadToken } from "@/lib/security/upload-token"
+import { persistUploadedObject } from "@/lib/storage/persist-upload"
 import { invalidateEventCaches } from "@/lib/utils/event-cache"
+import { checkRateLimit, getClientIp } from "@/lib/security/rate-limit"
+import {
+  releasePublicEventFlyerReservation,
+  reservePublicEventFlyerUpload,
+} from "@/lib/events/flyer-upload-budget"
 
 export interface UploadFlyerResponse {
   success: true
@@ -37,9 +43,9 @@ export async function uploadEventFlyer(
   const session = await auth()
   const isAdmin = !!session?.user?.email
 
-  const file = formData.get("file") as File | null
+  const file = formData.get("file")
 
-  if (!file) {
+  if (!(file instanceof File)) {
     return { success: false, error: "No file provided" }
   }
 
@@ -49,13 +55,41 @@ export async function uploadEventFlyer(
     return { success: false, error: "Event not found" }
   }
 
+  let reservationId: string | null = null
   if (!isAdmin) {
     const uploadToken = formData.get("uploadToken") as string | null
-    if (!uploadToken || !(await verifyEventUploadToken(uploadToken, eventId))) {
+    const tokenClaims = uploadToken
+      ? await verifyEventUploadToken(uploadToken, eventId)
+      : null
+    if (!tokenClaims) {
       return { success: false, error: "Upload not authorized" }
     }
     if (event.status !== "pending") {
       return { success: false, error: "Uploads are only allowed for pending events" }
+    }
+
+    const ip = await getClientIp()
+    const rateLimit = await checkRateLimit(`event-flyer:${ip}`, {
+      limit: 10,
+      windowMs: 10 * 60 * 1000,
+    })
+    if (!rateLimit.ok) {
+      return { success: false, error: "Too many uploads. Please try again later." }
+    }
+
+    reservationId = crypto.randomUUID()
+    const reserved = await reservePublicEventFlyerUpload(db.$client, {
+      id: reservationId,
+      eventId,
+      tokenId: tokenClaims.tokenId,
+      fileSize: file.size,
+      expiresAt: tokenClaims.expiresAt,
+    })
+    if (!reserved) {
+      return {
+        success: false,
+        error: "This event has reached its flyer upload limit.",
+      }
     }
   }
 
@@ -63,32 +97,76 @@ export async function uploadEventFlyer(
   const uploadResult = await uploadFlyer(eventId, file)
 
   if (!uploadResult.success) {
+    if (reservationId) {
+      try {
+        await releasePublicEventFlyerReservation(db.$client, reservationId)
+      } catch (error) {
+        console.error("Failed to release event flyer reservation", error)
+      }
+    }
     return { success: false, error: uploadResult.error }
   }
 
-  // Get the current max order for this event's flyers
-  const existingFlyers = await db
-    .select()
-    .from(eventFlyers)
-    .where(eq(eventFlyers.eventId, eventId))
-  
-  const maxOrder = existingFlyers.reduce((max, f) => Math.max(max, f.order), -1)
-
-  // Save flyer metadata to database
   const flyerId = crypto.randomUUID()
-  await db.insert(eventFlyers).values({
-    id: flyerId,
-    eventId,
-    fileKey: uploadResult.key,
-    fileName: uploadResult.fileName,
-    fileType: uploadResult.fileType,
-    fileSize: uploadResult.fileSize,
-    order: maxOrder + 1,
-  })
+  try {
+    await persistUploadedObject(async () => {
+      // Calculate and insert the next order in one D1 statement so concurrent
+      // uploads cannot all reuse a stale application-side MAX snapshot.
+      const result = await db.$client
+        .prepare(
+          `INSERT INTO event_flyers (
+            id, event_id, file_key, file_name, file_type, file_size, "order"
+          )
+          SELECT ?, ?, ?, ?, ?, ?, COALESCE(MAX("order"), -1) + 1
+          FROM event_flyers
+          WHERE event_id = ?`
+        )
+        .bind(
+          flyerId,
+          eventId,
+          uploadResult.key,
+          uploadResult.fileName,
+          uploadResult.fileType,
+          uploadResult.fileSize,
+          eventId
+        )
+      if (reservationId) {
+        await db.$client.batch([
+          result,
+          db.$client.prepare(
+            `UPDATE event_flyer_upload_reservations
+             SET state = 'committed', updated_at = datetime('now')
+             WHERE id = ? AND state = 'reserved'`
+          ).bind(reservationId),
+        ])
+        return
+      }
 
-  revalidatePath("/events")
-  revalidatePath("/admin/events")
-  await invalidateEventCaches(event.districtNumber)
+      const insertResult = await result.run()
+      if (!insertResult.success) {
+        throw new Error("Flyer metadata insert failed")
+      }
+    }, () => deleteFlyer(uploadResult.key))
+  } catch (error) {
+    if (reservationId) {
+      try {
+        await releasePublicEventFlyerReservation(db.$client, reservationId)
+      } catch (reservationError) {
+        console.error("Failed to release event flyer reservation", reservationError)
+      }
+    }
+    console.error("Failed to persist flyer metadata", error)
+    return { success: false, error: "Failed to save flyer. Please try again." }
+  }
+
+  try {
+    revalidatePath("/events")
+    revalidatePath("/admin/events")
+    await invalidateEventCaches(event.districtNumber)
+  } catch (error) {
+    // The upload is committed; cache invalidation can recover independently.
+    console.error("Flyer saved but cache invalidation failed", error)
+  }
 
   return {
     success: true,

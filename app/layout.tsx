@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "sonner"
 import { getRequestLocale, localeToHtmlLang } from "@/lib/i18n/get-locale"
+import { SkipLink } from "@/components/skip-link"
 import "./globals.css"
 
 export const metadata: Metadata = {
@@ -22,9 +23,7 @@ export default async function RootLayout({
     <html lang={localeToHtmlLang(locale)} suppressHydrationWarning>
       <body className="font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <a href="#main-content" className="skip-link">
-            Skip to main content
-          </a>
+          <SkipLink />
           {children}
           <Toaster richColors closeButton position="bottom-right" />
         </ThemeProvider>

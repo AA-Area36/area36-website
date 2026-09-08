@@ -8,6 +8,9 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Contacts" }
 
 function coerceDistrict(param: string): number | null {
   const n = Number(param)

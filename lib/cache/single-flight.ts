@@ -36,11 +36,16 @@ async function hashFlightKey(key: string): Promise<string> {
   return `v1:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`
 }
 
-async function getSharedDb(): Promise<D1Database | null> {
+async function getRegionalCoordination(): Promise<{ db: D1Database; colo: string } | null> {
   try {
     const { getCloudflareContext } = await import("@opennextjs/cloudflare")
-    const { env } = await getCloudflareContext({ async: true })
-    return env.DB ?? null
+    const { env, cf } = await getCloudflareContext({ async: true })
+    // Cache API entries are local to the serving data center. Never coordinate
+    // globally if its identity is unavailable (for example in local Node).
+    const colo = cf?.colo
+    return env.DB && typeof colo === "string" && colo.length > 0
+      ? { db: env.DB, colo }
+      : null
   } catch {
     return null
   }
@@ -113,7 +118,7 @@ function delay(ms: number): Promise<void> {
 }
 
 /**
- * Coalesces cache fills across Worker isolates with a short D1 lease. The
+ * Coalesces cache fills across Worker isolates in the same data center. The
  * cache remains the result channel, so lease holders never persist payloads
  * in D1 and waiters have a bounded failure path.
  */
@@ -127,13 +132,14 @@ export function runSharedSingleFlight<T>(
     const cached = await readCached()
     if (cached !== null) return cached
 
-    const db = await getSharedDb()
-    if (!db) return task()
+    const coordination = await getRegionalCoordination()
+    if (!coordination) return task()
+    const { db, colo } = coordination
 
     const leaseMs = options.leaseMs ?? DEFAULT_LEASE_MS
     const waitMs = options.waitMs ?? DEFAULT_WAIT_MS
     const pollMs = options.pollMs ?? DEFAULT_POLL_MS
-    const keyHash = await hashFlightKey(key)
+    const keyHash = await hashFlightKey(JSON.stringify([colo, key]))
     const owner = crypto.randomUUID()
 
     let acquired: boolean

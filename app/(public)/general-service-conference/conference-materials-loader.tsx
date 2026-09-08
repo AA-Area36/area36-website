@@ -6,7 +6,7 @@ import {
   useServiceResources,
 } from "@/lib/hooks/use-gdrive-files"
 import { findFinalReportProcessResource } from "@/lib/gdrive/final-report-process"
-import { GdriveLoader } from "@/components/gdrive-loader"
+import { GdriveError, GdriveLoader } from "@/components/gdrive-loader"
 import { ConferenceMaterialsContent } from "./conference-materials-content"
 import { FinalReportsContent } from "./final-reports-content"
 import { BackgroundMaterialsContent } from "./background-materials-content"
@@ -22,15 +22,14 @@ import { BackgroundMaterialsContent } from "./background-materials-content"
  * is unavailable.
  */
 export function ConferenceMaterialsLoader() {
-  const { data, isLoading, error } = useBackgroundMaterials()
+  const { data, isLoading, error, refetch } = useBackgroundMaterials()
 
   if (isLoading) {
     return <GdriveLoader message="Loading advisory actions..." />
   }
 
-  // Graceful degradation: log error but show empty content
-  if (error) {
-    console.error("Failed to load advisory actions:", error)
+  if (error && !data) {
+    return <GdriveError resourceName="Advisory actions" onRetry={refetch} />
   }
 
   return <ConferenceMaterialsContent materials={data?.advisoryActions || []} />
@@ -44,16 +43,15 @@ export function ConferenceMaterialsLoader() {
  * is unavailable.
  */
 export function FinalReportsLoader() {
-  const { data, isLoading, error } = useConferenceMaterials()
+  const { data, isLoading, error, refetch } = useConferenceMaterials()
   const { data: serviceResources, error: serviceResourcesError } = useServiceResources()
 
   if (isLoading) {
     return <GdriveLoader message="Loading final reports..." />
   }
 
-  // Graceful degradation: log error but show empty content
-  if (error) {
-    console.error("Failed to load final reports:", error)
+  if (error && !data) {
+    return <GdriveError resourceName="Final reports" onRetry={refetch} />
   }
   if (serviceResourcesError) {
     console.error("Failed to load the Final Report ordering guide:", serviceResourcesError)
@@ -75,15 +73,14 @@ export function FinalReportsLoader() {
  * is unavailable.
  */
 export function BackgroundMaterialsLoader() {
-  const { data, isLoading, error } = useBackgroundMaterials()
+  const { data, isLoading, error, refetch } = useBackgroundMaterials()
 
   if (isLoading) {
     return <GdriveLoader message="Loading background materials..." />
   }
 
-  // Graceful degradation: log error but show empty content
-  if (error) {
-    console.error("Failed to load background materials:", error)
+  if (error && !data) {
+    return <GdriveError resourceName="Background materials" onRetry={refetch} />
   }
 
   return (

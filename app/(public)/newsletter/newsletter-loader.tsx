@@ -1,27 +1,24 @@
 "use client"
 
 import { useNewsletters } from "@/lib/hooks/use-gdrive-files"
-import { GdriveLoader } from "@/components/gdrive-loader"
+import { GdriveError, GdriveLoader } from "@/components/gdrive-loader"
 import { NewsletterViewer } from "./newsletter-viewer"
 import { FileText } from "lucide-react"
 
 /**
  * Lazy loads newsletters from the API and renders the NewsletterViewer
  * 
- * GRACEFUL DEGRADATION: If files fail to load, shows empty state message
- * instead of error. This ensures the page remains usable even if GDrive
- * is unavailable.
+ * Keeps a service outage distinct from a legitimate empty archive.
  */
 export function NewsletterLoader() {
-  const { data, isLoading, error } = useNewsletters()
+  const { data, isLoading, error, refetch } = useNewsletters()
 
   if (isLoading) {
     return <GdriveLoader message="Loading newsletters..." />
   }
 
-  // Graceful degradation: log error but show empty state
-  if (error) {
-    console.error("Failed to load newsletters:", error)
+  if (error && !data) {
+    return <GdriveError resourceName="Newsletters" onRetry={refetch} />
   }
 
   if (!data || data.newsletters.length === 0) {

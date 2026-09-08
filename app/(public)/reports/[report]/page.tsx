@@ -4,7 +4,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare"
 import { getDb } from "@/lib/db"
 import { reportsMonthly } from "@/lib/db/schema"
 import { ReportContent } from "./report-content"
-import type { ReportData } from "./types"
+import { redactPublicReportDiagnostics, type ReportData } from "./types"
 
 const MONTH_RE = /^\d{4}-\d{2}$/
 
@@ -54,7 +54,7 @@ export default async function ReportPage({ params }: Props) {
     notFound()
   }
 
-  const data = (await object.json()) as ReportData
+  const data = redactPublicReportDiagnostics((await object.json()) as ReportData)
 
   return <ReportContent data={data} month={month} generatedAt={report.generatedAt} />
 }

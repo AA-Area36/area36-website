@@ -29,8 +29,21 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+## Deploy to Cloudflare
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Deploy the application with the repository script:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+pnpm deploy:production
+```
+
+This builds the OpenNext Worker, applies all pending production D1 migrations,
+and deploys the Worker in that order. Do not run `pnpm deploy` or `wrangler
+deploy` directly: the former invokes pnpm's unrelated workspace command, while
+the latter bypasses migrations and can deploy code against an outdated schema.
+
+Before or after a production deploy, confirm that no migrations remain pending:
+
+```bash
+pnpm exec wrangler d1 migrations list DB --remote
+```

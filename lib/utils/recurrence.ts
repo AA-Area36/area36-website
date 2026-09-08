@@ -1,5 +1,8 @@
+import { calendarDayDifference, addCalendarDays, isDateOnly } from "./date-only"
 import type { Event } from "@/lib/db/schema"
 import type { WeeklyPattern, MonthlyPattern } from "@/lib/types/recurrence"
+
+const MAX_ARCHIVE_MONTHS = 121
 
 /**
  * Parse the weekly recurrence pattern from database JSON string
@@ -104,18 +107,14 @@ export function formatDate(date: Date): string {
  */
 export function getEventDurationDays(event: Event): number {
   if (!event.endDate) return 0
-  const start = parseLocalDate(event.date)
-  const end = parseLocalDate(event.endDate)
-  return Math.floor((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000))
+  return calendarDayDifference(event.date, event.endDate)
 }
 
 /**
  * Add days to a date string
  */
 export function addDaysToDate(dateStr: string, days: number): string {
-  const date = parseLocalDate(dateStr)
-  date.setDate(date.getDate() + days)
-  return formatDate(date)
+  return addCalendarDays(dateStr, days)
 }
 
 /**
@@ -163,8 +162,16 @@ export function generateOccurrenceDates(
     let year = effectiveStart.getFullYear()
     let month = effectiveStart.getMonth()
 
-    // Safety limit - don't go more than 5 years
-    const maxIterations = 60 // 5 years of months
+    const requestedMonths =
+      (effectiveEnd.getFullYear() - effectiveStart.getFullYear()) * 12 +
+      (effectiveEnd.getMonth() - effectiveStart.getMonth()) +
+      1
+    // The past-events API validates a maximum ten-year window. Keep a hard
+    // archive cap for defense in depth while covering every requested month.
+    const maxIterations = Math.min(
+      Math.max(requestedMonths, 0),
+      MAX_ARCHIVE_MONTHS
+    )
     let iterations = 0
 
     while (iterations < maxIterations) {
@@ -264,4 +271,11 @@ export function serializeMonthlyPatternValue(pattern: MonthlyPattern): string {
     week: pattern.weekOfMonth,
     day: pattern.dayOfWeek,
   })
+}
+
+/** Exceptions remain attached only to dates that still belong to the edited series. */
+export function isOccurrenceDate(event: Event, value: string): boolean {
+  if (!isDateOnly(value)) return false
+  const day = parseLocalDate(value)
+  return generateOccurrenceDates(event, day, day).includes(value)
 }

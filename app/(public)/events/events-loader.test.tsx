@@ -10,8 +10,10 @@ vi.mock("./calendar-file-actions", () => ({
   getAnnualCalendarFiles,
 }))
 vi.mock("./events-client", () => ({
-  EventsClient: ({ events }: { events: unknown[] }) => (
-    <div data-testid="events-client">Loaded {events.length} events</div>
+  EventsClient: ({ events, calendarFiles }: { events: unknown[]; calendarFiles: unknown[] }) => (
+    <div data-testid="events-client">
+      Loaded {events.length} events and {calendarFiles.length} calendar files
+    </div>
   ),
 }))
 
@@ -39,6 +41,16 @@ describe("EventsLoader", () => {
     vi.restoreAllMocks()
   })
 
+  it("keeps the page heading and calendar space available while events load", () => {
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(new Promise(() => undefined)))
+    render(<EventsLoader hero={hero} />)
+    expect(screen.getByRole("heading", { level: 1, name: hero.title })).toBeVisible()
+    expect(screen.getByText(hero.description)).toBeVisible()
+    expect(screen.getByRole("status")).toHaveTextContent("Loading events...")
+    expect(screen.getByRole("button", { name: "Submit Event", hidden: true })).toBeDisabled()
+    expect(screen.queryByTestId("events-client")).not.toBeInTheDocument()
+  })
+
   it("preserves a successful empty response as a legitimate empty calendar", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response([])))
 
@@ -46,6 +58,29 @@ describe("EventsLoader", () => {
 
     expect(await screen.findByTestId("events-client")).toHaveTextContent("Loaded 0 events")
     expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  })
+
+  it("renders events before optional Drive calendar metadata settles", async () => {
+    let resolveCalendarFiles: (files: unknown[]) => void = () => undefined
+    getAnnualCalendarFiles.mockReturnValue(
+      new Promise((resolve) => {
+        resolveCalendarFiles = resolve
+      })
+    )
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response([{ id: "event-1" }])))
+
+    render(<EventsLoader hero={hero} />)
+
+    expect(await screen.findByTestId("events-client")).toHaveTextContent(
+      "Loaded 1 events and 0 calendar files"
+    )
+
+    resolveCalendarFiles([{ id: "calendar-1" }])
+    await waitFor(() => {
+      expect(screen.getByTestId("events-client")).toHaveTextContent(
+        "Loaded 1 events and 1 calendar files"
+      )
+    })
   })
 
   it("shows an announced unavailable state instead of an empty calendar on API failure", async () => {

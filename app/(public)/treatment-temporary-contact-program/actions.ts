@@ -1,5 +1,7 @@
 "use server"
 
+import { verifyRecaptcha } from "@/lib/security/recaptcha"
+
 import { getCloudflareContext } from "@opennextjs/cloudflare"
 import { sendEmail, getGmailCredentials } from "@/lib/gmail/client"
 import {
@@ -10,72 +12,33 @@ import {
 } from "@/lib/schemas/treatment-tcp"
 import { checkRateLimit, getClientIp } from "@/lib/security/rate-limit"
 
-interface ReCaptchaResponse {
-  success: boolean
-  score?: number
-  action?: string
-  challenge_ts?: string
-  hostname?: string
-  "error-codes"?: string[]
+const TREATMENT_RECIPIENTS = ["ttcc@area36.org", "treatment@area36.org"] as const
+const DELIVERY_ERROR =
+  "We could not deliver your request. Please try again or contact ttcc@area36.org directly."
+
+async function deliverTreatmentMessage(
+  credentials: ReturnType<typeof getGmailCredentials>,
+  message: Omit<Parameters<typeof sendEmail>[1], "to">
+): Promise<boolean> {
+  let delivered = 0
+
+  for (const recipient of TREATMENT_RECIPIENTS) {
+    try {
+      const emailResult = await sendEmail(credentials, { ...message, to: recipient })
+      if (emailResult.success) {
+        delivered++
+      } else {
+        console.error(`Failed to send Treatment TCP form to ${recipient}:`, emailResult.error)
+      }
+    } catch (error) {
+      console.error(`Treatment TCP delivery threw for ${recipient}:`, error)
+    }
+  }
+
+  return delivered > 0
 }
 
-const RECAPTCHA_SCORE_THRESHOLD = 0.5
 
-async function getRecaptchaSecretKey(): Promise<string | undefined> {
-  try {
-    const { env } = await getCloudflareContext({ async: true })
-    if (env.RECAPTCHA_SECRET_KEY) {
-      return env.RECAPTCHA_SECRET_KEY
-    }
-  } catch {
-    // Not in Cloudflare environment
-  }
-  return process.env.RECAPTCHA_SECRET_KEY
-}
-
-async function verifyRecaptcha(token: string): Promise<{ success: boolean; error?: string }> {
-  const isDevelopment = process.env.NODE_ENV === "development"
-
-  if (isDevelopment) {
-    return { success: true }
-  }
-
-  if (!token) {
-    return { success: false, error: "reCAPTCHA token is missing. Please try again." }
-  }
-
-  const secretKey = await getRecaptchaSecretKey()
-
-  if (!secretKey) {
-    console.error("RECAPTCHA_SECRET_KEY is not configured")
-    return { success: false, error: "Server configuration error. Please try again later." }
-  }
-
-  try {
-    const verifyResponse = await fetch("https://www.google.com/recaptcha/api/siteverify", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ secret: secretKey, response: token }),
-    })
-
-    const verifyResult: ReCaptchaResponse = await verifyResponse.json()
-
-    if (!verifyResult.success) {
-      console.error("reCAPTCHA verification failed:", verifyResult["error-codes"])
-      return { success: false, error: "reCAPTCHA verification failed. Please try again." }
-    }
-
-    if (verifyResult.score !== undefined && verifyResult.score < RECAPTCHA_SCORE_THRESHOLD) {
-      console.warn("reCAPTCHA score too low:", verifyResult.score)
-      return { success: false, error: "Suspicious activity detected. Please try again." }
-    }
-
-    return { success: true }
-  } catch (error) {
-    console.error("reCAPTCHA verification error:", error)
-    return { success: false, error: "reCAPTCHA verification failed. Please try again." }
-  }
-}
 
 export async function submitNewcomerForm(data: NewcomerFormData) {
   const result = newcomerFormSchema.safeParse(data)
@@ -93,7 +56,7 @@ export async function submitNewcomerForm(data: NewcomerFormData) {
     return { success: false, error: "Too many submissions. Please try again later." }
   }
 
-  const recaptchaResult = await verifyRecaptcha(result.data.recaptchaToken)
+  const recaptchaResult = await verifyRecaptcha(result.data.recaptchaToken, "newcomer_form")
   if (!recaptchaResult.success) {
     return { success: false, error: recaptchaResult.error }
   }
@@ -123,19 +86,12 @@ Facility Address: ${result.data.treatmentFacilityAddress}
 ---
 This form was submitted via the Area 36 website Treatment Temporary Contact Program page.`
 
-    // Send to both ttcc@area36.org and treatment@area36.org
-    const recipients = ["ttcc@area36.org", "treatment@area36.org"]
-
-    for (const recipient of recipients) {
-      const emailResult = await sendEmail(credentials, {
-        to: recipient,
-        subject: "[Treatment TCP] New Newcomer Sign Up Request",
-        body,
-      })
-
-      if (!emailResult.success) {
-        console.error(`Failed to send newcomer form to ${recipient}:`, emailResult.error)
-      }
+    const delivered = await deliverTreatmentMessage(credentials, {
+      subject: "[Treatment TCP] New Newcomer Sign Up Request",
+      body,
+    })
+    if (!delivered) {
+      return { success: false, error: DELIVERY_ERROR }
     }
 
     return { success: true, message: "Your request has been submitted. The Treatment TCP Coordinator will contact you shortly." }
@@ -161,7 +117,7 @@ export async function submitVolunteerForm(data: VolunteerFormData) {
     return { success: false, error: "Too many submissions. Please try again later." }
   }
 
-  const recaptchaResult = await verifyRecaptcha(result.data.recaptchaToken)
+  const recaptchaResult = await verifyRecaptcha(result.data.recaptchaToken, "volunteer_form")
   if (!recaptchaResult.success) {
     return { success: false, error: recaptchaResult.error }
   }
@@ -191,20 +147,13 @@ Sobriety Date: ${result.data.sobrietyDate}
 ---
 This form was submitted via the Area 36 website Treatment Temporary Contact Program page.`
 
-    // Send to both ttcc@area36.org and treatment@area36.org
-    const recipients = ["ttcc@area36.org", "treatment@area36.org"]
-
-    for (const recipient of recipients) {
-      const emailResult = await sendEmail(credentials, {
-        to: recipient,
-        subject: "[Treatment TCP] New Volunteer Sign Up",
-        body,
-        replyTo: result.data.email,
-      })
-
-      if (!emailResult.success) {
-        console.error(`Failed to send volunteer form to ${recipient}:`, emailResult.error)
-      }
+    const delivered = await deliverTreatmentMessage(credentials, {
+      subject: "[Treatment TCP] New Volunteer Sign Up",
+      body,
+      replyTo: result.data.email,
+    })
+    if (!delivered) {
+      return { success: false, error: DELIVERY_ERROR }
     }
 
     return { success: true, message: "Your volunteer sign up has been submitted. The Treatment TCP Coordinator will contact you shortly." }

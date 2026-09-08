@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: Props) {
   const monthName = date.toLocaleDateString("en-US", { month: "long", year: "numeric" })
 
   return {
-    title: `${monthName} Report (Admin) - Area 36`,
+    title: `${monthName} Report`,
     description: `Monthly operational report for Area 36 web services - ${monthName}`,
   }
 }
