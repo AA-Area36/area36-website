@@ -204,6 +204,44 @@ export function FinalReportsContent({ oldReports, orderingGuide }: FinalReportsC
   return (
     <>
       <div className="space-y-8">
+        {/* 2026 Reports - aa.org */}
+        <div>
+          <h3 className="text-lg font-semibold text-foreground mb-4">2026</h3>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <ExternalReportLink
+              href="https://www.aa.org/2026-general-service-conference-final-report"
+              title="2026 Final Report (English)"
+            />
+            <ExternalReportLink
+              href="https://www.aa.org/es/informe-final-de-la-conferencia-de-servicios-generales-2026"
+              title="2026 Informe Final (Español)"
+            />
+            <ExternalReportLink
+              href="https://www.aa.org/fr/rapport-final-de-la-conference-des-services-generaux-de-2026"
+              title="2026 Rapport Final (Français)"
+            />
+          </div>
+        </div>
+
+        {/* 2025 Reports - aa.org */}
+        <div>
+          <h3 className="text-lg font-semibold text-foreground mb-4">2025</h3>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <ExternalReportLink
+              href="https://www.aa.org/2025-general-service-conference-final-report"
+              title="2025 Final Report (English)"
+            />
+            <ExternalReportLink
+              href="https://www.aa.org/es/informe-final-de-la-conferencia-de-servicios-generales-2025"
+              title="2025 Informe Final (Español)"
+            />
+            <ExternalReportLink
+              href="https://www.aa.org/fr/rapport-final-de-la-conference-des-services-generaux-de-2025"
+              title="2025 Rapport Final (Français)"
+            />
+          </div>
+        </div>
+
         {/* 2024 Reports - aa.org */}
         <div>
           <h3 className="text-lg font-semibold text-foreground mb-4">2024</h3>
