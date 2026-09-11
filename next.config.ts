@@ -17,6 +17,18 @@ const nextConfig: NextConfig = {
         source: "/:path*",
         headers: [...BROWSER_SECURITY_HEADERS],
       },
+      // Header rules are applied in order. The preview endpoint is embedded
+      // only by this site's PDF viewer, so override the default DENY policy
+      // after the site-wide security headers have been applied.
+      {
+        source: "/api/files/preview/:path*",
+        headers: [
+          {
+            key: "X-Frame-Options",
+            value: "SAMEORIGIN",
+          },
+        ],
+      },
     ];
   },
   experimental: {
