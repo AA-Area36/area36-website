@@ -1,6 +1,5 @@
 "use server"
 
-import { nanoid } from "nanoid"
 import { revalidatePath } from "next/cache"
 import { signIn } from "@/lib/auth"
 import { requireQuorumWriteSession } from "@/lib/auth/guards"
@@ -36,24 +35,29 @@ export async function connectQuorumDriveAction() {
   )
 }
 
-export async function createQuorumEventAction(data: QuorumEventInput) {
+export async function createQuorumEventAction(data: QuorumEventInput, eventKey: string) {
   await requireWriter()
   const parsed = quorumEventSchema.safeParse(data)
   if (!parsed.success) {
     return { success: false as const, error: parsed.error.errors[0]?.message ?? "Invalid event." }
   }
   try {
-    const event = await createQuorumEvent({ ...parsed.data, eventKey: nanoid(14) })
-    if (parsed.data.featured) await setQuorumEventFeatured(event.eventKey)
-    await Promise.all([
-      invalidateEdgeCache("quorum:featured"),
-      invalidateEdgeCache(`quorum:summary:${event.eventKey}`),
-    ])
-    revalidatePath("/admin/quorum")
-    return { success: true as const, eventKey: event.eventKey }
+    const event = await createQuorumEvent({ ...parsed.data, eventKey: quorumEventKeySchema.parse(eventKey) })
+    let warning: string | undefined
+    try {
+      if (parsed.data.featured) await setQuorumEventFeatured(event.eventKey)
+      await Promise.all([
+        invalidateEdgeCache("quorum:featured"),
+        invalidateEdgeCache(`quorum:summary:${event.eventKey}`),
+      ])
+      revalidatePath("/admin/quorum")
+    } catch {
+      warning = "The event was created. Featured selection or page refresh did not complete; refresh and select the event below. Do not create it again."
+    }
+    return { success: true as const, eventKey: event.eventKey, warning }
   } catch (error) {
     console.error("Failed to create quorum event", getRedactedErrorMetadata(error))
-    return { success: false as const, error: "The event spreadsheet could not be created. Check the Quorum Drive configuration." }
+    return { success: false as const, error: `Creation could not be confirmed. Retry this same form. If it remains unavailable, ask an administrator to reconcile attempt ${quorumEventKeySchema.safeParse(eventKey).success ? eventKey : "(invalid key)"} in Quorum Drive before creating another event.` }
   }
 }
 

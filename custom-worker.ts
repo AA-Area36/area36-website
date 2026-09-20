@@ -3,6 +3,7 @@
 import openNextHandler from "./.open-next/worker.js"
 import { serveWithPublicHtmlCache } from "@/lib/cache/public-html-worker"
 import { processPendingEventFlyerCleanup } from "@/lib/events/flyer-cleanup"
+import { processPendingObjectCleanup } from "@/lib/storage/object-cleanup"
 
 export default {
   async fetch(request, env, ctx) {
@@ -17,6 +18,7 @@ export default {
   },
   async scheduled(_controller, env, ctx) {
     ctx.waitUntil(processPendingEventFlyerCleanup(env))
+    ctx.waitUntil(processPendingObjectCleanup(env))
   },
 } satisfies ExportedHandler<CloudflareEnv>
 

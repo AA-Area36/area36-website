@@ -12,6 +12,16 @@ const orderingGuide: ServiceResource = {
   mimeType: "application/pdf",
 }
 
+const archivedReport = {
+  id: "report-2022",
+  title: "2022 Final Report English",
+  category: "conference-materials" as const,
+  mimeType: "application/pdf",
+  previewUrl: "/api/files/preview/report-2022",
+  downloadUrl: "/api/files/download/report-2022",
+  driveId: "drive-report-2022",
+}
+
 describe("FinalReportsContent", () => {
   it("shows a subtle link to the Final Report ordering guide when available", () => {
     render(<FinalReportsContent oldReports={[]} orderingGuide={orderingGuide} />)
@@ -33,5 +43,15 @@ describe("FinalReportsContent", () => {
     expect(screen.queryByRole("complementary", {
       name: "Ordering printed Final Reports",
     })).not.toBeInTheDocument()
+  })
+
+  it("allows report cards to shrink within narrow grid columns", () => {
+    render(<FinalReportsContent oldReports={[archivedReport]} />)
+
+    expect(screen.getByText("2022 Final Report (English)").closest("article"))
+      .toHaveClass("min-w-0")
+
+    expect(screen.getByRole("link", { name: /2026 Rapport Final/ }))
+      .toHaveClass("min-w-0")
   })
 })

@@ -1,9 +1,11 @@
 import nextCoreWebVitals from "eslint-config-next/core-web-vitals"
 import nextTypescript from "eslint-config-next/typescript"
+import { fixupConfigRules } from "@eslint/compat"
 
 const config = [
-  ...nextCoreWebVitals,
-  ...nextTypescript,
+  // Bridge legacy rule-context methods until Next's React/import/a11y plugins
+  // publish ESLint 10 support. Keep the same rules enabled during the upgrade.
+  ...fixupConfigRules([...nextCoreWebVitals, ...nextTypescript]),
   {
     ignores: [
       ".next/**",

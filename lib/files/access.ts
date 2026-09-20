@@ -5,7 +5,7 @@ import { isFileUnlocked } from "@/lib/files/session"
 import { getDb } from "@/lib/db"
 import { isFolderUnlocked } from "@/lib/recordings/session"
 import { fileMetadata, recordingFolders } from "@/lib/db/schema"
-import { eq } from "drizzle-orm"
+import { eq, inArray } from "drizzle-orm"
 import type { DriveFile, GDriveCredentials } from "@/lib/gdrive/types"
 
 // Re-export types only (these don't add to bundle size)
@@ -101,9 +101,12 @@ export async function getFileMetadataByDriveId(driveId: string) {
 export async function getFileMetadataByDriveIds(driveIds: string[]) {
   if (driveIds.length === 0) return []
   const db = await getDb()
-  const results = await db.select().from(fileMetadata)
-  // Filter in JS since D1 doesn't support IN queries well
-  return results.filter((r) => driveIds.includes(r.driveId))
+  const ids = [...new Set(driveIds)]
+  const results: (typeof fileMetadata.$inferSelect)[] = []
+  for (let offset = 0; offset < ids.length; offset += 100) {
+    results.push(...await db.select().from(fileMetadata).where(inArray(fileMetadata.driveId, ids.slice(offset, offset + 100))))
+  }
+  return results
 }
 
 /**
@@ -112,13 +115,11 @@ export async function getFileMetadataByDriveIds(driveIds: string[]) {
  * Access is granted when ANY of the following are true:
  * 1. The file has no password set in our database.
  * 2. The file has a password but the user's session cookie marks it as unlocked.
- * 3. A valid short-lived unlock token is provided (issued after password
- *    verification, avoids cookie-propagation race).
  */
 export async function validateFileAccess(
   fileId: string,
   credentials: Awaited<ReturnType<typeof getGDriveCredentials>>,
-  unlockToken: string | null | undefined,
+  _unlockToken: string | null | undefined,
   allowedRootIds: string[]
 ): Promise<FileAccessResult> {
   try {
@@ -157,21 +158,7 @@ export async function validateFileAccess(
       }
     }
 
-    // File has password — check unlock token first (avoids cookie race)
-    if (unlockToken) {
-      const { verifyFileUnlockToken } = await import("@/lib/security/unlock-cookie")
-      const tokenFileId = await verifyFileUnlockToken(unlockToken, metadata.password)
-      if (tokenFileId === fileId) {
-        return {
-          valid: true,
-          filename: file.name,
-          requiresPassword: true,
-          isUnlocked: true,
-        }
-      }
-    }
-
-    // Fall back to cookie-based check
+    // URL credentials are deliberately ignored. Authorization is cookie-only.
     const unlocked = await isFileUnlocked(fileId)
     return {
       valid: unlocked,

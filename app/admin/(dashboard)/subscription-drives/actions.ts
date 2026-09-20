@@ -3,7 +3,8 @@
 import { auth } from "@/lib/auth"
 import { getDb } from "@/lib/db"
 import { subscriptionDrives, driveSubmissions, type SubscriptionDrive, type DriveSubmission, type DriveSubmissionStatus } from "@/lib/db/schema"
-import { deleteImage, deleteImagesByPrefix } from "@/lib/r2"
+import { deleteImagesByPrefix } from "@/lib/r2"
+import { enqueueObjectCleanup, finishObjectCleanup } from "@/lib/storage/object-cleanup"
 import { createDriveSchema, updateDriveSchema, type CreateDriveData, type UpdateDriveData } from "@/lib/schemas/drive-submission"
 import { eq, desc, and } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
@@ -204,15 +205,11 @@ export async function deleteSubmission(submissionId: string): Promise<void> {
     throw new Error("Submission not found")
   }
 
-  // Delete image from R2
-  try {
-    await deleteImage(submission.confirmationImageKey)
-  } catch (error) {
-    console.error("Failed to delete image from R2:", error)
-  }
-
-  // Delete submission from database
-  await db.delete(driveSubmissions).where(eq(driveSubmissions.id, submissionId))
+  await db.$client.batch([
+    enqueueObjectCleanup(db.$client, submission.confirmationImageKey),
+    db.$client.prepare("DELETE FROM drive_submissions WHERE id = ?").bind(submissionId),
+  ])
+  await finishObjectCleanup(db.$client, submission.confirmationImageKey).catch(() => undefined)
 
   revalidatePath("/admin/subscription-drives")
   revalidatePath("/grapevine")

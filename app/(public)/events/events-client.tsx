@@ -1,4 +1,5 @@
 "use client"
+import { formatDate as formatCalendarDate } from "@/lib/utils/recurrence"
 
 import { addCalendarDays } from "@/lib/utils/date-only"
 
@@ -390,8 +391,8 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
     const params = new URLSearchParams()
     if (search) params.set("q", search)
     if (types.length > 0) params.set("types", types.join(","))
-    if (range?.from) params.set("from", range.from.toISOString().split("T")[0])
-    if (range?.to) params.set("to", range.to.toISOString().split("T")[0])
+    if (range?.from) params.set("from", formatCalendarDate(range.from))
+    if (range?.to) params.set("to", formatCalendarDate(range.to))
     if (!districtMeetings) params.set("districtMeetings", "0")
 
     const queryString = params.toString()
@@ -578,8 +579,8 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
     if (cursor) params.set("cursor", cursor)
     if (opts.q.trim()) params.set("q", opts.q.trim())
     if (opts.types.length > 0) params.set("types", opts.types.join(","))
-    if (opts.range?.from) params.set("from", opts.range.from.toISOString().split("T")[0])
-    if (opts.range?.to) params.set("to", opts.range.to.toISOString().split("T")[0])
+    if (opts.range?.from) params.set("from", formatCalendarDate(opts.range.from))
+    if (opts.range?.to) params.set("to", formatCalendarDate(opts.range.to))
 
     const response = await fetch(`/api/events/past?${params.toString()}`)
     if (!response.ok) {
@@ -589,8 +590,8 @@ export function EventsClient({ events, calendarFiles, hero }: EventsClientProps)
   }, [])
 
   const pastQueryKey = React.useMemo(() => {
-    const from = pastDateRange?.from ? pastDateRange.from.toISOString().split("T")[0] : ""
-    const to = pastDateRange?.to ? pastDateRange.to.toISOString().split("T")[0] : ""
+    const from = pastDateRange?.from ? formatCalendarDate(pastDateRange.from) : ""
+    const to = pastDateRange?.to ? formatCalendarDate(pastDateRange.to) : ""
     return JSON.stringify({
       q: debouncedPastSearchQuery.trim(),
       types: [...pastSelectedTypes].sort(),

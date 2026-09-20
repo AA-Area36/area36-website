@@ -53,6 +53,7 @@ export function ManageOccurrencesDialog({ event, exceptions }: ManageOccurrences
     const rangeEnd = new Date(today)
     rangeEnd.setFullYear(rangeEnd.getFullYear() + 1)
 
+    today.setHours(0, 0, 0, 0)
     const dates = generateOccurrenceDates(event, today, rangeEnd)
     
     return dates.map((date): OccurrenceState => {

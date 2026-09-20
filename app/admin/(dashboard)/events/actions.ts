@@ -1,13 +1,14 @@
 "use server"
 
+import { saveOccurrence } from "@/lib/events/save-occurrence"
 import { eventEditSchema, recurringEventEditSchema } from "@/lib/schemas/event"
 import { auth } from "@/lib/auth"
 import { getDb } from "@/lib/db"
-import { events, eventToTypes, eventExceptions, type LocationType, type EventType, type MonthlyPatternType, type RecurrenceType } from "@/lib/db/schema"
+import { events, eventToTypes, eventExceptions, eventFlyers, type LocationType, type EventType, type MonthlyPatternType, type RecurrenceType } from "@/lib/db/schema"
 import { eq, and } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { sendDenialEmailToSubmitter, sendDenialEmailToChair } from "@/lib/email"
-import { serializeWeeklyPattern, serializeMonthlyPatternValue } from "@/lib/utils/recurrence"
+import { serializeWeeklyPattern, serializeMonthlyPatternValue, isOccurrenceDate } from "@/lib/utils/recurrence"
 import type { WeeklyPattern, MonthlyPattern } from "@/lib/types/recurrence"
 import { invalidateEventCaches } from "@/lib/utils/event-cache"
 import { completeEventFlyerCleanup, enqueueEventFlyerCleanup } from "@/lib/events/flyer-cleanup"
@@ -83,7 +84,7 @@ export async function denyEvent(eventId: string, reason: string): Promise<void> 
   }
 
   // Update the event status and denial reason
-  await db
+  const denyQuery = db
     .update(events)
     .set({
       status: "denied",
@@ -93,6 +94,12 @@ export async function denyEvent(eventId: string, reason: string): Promise<void> 
       updatedAt: new Date().toISOString(),
     })
     .where(eq(events.id, eventId))
+  await db.batch([
+    denyQuery,
+    enqueueEventFlyerCleanup(db, eventId),
+    db.delete(eventFlyers).where(eq(eventFlyers.eventId, eventId)),
+  ])
+  await completeEventFlyerCleanup(db, eventId).catch(() => undefined)
 
   // Send email notifications (wrapped in try/catch - don't fail denial if email fails)
   try {
@@ -163,6 +170,7 @@ export async function updateEvent(eventId: string, data: UpdateEventData): Promi
 
   const parsed = eventEditSchema.safeParse(data)
   if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid event" }
+  data = parsed.data as UpdateEventData
 
   try {
     const db = await getDb()
@@ -235,6 +243,7 @@ export async function updateRecurringEvent(
 
   const parsed = recurringEventEditSchema.safeParse(data)
   if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid event" }
+  data = parsed.data as UpdateRecurringEventData
 
   try {
     const db = await getDb()
@@ -312,17 +321,8 @@ export async function updateRecurringEvent(
     if (!data.occurrenceDate) {
       return { success: false, error: "Occurrence date is required" }
     }
-
-    // Check if exception already exists
-    const [existingException] = await db
-      .select()
-      .from(eventExceptions)
-      .where(
-        and(
-          eq(eventExceptions.eventId, eventId),
-          eq(eventExceptions.occurrenceDate, data.occurrenceDate)
-        )
-      )
+    const [parent] = await db.select().from(events).where(eq(events.id, eventId)).limit(1)
+    if (!parent || !isOccurrenceDate(parent, data.occurrenceDate)) return { success: false, error: "This date is no longer part of the event series. Refresh and try again." }
 
     const exceptionData = {
       exceptionType: "modified" as const,
@@ -339,22 +339,7 @@ export async function updateRecurringEvent(
       meetingLinkTBD: data.meetingLinkTBD ?? false,
     }
 
-    if (existingException) {
-      // Update existing exception
-      await db
-        .update(eventExceptions)
-        .set(exceptionData)
-        .where(eq(eventExceptions.id, existingException.id))
-    } else {
-      // Create new exception
-      await db.insert(eventExceptions).values({
-        id: crypto.randomUUID(),
-        eventId,
-        occurrenceDate: data.occurrenceDate,
-        ...exceptionData,
-        createdBy: session.user.email,
-      })
-    }
+    await saveOccurrence(db.$client, parent, data.occurrenceDate, exceptionData, session.user.email)
 
     revalidatePath("/admin/events")
     revalidatePath("/events")
@@ -382,34 +367,10 @@ export async function cancelOccurrence(
 
   try {
     const db = await getDb()
+    const [parent] = await db.select().from(events).where(eq(events.id, eventId)).limit(1)
+    if (!parent || !isOccurrenceDate(parent, occurrenceDate)) return { success: false, error: "This date is no longer part of the event series. Refresh and try again." }
 
-    // Check if exception already exists
-    const [existingException] = await db
-      .select()
-      .from(eventExceptions)
-      .where(
-        and(
-          eq(eventExceptions.eventId, eventId),
-          eq(eventExceptions.occurrenceDate, occurrenceDate)
-        )
-      )
-
-    if (existingException) {
-      // Update to cancelled
-      await db
-        .update(eventExceptions)
-        .set({ exceptionType: "cancelled" })
-        .where(eq(eventExceptions.id, existingException.id))
-    } else {
-      // Create cancelled exception
-      await db.insert(eventExceptions).values({
-        id: crypto.randomUUID(),
-        eventId,
-        occurrenceDate,
-        exceptionType: "cancelled",
-        createdBy: session.user.email,
-      })
-    }
+    await saveOccurrence(db.$client, parent, occurrenceDate, { exceptionType: "cancelled" }, session.user.email)
 
     revalidatePath("/admin/events")
     revalidatePath("/events")

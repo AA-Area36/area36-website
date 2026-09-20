@@ -41,7 +41,7 @@ export function FilePasswordDialog({
     setIsVerifying(true)
     setError(null)
 
-    const result = await onVerify(fileId, password)
+    const result = await onVerify(fileId, password).catch(() => ({ success: false, error: "Unable to verify. Please try again." }))
 
     setIsVerifying(false)
 

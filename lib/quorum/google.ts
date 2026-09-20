@@ -1,4 +1,6 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare"
+import { getDb } from "@/lib/db"
+import { hashQuorumPayload, reserveQuorumRow } from "./idempotency"
 import { clearGoogleServiceAccountToken, getGoogleServiceAccountAccessToken } from "@/lib/google/delegated-auth"
 import { getGoogleServiceAccountCredentials } from "@/lib/google/sheets"
 import { getQuorumDriveOwnerAccessToken } from "@/lib/google/user-drive-auth"
@@ -32,6 +34,10 @@ const SHEETS_API = "https://sheets.googleapis.com/v4"
 // with it. Drive ACLs still restrict it to the shared Quorum folder/resources.
 const GOOGLE_SCOPES = ["https://www.googleapis.com/auth/drive"]
 const REQUEST_TIMEOUT_MS = 12_000
+
+class GoogleResponseError extends Error {
+  constructor(readonly status: number) { super(`Google API request failed: ${status}`) }
+}
 
 type QuorumGoogleConfig = {
   folderId: string
@@ -72,8 +78,7 @@ async function requestWithAccessToken<T>(url: string, accessToken: string, init:
   })
 
   if (!response.ok) {
-    const body = await response.text()
-    throw new Error(`Google API request failed: ${response.status} ${body.slice(0, 300)}`)
+    throw new GoogleResponseError(response.status)
   }
   if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
@@ -184,6 +189,7 @@ function parseEvent(file: DriveFile): QuorumEvent | null {
   const eventDate = properties[QUORUM_APP_PROPERTIES.eventDate]
   const quorumTarget = Number.parseInt(properties[QUORUM_APP_PROPERTIES.quorumTarget] ?? "", 10)
   const rawStatus = properties[QUORUM_APP_PROPERTIES.status]
+  if (rawStatus === "initializing") return null
   if (!eventKey || !title || !eventDate || !Number.isFinite(quorumTarget)) return null
 
   return {
@@ -225,9 +231,12 @@ async function listEventFiles(extraQuery?: string): Promise<DriveFile[]> {
 
 export async function listQuorumEvents(): Promise<QuorumEvent[]> {
   const files = await listEventFiles()
+  const db = await getDb()
+  const selected = await db.$client.prepare("SELECT event_key AS eventKey FROM quorum_featured_selection WHERE singleton = 1").first<{ eventKey: string }>()
   return files
     .map(parseEvent)
     .filter((event): event is QuorumEvent => !!event)
+    .map(event => selected ? { ...event, featured: event.eventKey === selected.eventKey && event.status === "open" } : event)
     .sort((a, b) => b.eventDate.localeCompare(a.eventDate) || a.title.localeCompare(b.title))
 }
 
@@ -242,6 +251,12 @@ export async function getQuorumEventByKey(eventKey: string): Promise<QuorumEvent
 }
 
 export async function getFeaturedQuorumEvent(): Promise<QuorumEvent | null> {
+  const db = await getDb()
+  const selected = await db.$client.prepare("SELECT event_key AS eventKey FROM quorum_featured_selection WHERE singleton = 1").first<{ eventKey: string }>()
+  if (selected) {
+    const event = await getQuorumEventByKey(selected.eventKey)
+    return event?.status === "open" ? { ...event, featured: true } : null
+  }
   const files = await listEventFiles(
     `appProperties has { key='${QUORUM_APP_PROPERTIES.featured}' and value='1' }`,
   )
@@ -260,90 +275,116 @@ export async function createQuorumEvent(input: {
   quorumTarget: number
   featured: boolean
 }): Promise<QuorumEvent> {
+  // Validate Drive configuration before recording an irreversible create attempt.
   const folder = await ensureQuorumFolder()
-  const file = await ownerGoogleRequest<DriveFile>(
-    `${DRIVE_API}/files?fields=id,name,webViewLink,modifiedTime,appProperties&supportsAllDrives=true`,
+  await getQuorumDriveOwnerAccessToken()
+  const db = await getDb()
+  const payloadHash = await hashQuorumPayload(input)
+  const attempt = await db.$client.prepare("INSERT INTO quorum_creation_attempts (event_key, payload_hash) VALUES (?, ?) ON CONFLICT DO NOTHING RETURNING event_key").bind(input.eventKey, payloadHash).first()
+  let file: DriveFile
+  if (!attempt) {
+    const previous = await db.$client.prepare("SELECT payload_hash AS payloadHash FROM quorum_creation_attempts WHERE event_key = ?").bind(input.eventKey).first<{ payloadHash: string }>()
+    if (previous?.payloadHash !== payloadHash) throw new Error("Creation attempt details changed")
+    const files = await listEventFiles(`appProperties has { key='${QUORUM_APP_PROPERTIES.eventKey}' and value='${escapeDriveQueryValue(input.eventKey)}' }`)
+    const existing = files[0]
+    if (existing && parseEvent(existing)) return parseEvent(existing)!
+    // A timed-out Drive create may still be in flight. Never create a second file.
+    if (!existing) throw new Error("Creation is awaiting reconciliation. Retry this same attempt or ask an administrator to check Drive.")
+    file = existing
+  } else {
+    try {
+      file = await ownerGoogleRequest<DriveFile>(
+        `${DRIVE_API}/files?fields=id,name,webViewLink,modifiedTime,appProperties&supportsAllDrives=true`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: `${input.eventDate} — ${input.title} — Quorum`,
+            mimeType: "application/vnd.google-apps.spreadsheet",
+            parents: [folder.id],
+            appProperties: {
+              [QUORUM_APP_PROPERTIES.feature]: QUORUM_FEATURE_VALUE,
+              [QUORUM_APP_PROPERTIES.eventKey]: input.eventKey,
+              [QUORUM_APP_PROPERTIES.title]: input.title,
+              [QUORUM_APP_PROPERTIES.eventDate]: input.eventDate,
+              [QUORUM_APP_PROPERTIES.quorumTarget]: String(input.quorumTarget),
+              [QUORUM_APP_PROPERTIES.status]: "initializing",
+              [QUORUM_APP_PROPERTIES.featured]: "0",
+              [QUORUM_APP_PROPERTIES.schemaVersion]: QUORUM_SCHEMA_VERSION,
+            },
+          }),
+        },
+      )
+    } catch (error) {
+      // Definitive upstream rejection created no file; retrying is safe. Keep
+      // the claim for transport failures and 5xx responses with unknown outcome.
+      if (error instanceof GoogleResponseError && [400, 401, 403, 404, 429].includes(error.status)) {
+        await db.$client.prepare("DELETE FROM quorum_creation_attempts WHERE event_key = ? AND payload_hash = ?").bind(input.eventKey, payloadHash).run()
+      }
+      throw error
+    }
+  }
+
+  const spreadsheet = await ownerGoogleRequest<{ sheets?: { properties: { sheetId: number; title: string } }[] }>(`${SHEETS_API}/spreadsheets/${encodeURIComponent(file.id)}?fields=sheets.properties`)
+  const hasConfig = spreadsheet.sheets?.some(sheet => sheet.properties.title === QUORUM_CONFIG_TAB)
+  // Initialization is safe to repeat after ambiguous responses. Never delete
+  // the file on error: a committed operation may still be reconciling.
+  await ownerGoogleRequest(
+    `${SHEETS_API}/spreadsheets/${encodeURIComponent(file.id)}:batchUpdate`,
     {
       method: "POST",
       body: JSON.stringify({
-        name: `${input.eventDate} — ${input.title} — Quorum`,
-        mimeType: "application/vnd.google-apps.spreadsheet",
-        parents: [folder.id],
-        appProperties: {
-          [QUORUM_APP_PROPERTIES.feature]: QUORUM_FEATURE_VALUE,
-          [QUORUM_APP_PROPERTIES.eventKey]: input.eventKey,
-          [QUORUM_APP_PROPERTIES.title]: input.title,
-          [QUORUM_APP_PROPERTIES.eventDate]: input.eventDate,
-          [QUORUM_APP_PROPERTIES.quorumTarget]: String(input.quorumTarget),
-          [QUORUM_APP_PROPERTIES.status]: "open",
-          [QUORUM_APP_PROPERTIES.featured]: input.featured ? "1" : "0",
-          [QUORUM_APP_PROPERTIES.schemaVersion]: QUORUM_SCHEMA_VERSION,
-        },
+        requests: [
+          {
+            updateSheetProperties: {
+              properties: { sheetId: 0, title: QUORUM_SUBMISSIONS_TAB, gridProperties: { frozenRowCount: 1 } },
+              fields: "title,gridProperties.frozenRowCount",
+            },
+          },
+          ...(!hasConfig ? [{ addSheet: { properties: { sheetId: 1, title: QUORUM_CONFIG_TAB, hidden: true } } }] : []),
+          {
+            repeatCell: {
+              range: { sheetId: 0, startRowIndex: 0, endRowIndex: 1 },
+              cell: {
+                userEnteredFormat: {
+                  backgroundColor: { red: 0.08, green: 0.22, blue: 0.36 },
+                  textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                },
+              },
+              fields: "userEnteredFormat(backgroundColor,textFormat)",
+            },
+          },
+        ],
       }),
     },
   )
-
-  try {
-    await ownerGoogleRequest(
-      `${SHEETS_API}/spreadsheets/${encodeURIComponent(file.id)}:batchUpdate`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          requests: [
-            {
-              updateSheetProperties: {
-                properties: { sheetId: 0, title: QUORUM_SUBMISSIONS_TAB, gridProperties: { frozenRowCount: 1 } },
-                fields: "title,gridProperties.frozenRowCount",
-              },
-            },
-            { addSheet: { properties: { title: QUORUM_CONFIG_TAB, hidden: true } } },
-            {
-              repeatCell: {
-                range: { sheetId: 0, startRowIndex: 0, endRowIndex: 1 },
-                cell: {
-                  userEnteredFormat: {
-                    backgroundColor: { red: 0.08, green: 0.22, blue: 0.36 },
-                    textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } },
-                  },
-                },
-                fields: "userEnteredFormat(backgroundColor,textFormat)",
-              },
-            },
-          ],
-        }),
-      },
-    )
-    await ownerGoogleRequest(
-      `${SHEETS_API}/spreadsheets/${encodeURIComponent(file.id)}/values:batchUpdate`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          valueInputOption: "RAW",
-          data: [
-            { range: `${QUORUM_SUBMISSIONS_TAB}!A1:V1`, values: [[...QUORUM_HEADERS]] },
-            {
-              range: `${QUORUM_CONFIG_TAB}!A1:B7`,
-              values: [
-                ["Event Key", input.eventKey],
-                ["Title", input.title],
-                ["Event Date", input.eventDate],
-                ["Required Voting Members", input.quorumTarget],
-                ["Status", "open"],
-                ["Featured", input.featured],
-                ["Schema Version", QUORUM_SCHEMA_VERSION],
-              ],
-            },
-          ],
-        }),
-      },
-    )
-  } catch (error) {
-    await ownerGoogleRequest(`${DRIVE_API}/files/${encodeURIComponent(file.id)}?supportsAllDrives=true`, {
-      method: "DELETE",
-    }).catch(() => undefined)
-    throw error
-  }
-
+  await ownerGoogleRequest(
+    `${SHEETS_API}/spreadsheets/${encodeURIComponent(file.id)}/values:batchUpdate`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        valueInputOption: "RAW",
+        data: [
+          { range: `${QUORUM_SUBMISSIONS_TAB}!A1:V1`, values: [[...QUORUM_HEADERS]] },
+          {
+            range: `${QUORUM_CONFIG_TAB}!A1:B7`,
+            values: [
+              ["Event Key", input.eventKey],
+              ["Title", input.title],
+              ["Event Date", input.eventDate],
+              ["Required Voting Members", input.quorumTarget],
+              ["Status", "open"],
+              ["Featured", input.featured],
+              ["Schema Version", QUORUM_SCHEMA_VERSION],
+            ],
+          },
+        ],
+      }),
+    },
+  )
+  await ownerGoogleRequest(`${DRIVE_API}/files/${encodeURIComponent(file.id)}?supportsAllDrives=true`, {
+    method: "PATCH", body: JSON.stringify({ appProperties: { [QUORUM_APP_PROPERTIES.status]: "open" } }),
+  })
+  file.appProperties = { ...file.appProperties, [QUORUM_APP_PROPERTIES.status]: "open" }
   const event = parseEvent(file)
   if (!event) throw new Error("Created quorum event metadata is invalid")
   return event
@@ -364,12 +405,9 @@ export async function setQuorumEventFeatured(eventKey: string): Promise<void> {
   const selected = events.find((event) => event.eventKey === eventKey)
   if (!selected || selected.status !== "open") throw new Error("Open quorum event not found")
 
-  await patchEventProperties(selected, { [QUORUM_APP_PROPERTIES.featured]: "1" })
-  await Promise.all(
-    events
-      .filter((event) => event.eventKey !== eventKey && event.featured)
-      .map((event) => patchEventProperties(event, { [QUORUM_APP_PROPERTIES.featured]: "0" })),
-  )
+  const db = await getDb()
+  // One atomic pointer replaces non-transactional patches to multiple Drive files.
+  await db.$client.prepare("INSERT INTO quorum_featured_selection (singleton, event_key) VALUES (1, ?) ON CONFLICT(singleton) DO UPDATE SET event_key = excluded.event_key").bind(eventKey).run()
 }
 
 export async function closeQuorumEvent(eventKey: string): Promise<void> {
@@ -402,9 +440,34 @@ export async function appendQuorumSubmission(input: {
   isAlternate: boolean
   seatKey: string
 }): Promise<void> {
+  const db = await getDb()
+  const registration = { ...input.registration, recaptchaToken: undefined }
+  const payloadHash = await hashQuorumPayload(registration)
+  const identityRange = encodeURIComponent(`${QUORUM_SUBMISSIONS_TAB}!A:A`)
+  const identities = await googleRequest<{ values?: SheetValue[][] }>(`${SHEETS_API}/spreadsheets/${encodeURIComponent(input.event.spreadsheetId)}/values/${identityRange}`)
+  const reservation = await reserveQuorumRow(db.$client, {
+    eventKey: input.event.eventKey, submissionId: input.submissionId, payloadHash,
+    occupiedRows: identities.values?.length ?? 1, submittedAt: input.submittedAt,
+  })
+  const spreadsheet = await googleRequest<{ sheets?: { properties: { sheetId: number; title: string; gridProperties: { rowCount: number } } }[] }>(`${SHEETS_API}/spreadsheets/${encodeURIComponent(input.event.spreadsheetId)}?fields=sheets.properties`)
+  const sheet = spreadsheet.sheets?.find(sheet => sheet.properties.title === QUORUM_SUBMISSIONS_TAB)
+  if (!sheet) throw new Error("Check-in sheet is unavailable")
+  if (sheet.properties.gridProperties.rowCount < reservation.rowNumber) {
+    // Append only: concurrent expansion can add spare rows but never shrinks
+    // another writer's grid or overwrites manually occupied rows.
+    await googleRequest(`${SHEETS_API}/spreadsheets/${encodeURIComponent(input.event.spreadsheetId)}:batchUpdate`, {
+      method: "POST", body: JSON.stringify({ requests: [{ appendDimension: { sheetId: sheet.properties.sheetId, dimension: "ROWS", length: reservation.rowNumber - sheet.properties.gridProperties.rowCount } }] }),
+    })
+  }
+  const reservedRange = encodeURIComponent(`${QUORUM_SUBMISSIONS_TAB}!A${reservation.rowNumber}:V${reservation.rowNumber}`)
+  const reservedValues = await googleRequest<{ values?: SheetValue[][] }>(`${SHEETS_API}/spreadsheets/${encodeURIComponent(input.event.spreadsheetId)}/values/${reservedRange}`)
+  const occupiedRow = reservedValues.values?.[0] ?? []
+  const occupied = occupiedRow[0]
+  if (occupied === input.submissionId) return // Preserve later admin corrections on retries.
+  if (occupiedRow.some(value => value !== "" && value !== null)) throw new Error("Reserved check-in row was edited. Ask an administrator for help.")
   const row: SheetValue[] = [
     input.submissionId,
-    input.submittedAt,
+    reservation.submittedAt,
     input.registration.name,
     input.registration.district,
     input.registration.homeGroup,
@@ -426,10 +489,10 @@ export async function appendQuorumSubmission(input: {
     `/quorum/${input.event.eventKey}`,
     input.registration.newsletterDelivery,
   ]
-  const range = encodeURIComponent(`${QUORUM_SUBMISSIONS_TAB}!A:V`)
+  const range = encodeURIComponent(`${QUORUM_SUBMISSIONS_TAB}!A${reservation.rowNumber}:V${reservation.rowNumber}`)
   await googleRequest(
-    `${SHEETS_API}/spreadsheets/${encodeURIComponent(input.event.spreadsheetId)}/values/${range}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
-    { method: "POST", body: JSON.stringify({ values: [row] }) },
+    `${SHEETS_API}/spreadsheets/${encodeURIComponent(input.event.spreadsheetId)}/values/${range}?valueInputOption=RAW`,
+    { method: "PUT", body: JSON.stringify({ values: [row] }) },
   )
 }
 

@@ -69,7 +69,7 @@ describe("Quorum check-in side effects", () => {
     ["invalid registration", event.eventKey, { ...registration, email: "invalid" }],
     ["missing verification token", event.eventKey, { ...registration, recaptchaToken: "" }],
   ])("rejects %s before any external work", async (_label, eventKey, data) => {
-    await expect(submitQuorumRegistration(eventKey, data)).resolves.toMatchObject({ success: false })
+    await expect(submitQuorumRegistration(eventKey, data, "attempt12345678901")).resolves.toMatchObject({ success: false })
     expect(mocks.getClientIp).not.toHaveBeenCalled()
     expect(mocks.checkRateLimit).not.toHaveBeenCalled()
     expect(mocks.verifyRecaptcha).not.toHaveBeenCalled()
@@ -80,7 +80,7 @@ describe("Quorum check-in side effects", () => {
 
   it("does not read or append attendance when the limiter denies a request", async () => {
     mocks.checkRateLimit.mockResolvedValue({ ok: false })
-    await expect(submitQuorumRegistration(event.eventKey, registration))
+    await expect(submitQuorumRegistration(event.eventKey, registration, "attempt12345678901"))
       .resolves.toMatchObject({ success: false, error: expect.stringContaining("Too many") })
     expect(mocks.verifyRecaptcha).not.toHaveBeenCalled()
     expect(mocks.getQuorumEventByKey).not.toHaveBeenCalled()
@@ -90,7 +90,7 @@ describe("Quorum check-in side effects", () => {
 
   it("verifies the check-in action and stops before attendance access on rejection", async () => {
     mocks.verifyRecaptcha.mockResolvedValue({ success: false, error: "Verification rejected" })
-    await expect(submitQuorumRegistration(event.eventKey, registration))
+    await expect(submitQuorumRegistration(event.eventKey, registration, "attempt12345678901"))
       .resolves.toEqual({ success: false, error: "Verification rejected" })
     expect(mocks.verifyRecaptcha).toHaveBeenCalledExactlyOnceWith(registration.recaptchaToken, "quorum_check_in")
     expect(mocks.getQuorumEventByKey).not.toHaveBeenCalled()
@@ -100,7 +100,7 @@ describe("Quorum check-in side effects", () => {
 
   it.each([null, { ...event, status: "closed" }])("does not append for an unavailable event: %j", async (unavailable) => {
     mocks.getQuorumEventByKey.mockResolvedValue(unavailable)
-    await expect(submitQuorumRegistration(event.eventKey, registration))
+    await expect(submitQuorumRegistration(event.eventKey, registration, "attempt12345678901"))
       .resolves.toMatchObject({ success: false, error: expect.stringContaining("closed") })
     expect(mocks.appendQuorumSubmission).not.toHaveBeenCalled()
     expect(mocks.invalidateEdgeCache).not.toHaveBeenCalled()
@@ -108,7 +108,7 @@ describe("Quorum check-in side effects", () => {
 
   it("does not write attendance when event lookup fails", async () => {
     mocks.getQuorumEventByKey.mockRejectedValue(new Error("internal upstream detail"))
-    const result = await submitQuorumRegistration(event.eventKey, registration)
+    const result = await submitQuorumRegistration(event.eventKey, registration, "attempt12345678901")
     expect(result).toMatchObject({ success: false })
     expect(JSON.stringify(result)).not.toContain("internal upstream detail")
     expect(mocks.appendQuorumSubmission).not.toHaveBeenCalled()
@@ -117,7 +117,7 @@ describe("Quorum check-in side effects", () => {
 
   it("returns a generic failure and does not invalidate the cache when the append rejects", async () => {
     mocks.appendQuorumSubmission.mockRejectedValue(new Error("internal sheet detail"))
-    const result = await submitQuorumRegistration(event.eventKey, registration)
+    const result = await submitQuorumRegistration(event.eventKey, registration, "attempt12345678901")
     expect(result).toMatchObject({ success: false })
     expect(JSON.stringify(result)).not.toContain("internal sheet detail")
     expect(mocks.appendQuorumSubmission).toHaveBeenCalledOnce()
@@ -125,7 +125,7 @@ describe("Quorum check-in side effects", () => {
   })
 
   it("appends one normalized alternate and invalidates only that event summary afterward", async () => {
-    await expect(submitQuorumRegistration(event.eventKey, registration)).resolves.toEqual({ success: true })
+    await expect(submitQuorumRegistration(event.eventKey, registration, "attempt12345678901")).resolves.toEqual({ success: true })
     expect(mocks.getQuorumEventByKey).toHaveBeenCalledExactlyOnceWith(event.eventKey)
     expect(mocks.appendQuorumSubmission).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
       event,
@@ -142,7 +142,7 @@ describe("Quorum check-in side effects", () => {
 
   it("keeps saved success if only summary invalidation fails, avoiding a duplicate retry", async () => {
     mocks.invalidateEdgeCache.mockRejectedValue(new Error("test cache unavailable"))
-    await expect(submitQuorumRegistration(event.eventKey, registration)).resolves.toMatchObject({ success: true })
+    await expect(submitQuorumRegistration(event.eventKey, registration, "attempt12345678901")).resolves.toMatchObject({ success: true })
     expect(mocks.appendQuorumSubmission).toHaveBeenCalledOnce()
     expect(mocks.invalidateEdgeCache).toHaveBeenCalledOnce()
   })

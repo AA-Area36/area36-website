@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { enrichResourcesWithMetadata, enrichCommitteeFilesWithMetadata, getFileMetadataByDriveIds } from "@/lib/files/metadata"
 import { getDb } from "@/lib/db"
 import { recordingFolders } from "@/lib/db/schema"
+import { getUnlockedFolders } from "@/lib/recordings/session"
+import { createConcurrencyLimiter } from "@/lib/utils/concurrency"
 import { recordError } from "@/lib/monitoring/errors"
 import {
   createApiErrorResponse,
@@ -111,12 +113,6 @@ async function fetchRecordingsData(requestId: string) {
       const years = [...new Set(Object.values(data.recordings).flat().map((r) => r.year))]
         .sort((a, b) => b - a)
       
-      // Fetch registered folders from DB (not cached - DB is fast)
-      const db = await getDb()
-      const folders = await db.select({ 
-        driveId: recordingFolders.driveId, 
-        folderName: recordingFolders.folderName 
-      }).from(recordingFolders)
       
       log("info", "GDrive recordings fetched", { 
         requestId, 
@@ -129,7 +125,7 @@ async function fetchRecordingsData(requestId: string) {
         categories: data.categories,
         recordings: data.recordings,
         years,
-        registeredFolders: folders,
+        registeredFolders: [],
       }
     },
     { ttl: CACHE_TTL.recordings }
@@ -202,12 +198,13 @@ async function fetchResourcesData(requestId: string) {
       const driveTimer = timer()
       const resources = await getResources(credentials, folderId)
       
-      // Enrich with metadata from DB
+      const metadata = await getFileMetadataByDriveIds(Object.values(resources).flat().map(resource => resource.driveId))
+      // Enrich with one batched metadata lookup for all groups.
       const [delegateReports, areaDocuments, forms, conferenceMaterials] = await Promise.all([
-        enrichResourcesWithMetadata(resources.delegateReports),
-        enrichResourcesWithMetadata(resources.areaDocuments),
-        enrichResourcesWithMetadata(resources.forms),
-        enrichResourcesWithMetadata(resources.conferenceMaterials),
+        enrichResourcesWithMetadata(resources.delegateReports, metadata),
+        enrichResourcesWithMetadata(resources.areaDocuments, metadata),
+        enrichResourcesWithMetadata(resources.forms, metadata),
+        enrichResourcesWithMetadata(resources.conferenceMaterials, metadata),
       ])
       
       log("info", "GDrive resources fetched and enriched", { 
@@ -253,8 +250,9 @@ async function fetchCommitteesData(requestId: string) {
       
       // Enrich with metadata
       const enrichedFiles: CommitteeFiles = {}
+      const metadata = await getFileMetadataByDriveIds(Object.values(files).flat().map(file => file.id))
       for (const [slug, committeeFiles] of Object.entries(files)) {
-        enrichedFiles[slug] = await enrichCommitteeFilesWithMetadata(committeeFiles)
+        enrichedFiles[slug] = await enrichCommitteeFilesWithMetadata(committeeFiles, metadata)
       }
       
       const committeeCount = Object.keys(enrichedFiles).length
@@ -356,9 +354,10 @@ async function fetchConferenceMaterialsData(requestId: string) {
       ])
 
       // Enrich with DB metadata (display names, password flags)
+      const metadata = await getFileMetadataByDriveIds([...rawMaterials, ...rawOldReports].map(file => file.driveId))
       const [materials, oldReports] = await Promise.all([
-        enrichResourcesWithMetadata(rawMaterials),
-        enrichResourcesWithMetadata(rawOldReports),
+        enrichResourcesWithMetadata(rawMaterials, metadata),
+        enrichResourcesWithMetadata(rawOldReports, metadata),
       ])
       
       log("info", "GDrive conference materials fetched", { 
@@ -420,12 +419,12 @@ async function fetchBackgroundMaterialsData(requestId: string) {
       // Helper to fetch file details and convert to BackgroundFile.
       // All files are served through the server proxy so the browser never
       // contacts drive.google.com directly.
+      const limitDetails = createConcurrencyLimiter(4)
       const fetchFileDetails = async (records: { driveId: string; displayName: string; password: string | null }[]) => {
-        const files = []
-        for (const record of records) {
+        const files = await Promise.all(records.map(record => limitDetails(async () => {
           try {
             const driveFile = await getFileMetadata(credentials, record.driveId)
-            files.push({
+            return {
               id: driveFile.id,
               name: driveFile.name,
               displayName: record.displayName,
@@ -434,12 +433,13 @@ async function fetchBackgroundMaterialsData(requestId: string) {
               size: formatFileSize(driveFile.size),
               mimeType: driveFile.mimeType,
               isProtected: !!record.password,
-            })
+            }
           } catch (error) {
             console.warn(`Failed to fetch file ${record.driveId}:`, error)
+            return null
           }
-        }
-        return files
+        })))
+        return files.filter((file) => file !== null)
       }
       
       // Fetch details for tagged files
@@ -544,9 +544,24 @@ export async function GET(
     let data: unknown
 
     switch (type as GDriveType) {
-      case "recordings":
-        data = await fetchRecordingsData(requestId)
+      case "recordings": {
+        const raw = await fetchRecordingsData(requestId)
+        const unlocked = new Set(await getUnlockedFolders())
+        const db = await getDb()
+        const folders = await db.select({ id: recordingFolders.id, driveId: recordingFolders.driveId, folderName: recordingFolders.folderName }).from(recordingFolders)
+        const registered = new Map(folders.map(folder => [folder.driveId, folder]))
+        const visible = raw.categories.filter(category => category.folderId && registered.has(category.folderId))
+        const categories = visible.map(category => {
+          const folder = registered.get(category.folderId!)!
+          return { id: folder.id, folderId: folder.id, name: folder.folderName, count: unlocked.has(folder.driveId) ? category.count : 0 }
+        })
+        const recordings = Object.fromEntries(visible.map(category => {
+          const folder = registered.get(category.folderId!)!
+          return [folder.id, unlocked.has(folder.driveId) ? (raw.recordings[category.id] ?? []).map(recording => ({ ...recording, category: folder.id })) : []]
+        }))
+        data = { categories, recordings, years: [...new Set(Object.values(recordings).flat().map(recording => recording.year))].sort((a, b) => b - a), registeredFolders: folders.map(folder => ({ driveId: folder.id, folderName: folder.folderName })) }
         break
+      }
       case "newsletters":
         data = await fetchNewslettersData(requestId)
         break
@@ -578,7 +593,7 @@ export async function GET(
         "X-Request-Id": requestId,
         // Force browser revalidation so admin metadata updates appear on refresh,
         // while still allowing shared/CDN caching.
-        "Cache-Control": "public, max-age=0, s-maxage=300, stale-while-revalidate=3600",
+        "Cache-Control": type === "recordings" ? "private, no-store" : "public, max-age=0, s-maxage=300, stale-while-revalidate=3600",
       },
     })
   } catch (error) {

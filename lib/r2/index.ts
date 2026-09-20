@@ -117,16 +117,20 @@ export async function uploadFlyer(
   }
 
   // Generate unique key with event ID prefix for organization
-  // Format: flyers/{eventId}/{timestamp}-{sanitizedFileName}
-  const timestamp = Date.now()
-  const sanitizedName = file.name
-    .toLowerCase()
-    .replace(/[^a-z0-9.-]/g, "-")
-    .replace(/-+/g, "-")
-  const key = `flyers/${eventId}/${timestamp}-${sanitizedName}`
+  // Original names belong in metadata, not in collision-prone object keys.
+  const key = `flyers/${eventId}/${crypto.randomUUID()}`
 
   try {
     const arrayBuffer = await file.arrayBuffer()
+    const bytes = new Uint8Array(arrayBuffer)
+    const starts = (...signature: number[]) => signature.every((byte, index) => bytes[index] === byte)
+    const ascii = (start: number, end: number) => String.fromCharCode(...bytes.slice(start, end))
+    const validSignature = file.type === "application/pdf" ? ascii(0, 5) === "%PDF-"
+      : file.type === "image/png" ? starts(137, 80, 78, 71, 13, 10, 26, 10)
+      : file.type === "image/jpeg" ? starts(255, 216, 255)
+      : file.type === "image/gif" ? ["GIF87a", "GIF89a"].includes(ascii(0, 6))
+      : file.type === "image/webp" && ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP"
+    if (!validSignature) return { success: false, error: "File contents do not match the selected file type." }
     await bucket.put(key, arrayBuffer, {
       httpMetadata: {
         contentType: file.type,

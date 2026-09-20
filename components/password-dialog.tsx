@@ -26,7 +26,7 @@ export function PasswordDialog({ folderId, folderName, open, onOpenChange, onSuc
     setIsVerifying(true)
     setError(null)
 
-    const result = await verifyFolderPassword(folderId, password)
+    const result = await verifyFolderPassword(folderId, password).catch(() => ({ success: false, error: "Unable to verify. Please try again." }))
     
     setIsVerifying(false)
     

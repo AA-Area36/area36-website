@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getFlyer } from "@/lib/r2"
 import { sanitizeFilenameForHeader } from "@/lib/security/filename"
+import { getDb } from "@/lib/db"
+import { events, eventFlyers } from "@/lib/db/schema"
+import { eq } from "drizzle-orm"
+import { requireAreaAdminSession } from "@/lib/auth/guards"
 
 // Public route - no authentication required since event flyers are publicly displayed
 export async function GET(
@@ -19,6 +23,13 @@ export async function GET(
     return NextResponse.json({ error: "Invalid flyer key" }, { status: 400 })
   }
 
+  const db = await getDb()
+  const [linked] = await db.select({ status: events.status }).from(eventFlyers)
+    .innerJoin(events, eq(events.id, eventFlyers.eventId))
+    .where(eq(eventFlyers.fileKey, flyerKey)).limit(1)
+  if (!linked || (linked.status !== "approved" && !(await requireAreaAdminSession()))) {
+    return NextResponse.json({ error: "Flyer not found" }, { status: 404, headers: { "Cache-Control": "private, no-store" } })
+  }
   const flyer = await getFlyer(flyerKey)
 
   if (!flyer) {
@@ -29,8 +40,9 @@ export async function GET(
   const headers = new Headers()
   headers.set("Content-Type", contentType)
   
-  // Cache publicly for 1 hour, allow CDN caching
-  headers.set("Cache-Control", "public, max-age=3600, s-maxage=86400")
+  // Recheck approval on every read, including previously approved/now denied files.
+  headers.set("Cache-Control", "private, no-store")
+  headers.set("X-Content-Type-Options", "nosniff")
   
   // For PDFs, set content disposition to inline (view in browser)
   if (contentType === "application/pdf") {

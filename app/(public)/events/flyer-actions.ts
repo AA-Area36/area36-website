@@ -11,6 +11,7 @@ import { verifyEventUploadToken } from "@/lib/security/upload-token"
 import { persistUploadedObject } from "@/lib/storage/persist-upload"
 import { invalidateEventCaches } from "@/lib/utils/event-cache"
 import { checkRateLimit, getClientIp } from "@/lib/security/rate-limit"
+import { enqueueObjectCleanup, finishObjectCleanup } from "@/lib/storage/object-cleanup"
 import {
   releasePublicEventFlyerReservation,
   reservePublicEventFlyerUpload,
@@ -146,7 +147,15 @@ export async function uploadEventFlyer(
       if (!insertResult.success) {
         throw new Error("Flyer metadata insert failed")
       }
-    }, () => deleteFlyer(uploadResult.key))
+    }, async () => {
+      try {
+        await enqueueObjectCleanup(db.$client, uploadResult.key).run()
+        await finishObjectCleanup(db.$client, uploadResult.key)
+      } catch {
+        // A D1 outage must not prevent immediate R2 compensation.
+        await deleteFlyer(uploadResult.key)
+      }
+    })
   } catch (error) {
     if (reservationId) {
       try {
@@ -204,11 +213,11 @@ export async function deleteEventFlyer(
   }
 
   try {
-    // Delete from R2
-    await deleteFlyer(flyer.fileKey)
-
-    // Delete from database
-    await db.delete(eventFlyers).where(eq(eventFlyers.id, flyerId))
+    await db.$client.batch([
+      enqueueObjectCleanup(db.$client, flyer.fileKey),
+      db.$client.prepare("DELETE FROM event_flyers WHERE id = ?").bind(flyerId),
+    ])
+    await finishObjectCleanup(db.$client, flyer.fileKey).catch(() => undefined)
 
     revalidatePath("/events")
     revalidatePath("/admin/events")

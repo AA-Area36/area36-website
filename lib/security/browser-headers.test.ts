@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   BROWSER_SECURITY_HEADERS,
-  CONTENT_SECURITY_POLICY_REPORT_ONLY,
+  CONTENT_SECURITY_POLICY,
 } from "./browser-headers"
 
 function createHeaders(): Headers {
@@ -18,7 +18,7 @@ describe("browser security headers", () => {
 
     expect([...headers.keys()].map((key) => key.toLowerCase()).sort()).toEqual(
       [
-        "content-security-policy-report-only",
+        "content-security-policy",
         "permissions-policy",
         "referrer-policy",
         "strict-transport-security",
@@ -32,22 +32,22 @@ describe("browser security headers", () => {
     }
   })
 
-  it("keeps CSP observational while denying dangerous embedding and plugins", () => {
+  it("enforces CSP while denying dangerous embedding and plugins", () => {
     const headers = createHeaders()
 
-    expect(headers.has("content-security-policy")).toBe(false)
-    expect(headers.get("content-security-policy-report-only")).toBe(
-      CONTENT_SECURITY_POLICY_REPORT_ONLY,
+    expect(headers.has("content-security-policy-report-only")).toBe(false)
+    expect(headers.get("content-security-policy")).toBe(
+      CONTENT_SECURITY_POLICY,
     )
-    expect(CONTENT_SECURITY_POLICY_REPORT_ONLY).toContain("object-src 'none'")
-    expect(CONTENT_SECURITY_POLICY_REPORT_ONLY).toContain("frame-ancestors 'none'")
+    expect(CONTENT_SECURITY_POLICY).toContain("object-src 'none'")
+    expect(CONTENT_SECURITY_POLICY).toContain("frame-ancestors 'none'")
     expect(headers.get("x-frame-options")).toBe("DENY")
   })
 
   it("allows the current reCAPTCHA and document-preview origins during rollout", () => {
-    expect(CONTENT_SECURITY_POLICY_REPORT_ONLY).toContain("https://www.google.com")
-    expect(CONTENT_SECURITY_POLICY_REPORT_ONLY).toContain("https://www.gstatic.com")
-    expect(CONTENT_SECURITY_POLICY_REPORT_ONLY).toContain("https://www.recaptcha.net")
-    expect(CONTENT_SECURITY_POLICY_REPORT_ONLY).toContain("https://drive.google.com")
+    expect(CONTENT_SECURITY_POLICY).toContain("https://www.google.com")
+    expect(CONTENT_SECURITY_POLICY).toContain("https://www.gstatic.com")
+    expect(CONTENT_SECURITY_POLICY).toContain("https://www.recaptcha.net")
+    expect(CONTENT_SECURITY_POLICY).toContain("https://drive.google.com")
   })
 })

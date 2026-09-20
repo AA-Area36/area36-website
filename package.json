@@ -59,7 +59,7 @@
     "input-otp": "1.4.2",
     "lucide-react": "^0.454.0",
     "nanoid": "^5.1.16",
-    "next": "16.2.11",
+    "next": "16.3.5",
     "next-auth": "5.0.0-beta.32",
     "next-themes": "^0.4.6",
     "qrcode": "^1.5.4",
@@ -78,9 +78,9 @@
     "zod": "3.25.76"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260721.1",
-    "@eslint/eslintrc": "^3.3.5",
-    "@opennextjs/cloudflare": "^1.20.2",
+    "@cloudflare/workers-types": "^5.20260920.1",
+    "@eslint/compat": "2.1.1",
+    "@opennextjs/cloudflare": "^1.20.6",
     "@tailwindcss/postcss": "^4.1.18",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -89,21 +89,29 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.13",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.1",
-    "drizzle-kit": "^0.31.8",
+    "@vitejs/plugin-react": "^6.1.1",
+    "drizzle-kit": "^0.31.10",
     "esbuild": "^0.28.1",
-    "eslint": "^9.39.4",
-    "eslint-config-next": "^16.2.10",
+    "eslint": "10.11.0",
+    "eslint-config-next": "16.3.5",
     "fflate": "0.8.3",
-    "happy-dom": "^20.9.0",
+    "happy-dom": "^20.14.5",
     "postcss": "^8.5.26",
     "tailwindcss": "^4.1.18",
     "tw-animate-css": "1.3.3",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.4",
-    "wrangler": "^4.113.0"
+    "vite": "8.0.16",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.135.0"
   },
   "pnpm": {
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "eslint-plugin-react@7.37.5>eslint": "10.11.0",
+        "eslint-plugin-import@2.32.0>eslint": "10.11.0",
+        "eslint-plugin-jsx-a11y@6.10.2>eslint": "10.11.0"
+      }
+    },
     "overrides": {
       "@babel/core@7.29.0": "7.29.6",
       "browserslist@4.28.1": "4.28.9",
@@ -111,7 +119,9 @@
       "nanoid@3.3.11": "3.3.18",
       "postcss@8.4.31": "8.5.26",
       "postcss@8.5.10": "8.5.26",
-      "sharp@0.34.5": "0.35.3"
+      "sharp@0.34.5": "0.35.4",
+      "sharp@0.35.3": "0.35.4",
+      "@esbuild-kit/core-utils>esbuild": "0.25.12"
     }
   }
 }

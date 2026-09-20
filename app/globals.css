@@ -1,5 +1,9 @@
 @import "tailwindcss";
+
 @import "tw-animate-css";
+
+/* Inline prose links remain identifiable without color or hover. */
+p a, .prose a { text-decoration-line: underline; text-underline-offset: 0.2em; }
 
 @custom-variant dark (&:is(.dark *));
 

@@ -332,7 +332,10 @@ export function RecordingsClient({ categories, recordings, years, unlockedFolder
 
         <div className="flex items-center gap-2">
           <Select value={yearFilter} onValueChange={handleYearChange}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger
+              className="w-[140px]"
+              aria-label="Filter recordings by year"
+            >
               <Filter className="h-4 w-4 mr-2 text-muted-foreground" />
               <SelectValue placeholder="All Years" />
             </SelectTrigger>

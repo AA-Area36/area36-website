@@ -196,8 +196,8 @@ export function EditEventDialog({ event }: EditEventDialogProps) {
 
     // Use updateRecurringEvent for recurring events, otherwise use updateEvent
     const result = event.isRecurring || recurrenceConfig.isRecurring
-      ? await updateRecurringEvent(event.id, { ...data, scope: "series" })
-      : await updateEvent(event.id, data)
+? await updateRecurringEvent(event.id, { ...data, scope: "series" }).catch(() => ({ success: false, error: "Unable to save. Please try again." }))
+      : await updateEvent(event.id, data).catch(() => ({ success: false, error: "Unable to save. Please try again." }))
 
     setIsSubmitting(false)
 

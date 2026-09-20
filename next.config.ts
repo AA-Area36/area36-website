@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
-import { BROWSER_SECURITY_HEADERS } from "./lib/security/browser-headers";
+import { BROWSER_SECURITY_HEADERS, CONTENT_SECURITY_POLICY } from "./lib/security/browser-headers";
 
 initOpenNextCloudflareForDev();
 
@@ -23,6 +23,10 @@ const nextConfig: NextConfig = {
       {
         source: "/api/files/preview/:path*",
         headers: [
+          {
+            key: "Content-Security-Policy",
+            value: CONTENT_SECURITY_POLICY.replace("frame-ancestors 'none'", "frame-ancestors 'self'"),
+          },
           {
             key: "X-Frame-Options",
             value: "SAMEORIGIN",

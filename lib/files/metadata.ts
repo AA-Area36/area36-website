@@ -1,6 +1,7 @@
 // Utilities for enriching files with metadata from database
 
 import { getDb } from "@/lib/db"
+import { inArray, sql } from "drizzle-orm"
 import { fileMetadata } from "@/lib/db/schema"
 import type { Resource } from "@/lib/gdrive/types"
 import type { CommitteeFile } from "@/lib/gdrive/committees"
@@ -24,10 +25,12 @@ export async function getFileMetadataByDriveIds(
 
   try {
     const db = await getDb()
-    const results = await db.select().from(fileMetadata)
-    
-    // Filter to only requested IDs
-    const filtered = results.filter((r) => driveIds.includes(r.driveId))
+    const ids = [...new Set(driveIds)]
+    const filtered: FileMetadataRecord[] = []
+    for (let offset = 0; offset < ids.length; offset += 100) {
+      filtered.push(...await db.select({ driveId: fileMetadata.driveId, displayName: fileMetadata.displayName, password: fileMetadata.password, category: fileMetadata.category })
+        .from(fileMetadata).where(inArray(fileMetadata.driveId, ids.slice(offset, offset + 100))))
+    }
     
     return new Map(
       filtered.map((r) => [
@@ -53,12 +56,13 @@ export async function getFileMetadataByDriveIds(
  * needs to override the display name and protection flag.
  */
 export async function enrichResourcesWithMetadata(
-  resources: Resource[]
+  resources: Resource[],
+  metadata?: Map<string, FileMetadataRecord>
 ): Promise<Resource[]> {
   if (resources.length === 0) return resources
 
   const driveIds = resources.map((r) => r.driveId)
-  const metadataMap = await getFileMetadataByDriveIds(driveIds)
+  const metadataMap = metadata ?? await getFileMetadataByDriveIds(driveIds)
 
   return resources.map((resource) => {
     const meta = metadataMap.get(resource.driveId)
@@ -76,12 +80,13 @@ export async function enrichResourcesWithMetadata(
  * Enrich committee files with metadata from database
  */
 export async function enrichCommitteeFilesWithMetadata(
-  files: CommitteeFile[]
+  files: CommitteeFile[],
+  metadata?: Map<string, FileMetadataRecord>
 ): Promise<CommitteeFile[]> {
   if (files.length === 0) return files
 
   const driveIds = files.map((f) => f.id)
-  const metadataMap = await getFileMetadataByDriveIds(driveIds)
+  const metadataMap = metadata ?? await getFileMetadataByDriveIds(driveIds)
 
   return files.map((file) => {
     const meta = metadataMap.get(file.id)
@@ -104,12 +109,8 @@ export async function getFilesByCategory(
 ): Promise<FileMetadataRecord[]> {
   try {
     const db = await getDb()
-    const results = await db.select().from(fileMetadata)
-    
-    // Filter to only files with matching category (case-insensitive)
-    const filtered = results.filter(
-      (r) => r.category?.toLowerCase() === category.toLowerCase()
-    )
+    const filtered = await db.select().from(fileMetadata)
+      .where(sql`lower(${fileMetadata.category}) = ${category.toLowerCase()}`)
     
     return filtered.map((r) => ({
       driveId: r.driveId,

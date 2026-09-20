@@ -52,6 +52,9 @@ export function FlyerUpload({
   className,
 }: FlyerUploadProps) {
   const fileInputRef = React.useRef<HTMLInputElement>(null)
+  const uploadButtonRef = React.useRef<HTMLButtonElement>(null)
+  const errorId = React.useId()
+  const helpId = React.useId()
   const [isDragging, setIsDragging] = React.useState(false)
   const [uploadingIds, setUploadingIds] = React.useState<Set<string>>(new Set())
   const [deletingIds, setDeletingIds] = React.useState<Set<string>>(new Set())
@@ -61,6 +64,7 @@ export function FlyerUpload({
 
   const handleFileSelect = async (files: FileList | null) => {
     if (!files || files.length === 0) return
+    uploadButtonRef.current?.focus()
     setError(null)
 
     const newFiles: FlyerFile[] = []
@@ -96,7 +100,7 @@ export function FlyerUpload({
       // If onUpload is provided, upload immediately
       if (onUpload) {
         setUploadingIds((prev) => new Set(prev).add(id))
-        const result = await onUpload(file)
+        const result = await onUpload(file).catch(() => ({ success: false, flyer: undefined, error: "Unable to upload. Please try again." }))
         setUploadingIds((prev) => {
           const next = new Set(prev)
           next.delete(id)
@@ -130,7 +134,7 @@ export function FlyerUpload({
     // If it's an uploaded file and we have onDelete, call it
     if (flyer.fileKey && onDelete) {
       setDeletingIds((prev) => new Set(prev).add(flyerId))
-      const result = await onDelete(flyerId)
+      const result = await onDelete(flyerId).catch(() => ({ success: false, error: "Unable to delete. Please try again." }))
       setDeletingIds((prev) => {
         const next = new Set(prev)
         next.delete(flyerId)
@@ -205,6 +209,9 @@ export function FlyerUpload({
           <input
             ref={fileInputRef}
             type="file"
+            aria-label="Event flyers"
+            aria-describedby={`${helpId}${error ? ` ${errorId}` : ""}`}
+            aria-invalid={!!error}
             accept={ALLOWED_TYPES.join(",")}
             multiple
             onChange={(e) => handleFileSelect(e.target.files)}
@@ -215,6 +222,9 @@ export function FlyerUpload({
             <Upload className="h-8 w-8 text-muted-foreground" />
             <div>
               <button
+                ref={uploadButtonRef}
+                aria-label="Upload event flyers"
+                aria-describedby={`${helpId}${error ? ` ${errorId}` : ""}`}
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={disabled}
@@ -224,7 +234,7 @@ export function FlyerUpload({
               </button>
               <span className="text-sm text-muted-foreground"> or drag and drop</span>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p id={helpId} className="text-xs text-muted-foreground">
               JPG, PNG, WebP, GIF, or PDF (max 15MB each, up to {maxFiles} files)
             </p>
           </div>
@@ -233,7 +243,7 @@ export function FlyerUpload({
 
       {/* Error message */}
       {error && (
-        <p className="text-sm text-destructive">{error}</p>
+        <p id={errorId} role="alert" className="text-sm text-destructive">{error}</p>
       )}
 
       {/* File list */}

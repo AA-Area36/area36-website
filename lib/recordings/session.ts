@@ -26,8 +26,7 @@ export async function setUnlockedFolder(folderId: string): Promise<void> {
   
   const signedValue = await signUnlockCookie(existing)
   if (!signedValue) {
-    console.error("UNLOCK_COOKIE_SECRET is not configured; cannot set unlock cookie")
-    return
+    throw new Error("Recording unlock session is unavailable")
   }
 
   cookieStore.set(UNLOCKED_FOLDERS_COOKIE, signedValue, {

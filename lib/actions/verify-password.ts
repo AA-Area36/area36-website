@@ -60,7 +60,7 @@ export async function verifyFolderPassword(
     const [folder] = await db
       .select()
       .from(recordingFolders)
-      .where(eq(recordingFolders.driveId, driveId))
+      .where(eq(recordingFolders.id, driveId))
 
     if (!folder) {
       return { success: false, error: UNLOCK_ERROR }
@@ -71,7 +71,7 @@ export async function verifyFolderPassword(
       return { success: false, error: UNLOCK_ERROR }
     }
 
-    await setUnlockedFolder(driveId)
+    await setUnlockedFolder(folder.driveId)
     return { success: true }
   } catch (error) {
     console.error("Error verifying folder password:", error)
@@ -81,9 +81,8 @@ export async function verifyFolderPassword(
 
 /**
  * Verify password for a file and unlock it.
- * On success, returns the proxy preview/download URLs (with a short-lived
- * unlock token appended) so the client can use them immediately without
- * waiting for the httpOnly cookie to propagate.
+ * On success, returns credential-free proxy URLs. The completed server action
+ * response has established the HttpOnly session cookie before these are fetched.
  */
 export async function verifyFilePassword(
   driveId: string,
@@ -93,8 +92,6 @@ export async function verifyFilePassword(
   error?: string
   previewUrl?: string
   downloadUrl?: string
-  unlockToken?: string
-  unlockExpiresAt?: number
 }> {
   try {
     if (!hasValidUnlockInput(driveId, password)) {
@@ -124,20 +121,14 @@ export async function verifyFilePassword(
     // Set cookie to unlock file (for subsequent page loads / refreshes)
     await setUnlockedFile(driveId)
 
-    // Also generate a short-lived token for immediate use (avoids cookie
-    // propagation race between server action and subsequent fetch).
-    const { signFileUnlockToken, FILE_UNLOCK_TOKEN_MAX_AGE_MS } = await import("@/lib/security/unlock-cookie")
-    const unlockToken = await signFileUnlockToken(driveId, meta.password)
-    const qs = unlockToken ? `?unlock=${encodeURIComponent(unlockToken)}` : ""
-    const previewUrl = `/api/files/preview/${driveId}${qs}`
-    const downloadUrl = `/api/files/download/${driveId}${qs}`
+    // URLs never carry bearer credentials.
+    const previewUrl = `/api/files/preview/${encodeURIComponent(driveId)}`
+    const downloadUrl = `/api/files/download/${encodeURIComponent(driveId)}`
 
     return {
       success: true,
       previewUrl,
       downloadUrl,
-      unlockToken: unlockToken ?? undefined,
-      unlockExpiresAt: unlockToken ? Date.now() + FILE_UNLOCK_TOKEN_MAX_AGE_MS : undefined,
     }
   } catch (error) {
     console.error("Error verifying file password:", error)

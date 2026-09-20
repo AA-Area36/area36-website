@@ -13,7 +13,7 @@ export default defineConfig({
     environment: "happy-dom",
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
-    passWithNoTests: true,
+    passWithNoTests: false,
     include: ["**/*.{test,spec}.{ts,tsx}"],
     exclude: [
       "**/node_modules/**",
