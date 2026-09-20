@@ -39,7 +39,7 @@ function FileSection({ title, files, onView, onDownload, loadingAction }: FileSe
           return (
           <article
             key={file.id}
-            className="group flex items-center gap-3 rounded-lg border border-border bg-card p-3 transition-all hover:border-primary/30 hover:shadow-sm"
+            className="group flex min-w-0 items-center gap-3 rounded-lg border border-border bg-card p-3 transition-all hover:border-primary/30 hover:shadow-sm"
           >
             <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
               {file.isProtected ? (

@@ -24,7 +24,7 @@ const recordings = {
   }],
 }
 
-describe("RecordingsClient playback failure", () => {
+describe("RecordingsClient", () => {
   beforeEach(() => {
     vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => undefined)
     vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined)
@@ -32,6 +32,15 @@ describe("RecordingsClient playback failure", () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+  })
+
+  it("gives the year filter an accessible name", () => {
+    render(
+      <RecordingsClient categories={categories} recordings={recordings} years={[2026]} />
+    )
+
+    expect(screen.getByRole("combobox", { name: "Filter recordings by year" }))
+      .toBeInTheDocument()
   })
 
   it("clears the loading state, announces failure, and can retry", async () => {
