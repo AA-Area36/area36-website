@@ -32,8 +32,7 @@ export async function setUnlockedFile(fileId: string): Promise<void> {
 
   const signedValue = await signUnlockCookie(existing)
   if (!signedValue) {
-    console.error("UNLOCK_COOKIE_SECRET is not configured; cannot set unlock cookie")
-    return
+    throw new Error("File unlock session is unavailable")
   }
 
   cookieStore.set(UNLOCKED_FILES_COOKIE, signedValue, {

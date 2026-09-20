@@ -1,4 +1,4 @@
-export const CONTENT_SECURITY_POLICY_REPORT_ONLY = [
+export const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "base-uri 'self'",
   "object-src 'none'",
@@ -18,8 +18,8 @@ export const CONTENT_SECURITY_POLICY_REPORT_ONLY = [
 
 export const BROWSER_SECURITY_HEADERS = [
   {
-    key: "Content-Security-Policy-Report-Only",
-    value: CONTENT_SECURITY_POLICY_REPORT_ONLY,
+    key: "Content-Security-Policy",
+    value: CONTENT_SECURITY_POLICY,
   },
   {
     key: "Permissions-Policy",

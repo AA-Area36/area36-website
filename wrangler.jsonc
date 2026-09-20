@@ -2,6 +2,9 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "area36-website",
   "main": "custom-worker.ts",
+  // next-themes serializes its bootstrap function; injected __name helpers
+  // would be undefined in the browser. See OpenNext's keep_names guidance.
+  "keep_names": false,
   "compatibility_date": "2025-01-15",
   "compatibility_flags": ["nodejs_compat"],
   "triggers": {

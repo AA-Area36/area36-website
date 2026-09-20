@@ -1,6 +1,5 @@
 "use server"
 
-import { nanoid } from "nanoid"
 import { quorumEventKeySchema, quorumRegistrationSchema, type QuorumRegistrationInput } from "@/lib/schemas/quorum"
 import { checkRateLimit, getClientIp } from "@/lib/security/rate-limit"
 import { verifyRecaptcha } from "@/lib/security/recaptcha"
@@ -9,7 +8,8 @@ import { appendQuorumSubmission, getQuorumEventByKey } from "@/lib/quorum/google
 import { invalidateEdgeCache } from "@/lib/cache/edge-cache"
 import { getRedactedErrorMetadata } from "@/lib/api/error-response"
 
-export async function submitQuorumRegistration(eventKey: string, data: QuorumRegistrationInput) {
+export async function submitQuorumRegistration(eventKey: string, data: QuorumRegistrationInput, submissionId: string) {
+  if (!/^[A-Za-z0-9_-]{18}$/.test(submissionId ?? "")) return { success: false as const, error: "Refresh the check-in form and try again." }
   const parsedEventKey = quorumEventKeySchema.safeParse(eventKey)
   if (!parsedEventKey.success) {
     return { success: false as const, error: "Check-in for this event is unavailable." }
@@ -45,7 +45,7 @@ export async function submitQuorumRegistration(eventKey: string, data: QuorumReg
     const seatKey = buildQuorumSeatKey(parsed.data)
     await appendQuorumSubmission({
       event,
-      submissionId: nanoid(18),
+      submissionId,
       submittedAt: new Date().toISOString(),
       registration: parsed.data,
       isAlternate,

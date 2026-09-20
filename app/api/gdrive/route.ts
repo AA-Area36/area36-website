@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server"
 import { getCloudflareContext } from "@opennextjs/cloudflare"
-import { getGDriveCredentials } from "@/lib/gdrive/client"
-import { getAccessToken } from "@/lib/gdrive/auth"
 import {
   createApiErrorResponse,
   createApiRequestId,
@@ -46,32 +44,8 @@ export async function GET() {
       })
     }
 
-    const credentials = getGDriveCredentials({
-      GDRIVE_SERVICE_ACCOUNT_EMAIL: env.GDRIVE_SERVICE_ACCOUNT_EMAIL,
-      GDRIVE_PRIVATE_KEY: env.GDRIVE_PRIVATE_KEY,
-      GDRIVE_PRIVATE_KEY_ID: env.GDRIVE_PRIVATE_KEY_ID,
-    })
-
-    const accessToken = await getAccessToken(credentials)
-    const response = await fetch("https://www.googleapis.com/drive/v3/about?fields=user", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
-
-    if (!response.ok) {
-      console.error("GDrive probe failed", {
-        requestId,
-        upstreamStatus: response.status,
-      })
-      return createApiErrorResponse({
-        message: "Google Drive is temporarily unavailable.",
-        requestId,
-        status: 503,
-        details: { ok: false, gdrive: false, timestamp },
-      })
-    }
-
     return NextResponse.json(
-      { ok: true, gdrive: true, timestamp },
+      { ok: true, configured: true, check: "configuration", timestamp },
       { headers }
     )
   } catch (error) {

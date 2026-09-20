@@ -16,8 +16,33 @@ const addressRegex = /^\d+\s+[\w\s]+(\s+(St|Street|Ave|Avenue|Blvd|Boulevard|Dr|
 // Helper to handle optional URL fields - empty string becomes undefined
 const optionalUrl = z.preprocess(
   (val) => (val === "" || val === null ? undefined : val),
-  z.string().url("Please enter a valid URL").optional()
+  z.string().url("Please enter a valid URL").refine(
+    (value) => {
+      if (!/^https?:\/\//i.test(value) || /[\u0000-\u0020\u007f]/.test(value)) return false
+      try { const url = new URL(value); return !url.username && !url.password } catch { return false }
+    },
+    "Use an http:// or https:// URL"
+  ).optional()
 )
+
+
+type EventDetails = {
+  date: string; endDate?: string | null; startTime?: string | null; endTime?: string | null;
+  locationType: string; address?: string | null; meetingLink?: string | null;
+  timeTBD?: boolean; addressTBD?: boolean; meetingLinkTBD?: boolean;
+}
+function validateEventDetails(data: EventDetails, ctx: z.RefinementCtx) {
+  const issue = (path: string, message: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message })
+  if (data.endDate && data.endDate < data.date) issue("endDate", "End date must be on or after start date")
+  if (!data.timeTBD && !data.startTime) issue("startTime", "Start time is required unless marked as TBD")
+  const minutes = (time: string) => { const [hour, minute] = time.split(":").map(Number); return hour * 60 + minute }
+  if (data.startTime && data.endTime && (!data.endDate || data.endDate === data.date) && minutes(data.endTime) <= minutes(data.startTime)) issue("endTime", "End time must be after start time for same-day events")
+  if (["in-person", "hybrid"].includes(data.locationType) && !data.addressTBD) {
+    if (!data.address?.trim()) issue("address", "Address is required for in-person and hybrid events (or mark as TBD)")
+    else if (!addressRegex.test(data.address.trim())) issue("address", "Please enter a valid address (e.g., 123 Main St, City, MN 55555)")
+  }
+  if (["online", "hybrid"].includes(data.locationType) && !data.meetingLinkTBD && !data.meetingLink?.trim()) issue("meetingLink", "Meeting link is required for online and hybrid events (or mark as TBD)")
+}
 
 export const eventSubmissionSchema = z.object({
   title: z.string().min(1, "Title is required").max(200, "Title must be 200 characters or less"),
@@ -48,71 +73,7 @@ export const eventSubmissionSchema = z.object({
   timeTBD: z.boolean().default(false),
   addressTBD: z.boolean().default(false),
   meetingLinkTBD: z.boolean().default(false),
-}).refine((data) => !data.endDate || data.endDate >= data.date, { message: "End date must be on or after start date", path: ["endDate"] }).refine(
-  (data) => {
-    // Start time is required unless TBD
-    if (!data.timeTBD && !data.startTime) {
-      return false
-    }
-    return true
-  },
-  {
-    message: "Start time is required unless marked as TBD",
-    path: ["startTime"],
-  }
-).refine(
-  (data) => {
-    // If both start and end time are provided on the SAME day, end must be after start
-    // For multi-day events (endDate > date), end time can be before start time
-    if (data.startTime && data.endTime) {
-      const isSameDay = !data.endDate || data.endDate === data.date
-      if (isSameDay) {
-        return data.endTime > data.startTime
-      }
-    }
-    return true
-  },
-  {
-    message: "End time must be after start time for same-day events",
-    path: ["endTime"],
-  }
-).refine(
-  (data) => {
-    // Address is required for in-person and hybrid events, unless TBD
-    if ((data.locationType === "in-person" || data.locationType === "hybrid") && !data.addressTBD) {
-      return !!data.address && data.address.trim().length > 0
-    }
-    return true
-  },
-  {
-    message: "Address is required for in-person and hybrid events (or mark as TBD)",
-    path: ["address"],
-  }
-).refine(
-  (data) => {
-    // Validate address format for in-person and hybrid events (unless TBD)
-    if ((data.locationType === "in-person" || data.locationType === "hybrid") && !data.addressTBD && data.address) {
-      return addressRegex.test(data.address.trim())
-    }
-    return true
-  },
-  {
-    message: "Please enter a valid address (e.g., 123 Main St, City, MN 55555)",
-    path: ["address"],
-  }
-).refine(
-  (data) => {
-    // Meeting link is required for online and hybrid events, unless TBD
-    if ((data.locationType === "online" || data.locationType === "hybrid") && !data.meetingLinkTBD) {
-      return !!data.meetingLink && data.meetingLink.trim().length > 0
-    }
-    return true
-  },
-  {
-    message: "Meeting link is required for online and hybrid events (or mark as TBD)",
-    path: ["meetingLink"],
-  }
-)
+}).superRefine(validateEventDetails)
 
 export type EventSubmissionData = z.infer<typeof eventSubmissionSchema>
 
@@ -245,7 +206,7 @@ export const eventExceptionSchema = z.object({
   endDate: dateValue.optional().nullable(),
   locationType: z.enum(locationTypes).optional(),
   address: z.string().optional().nullable(),
-  meetingLink: z.string().url().optional().nullable(),
+  meetingLink: optionalUrl,
   description: z.string().optional(),
   timeTBD: z.boolean().optional(),
   addressTBD: z.boolean().optional(),
@@ -262,11 +223,11 @@ export const eventEditSchema = z.object({
   endTime: z.union([z.string().regex(timeRegex), z.literal("")]).nullish(),
   timezone: z.string().refine(isValidTimeZone, "Select a valid time zone"),
   locationType: z.enum(locationTypes), address: z.string().max(500).nullish(),
-  meetingLink: z.union([z.string().url(), z.literal("")]).nullish(),
-  flyerUrl: z.union([z.string().url(), z.literal("")]).nullish(),
-  description: z.string().max(2000), types: eventTypesArray,
+  meetingLink: optionalUrl,
+  flyerUrl: optionalUrl,
+  description: z.string().min(10).max(2000), types: eventTypesArray,
   timeTBD: z.boolean().optional(), addressTBD: z.boolean().optional(), meetingLinkTBD: z.boolean().optional(),
-}).passthrough().refine((data) => !data.endDate || data.endDate >= data.date, { message: "End date must be on or after start date", path: ["endDate"] })
+}).passthrough().superRefine(validateEventDetails)
 
 export const recurringEventEditSchema = eventEditSchema.and(z.object({
   scope: z.enum(["series", "occurrence"]),

@@ -1,5 +1,5 @@
-import { parseLocalDate } from "@/lib/utils/recurrence"
-import { recurringOverlapsStart } from "@/lib/events/recurring-window"
+import { parseLocalDate, formatDate } from "@/lib/utils/recurrence"
+import { recurringOverlapsStart, startsBeforeHorizon } from "@/lib/events/recurring-window"
 import { NextResponse } from "next/server"
 import { getDb } from "@/lib/db"
 import {
@@ -37,8 +37,11 @@ async function buildApprovedEvents(
   yesterday.setDate(yesterday.getDate() - 1)
   const yesterdayStr = yesterday.toLocaleDateString("en-CA", { timeZone: "America/Chicago" })
 
+  const rangeEnd = parseLocalDate(todayStr)
+  rangeEnd.setFullYear(rangeEnd.getFullYear() + 1)
   const baseWhere = [
     eq(events.status, "approved"),
+    startsBeforeHorizon(formatDate(rangeEnd)),
     or(
       and(
         eq(events.isRecurring, false),
@@ -70,8 +73,6 @@ async function buildApprovedEvents(
 
   const rangeStart = parseLocalDate(todayStr)
   rangeStart.setDate(rangeStart.getDate() - 1)
-  const rangeEnd = parseLocalDate(todayStr)
-  rangeEnd.setFullYear(rangeEnd.getFullYear() + 1)
 
   const endOp = log.tracker.startOperation("events.range")
   const displayEvents = getEventsForDateRange(eventsWithRelations, rangeStart, rangeEnd)

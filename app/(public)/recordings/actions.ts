@@ -9,7 +9,7 @@ import { recordingFolders } from "@/lib/db/schema"
 export async function getRegisteredFolderIds(): Promise<string[]> {
   try {
     const db = await getDb()
-    const folders = await db.select({ driveId: recordingFolders.driveId }).from(recordingFolders)
+    const folders = await db.select({ driveId: recordingFolders.id }).from(recordingFolders)
     return folders.map(f => f.driveId)
   } catch (error) {
     console.error("Error fetching registered folders:", error)
@@ -24,7 +24,7 @@ export async function getRegisteredFolders(): Promise<{ driveId: string; folderN
   try {
     const db = await getDb()
     const folders = await db.select({ 
-      driveId: recordingFolders.driveId, 
+      driveId: recordingFolders.id,
       folderName: recordingFolders.folderName 
     }).from(recordingFolders)
     return folders

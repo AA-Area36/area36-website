@@ -5,6 +5,9 @@ import { PageHeader } from "@/components/page-header"
 import { getContent } from "@/lib/content/repo"
 import { createTranslator } from "@/lib/content/t"
 import { getRequestLocale } from "@/lib/i18n/get-locale"
+import { getDb } from "@/lib/db"
+import { recordingFolders } from "@/lib/db/schema"
+import { inArray } from "drizzle-orm"
 
 export const metadata: Metadata = {
   title: "Recordings | Area 36",
@@ -17,7 +20,9 @@ export const metadata: Metadata = {
 
 async function RecordingsWrapper() {
   // Only fetch unlocked folders server-side (for security)
-  const unlockedFolders = await getUnlockedFolders()
+  const unlockedDriveIds = await getUnlockedFolders()
+  const db = await getDb()
+  const unlockedFolders = unlockedDriveIds.length ? (await db.select({ id: recordingFolders.id }).from(recordingFolders).where(inArray(recordingFolders.driveId, unlockedDriveIds))).map(folder => folder.id) : []
   return <RecordingsLoader unlockedFolders={unlockedFolders} />
 }
 

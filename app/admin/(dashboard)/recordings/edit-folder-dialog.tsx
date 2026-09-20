@@ -26,7 +26,7 @@ export function EditFolderDialog({ folder }: EditFolderDialogProps) {
     setIsSubmitting(true)
     setError(null)
 
-    const result = await updateRecordingFolder(folder.id, { folderName, password })
+    const result = await updateRecordingFolder(folder.id, { folderName, password }).catch(() => ({ success: false, error: "Unable to save. Please try again." }))
     
     setIsSubmitting(false)
     

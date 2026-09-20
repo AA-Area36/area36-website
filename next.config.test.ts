@@ -14,6 +14,11 @@ describe("configured response headers", () => {
     })
 
     expect(preview.headers.get("x-frame-options")).toBe("SAMEORIGIN")
+    expect(preview.headers.get("content-security-policy")).toContain("frame-ancestors 'self'")
+    expect(preview.headers.get("content-security-policy")).not.toContain("frame-ancestors 'none'")
+    expect(preview.headers.get("content-security-policy-report-only")).toBeNull()
     expect(otherRoute.headers.get("x-frame-options")).toBe("DENY")
+    expect(otherRoute.headers.get("content-security-policy")).toContain("frame-ancestors 'none'")
+    expect(otherRoute.headers.get("content-security-policy-report-only")).toBeNull()
   })
 })

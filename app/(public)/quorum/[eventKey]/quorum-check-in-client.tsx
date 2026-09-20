@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useRef, useState, useTransition } from "react"
+import { useEffect, useMemo, useRef, useState, useTransition } from "react"
+import { nanoid } from "nanoid"
 import Link from "next/link"
 import { Controller, useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -20,7 +21,10 @@ import { submitQuorumRegistration } from "./actions"
 export function QuorumCheckInClient({ event }: { event: PublicQuorumEvent }) {
   const eventKey = event.eventKey
   const submissionInFlight = useRef(false)
+  const attemptId = useRef<string | null>(null)
   const errorSummaryRef = useRef<HTMLDivElement>(null)
+  const successRef = useRef<HTMLHeadingElement>(null)
+  const returnToForm = useRef(false)
   const [submitted, setSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -48,6 +52,13 @@ export function QuorumCheckInClient({ event }: { event: PublicQuorumEvent }) {
     "aria-invalid": !!form.formState.errors[name],
     "aria-describedby": form.formState.errors[name] ? `${id}-error` : undefined,
   })
+  useEffect(() => {
+    if (submitted) successRef.current?.focus()
+    else if (returnToForm.current) {
+      form.setFocus("name")
+      returnToForm.current = false
+    }
+  }, [submitted, form])
   // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form watch drives conditional role fields.
   const servicePosition = form.watch("servicePosition")
   const needsPositionDetail = servicePosition === "area_officer" || servicePosition === "area_committee_chair"
@@ -90,8 +101,18 @@ export function QuorumCheckInClient({ event }: { event: PublicQuorumEvent }) {
         const token = await executeRecaptcha("quorum_check_in")
         form.setValue("recaptchaToken", token)
         await form.handleSubmit(async (data) => {
-          const result = await submitQuorumRegistration(eventKey, data)
+          if (!attemptId.current) {
+            try {
+              const saved = sessionStorage.getItem(`quorum-check-in:${eventKey}`)
+              if (saved && /^[A-Za-z0-9_-]{18}$/.test(saved)) attemptId.current = saved
+            } catch { /* Private browsing may disable storage. */ }
+            attemptId.current ??= nanoid(18)
+            try { sessionStorage.setItem(`quorum-check-in:${eventKey}`, attemptId.current) } catch { /* Keep the in-memory ID. */ }
+          }
+          const result = await submitQuorumRegistration(eventKey, data, attemptId.current)
           if (result.success) {
+            try { sessionStorage.removeItem(`quorum-check-in:${eventKey}`) } catch { /* No persistent ID. */ }
+            attemptId.current = null
             setSubmitted(true)
             form.reset()
           } else {
@@ -114,13 +135,13 @@ export function QuorumCheckInClient({ event }: { event: PublicQuorumEvent }) {
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
             <CheckCircle2 className="h-8 w-8" aria-hidden="true" />
           </div>
-          <h1 className="mt-6 text-3xl font-bold tracking-tight">You’re checked in</h1>
+          <h1 ref={successRef} tabIndex={-1} className="mt-6 text-3xl font-bold tracking-tight">You’re checked in</h1>
           <p className="mt-3 text-muted-foreground">Your attendance has been recorded for {event.title}.</p>
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
             <Button asChild>
               <Link href={`/quorum/${event.eventKey}/dashboard`}>View quorum dashboard</Link>
             </Button>
-            <Button variant="outline" onClick={() => setSubmitted(false)}>Check in another attendee</Button>
+            <Button variant="outline" onClick={() => { returnToForm.current = true; setSubmitted(false) }}>Check in another attendee</Button>
           </div>
         </div>
       </section>

@@ -1,6 +1,20 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
+
+const requests = new Map<string, Promise<unknown>>()
+// Share in-flight public catalog requests; never retain private recordings data.
+async function fetchCatalog(type: string) {
+  const existing = type === "recordings" ? undefined : requests.get(type)
+  if (existing) return existing
+  const request = (async () => {
+    const response = await fetch(`/api/gdrive/${type}`)
+    if (!response.ok) throw new Error(`Files are temporarily unavailable (${response.status}).`)
+    return response.json()
+  })()
+  if (type !== "recordings") requests.set(type, request)
+  try { return await request } finally { if (type !== "recordings") requests.delete(type) }
+}
 
 type GDriveType = 
   | "recordings" 
@@ -34,6 +48,7 @@ export function useGdriveFiles<T>(
   options: UseGdriveFilesOptions = {}
 ): UseGdriveFilesResult<T> {
   const { enabled = true } = options
+  const generation = useRef(0)
   
   const [data, setData] = useState<T | null>(null)
   const [isLoading, setIsLoading] = useState(enabled)
@@ -41,32 +56,28 @@ export function useGdriveFiles<T>(
 
   const fetchData = useCallback(async () => {
     if (!enabled) return
+    const requestGeneration = ++generation.current
 
     setIsLoading(true)
     setError(null)
 
     try {
-      const response = await fetch(`/api/gdrive/${type}`)
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: null })) as { error?: string }
-        throw new Error(errorData.error || `Failed to fetch ${type}: ${response.status}`)
-      }
-
-      const result = await response.json()
-      setData(result as T)
+      const result = await fetchCatalog(type)
+      if (generation.current === requestGeneration) setData(result as T)
     } catch (err) {
       const message = err instanceof Error ? err.message : `Failed to fetch ${type}`
-      setError(message)
+      if (generation.current === requestGeneration) setError(message)
       console.error(`GDrive fetch error (${type}):`, err)
     } finally {
-      setIsLoading(false)
+      if (generation.current === requestGeneration) setIsLoading(false)
     }
   }, [type, enabled])
 
   useEffect(() => {
+    const activeGeneration = generation
     // eslint-disable-next-line react-hooks/set-state-in-effect -- This effect intentionally starts the hook's request lifecycle.
     fetchData()
+    return () => { activeGeneration.current++ }
   }, [fetchData])
 
   return {

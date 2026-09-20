@@ -19,6 +19,14 @@ interface RecordingsLoaderProps {
  */
 export function RecordingsLoader({ unlockedFolders }: RecordingsLoaderProps) {
   const { data, isLoading, error, refetch } = useRecordings()
+  const unlockKey = [...unlockedFolders].sort().join(",")
+  const previousUnlockKey = React.useRef(unlockKey)
+  React.useEffect(() => {
+    if (previousUnlockKey.current !== unlockKey) {
+      previousUnlockKey.current = unlockKey
+      void refetch()
+    }
+  }, [unlockKey, refetch])
 
   if (isLoading) {
     return <GdriveLoader message="Loading recordings..." />

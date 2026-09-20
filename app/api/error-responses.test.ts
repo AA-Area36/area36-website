@@ -96,11 +96,18 @@ describe("public API failures", () => {
     consoleError.mockRestore()
   })
 
-  it("redacts the general Google Drive probe", async () => {
-    await expectRedactedFailure(
-      await getGDriveHealth(),
-      "Google Drive is temporarily unavailable.",
-    )
+  it("keeps the public Drive probe shallow without leaking configuration or upstream details", async () => {
+    const fetch = vi.spyOn(globalThis, "fetch")
+    try {
+      const response = await getGDriveHealth()
+      expect(response.status).toBe(200)
+      expect(response.headers.get("cache-control")).toBe("no-store")
+      const body = await response.text()
+      expect(JSON.parse(body)).toMatchObject({ ok: true, configured: true, check: "configuration" })
+      expect(body).not.toContain(internalMarker)
+      expect(body).not.toContain("configured@example.test")
+      expect(fetch).not.toHaveBeenCalled()
+    } finally { fetch.mockRestore() }
   })
 
   it("redacts typed Google Drive failures", async () => {

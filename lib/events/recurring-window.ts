@@ -11,3 +11,12 @@ export function recurringOverlapsStart(start: string) {
       WHERE ${eventExceptions.eventId} = ${events.id} AND ${eventExceptions.endDate} >= ${start}
     ))`
 }
+
+/** Conservative candidate bound includes stored modified occurrences. */
+export function startsBeforeHorizon(end: string) {
+  return sql`(${events.date} <= ${end} OR EXISTS (
+    SELECT 1 FROM ${eventExceptions} WHERE ${eventExceptions.eventId} = ${events.id}
+      AND ${eventExceptions.exceptionType} = 'modified'
+      AND ${eventExceptions.occurrenceDate} <= ${end}
+  ))`
+}

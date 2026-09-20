@@ -111,7 +111,7 @@ export function EditOccurrenceDialog({ event, occurrenceDate, exception, trigger
       timeTBD,
       addressTBD,
       meetingLinkTBD,
-    })
+    }).catch(() => ({ success: false, error: "Unable to save. Please try again." }))
 
     setIsSubmitting(false)
 

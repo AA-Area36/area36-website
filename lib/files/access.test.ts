@@ -28,6 +28,14 @@ function mockMetadataRows(rows: unknown[] = [], folders: unknown[] = []) {
 }
 
 describe("validateFileAccess Drive root boundary", () => {
+  it("does not accept a copied URL token for a password-protected file", async () => {
+    mockMetadataRows([{ password: "synthetic-hash" }])
+    getFileMetadata.mockResolvedValue({ id: "file-1", name: "fixture.pdf", parents: ["resources-root"] })
+    const result = await validateFileAccess("file-1", credentials, "copied-url-token", ["resources-root"])
+    expect(result.valid).toBe(false)
+    isFileUnlocked.mockResolvedValue(true)
+    expect((await validateFileAccess("file-1", credentials, null, ["resources-root"])).valid).toBe(true)
+  })
   beforeEach(() => {
     vi.clearAllMocks()
     mockMetadataRows()

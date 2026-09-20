@@ -35,6 +35,7 @@ function errorAttributes(id: string, error: unknown) {
 
 function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }) {
   const [submitted, setSubmitted] = useState(false)
+  const [successMessage, setSuccessMessage] = useState("")
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const { executeRecaptcha } = useGoogleReCaptcha()
@@ -88,6 +89,7 @@ function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }
           const result = await submitCorrectionsContactForm({ ...data, recaptchaToken: token })
 
           if (result.success) {
+            setSuccessMessage(result.message ?? "Your information has been saved.")
             setSubmitted(true)
           } else {
             setSubmitError(result.error ?? t("form.genericError", "An error occurred"))
@@ -111,10 +113,7 @@ function VolunteerForm({ t }: { t: (path: string, fallback?: string) => string }
           {t("form.successTitle", "Volunteer Sign Up Received")}
         </h3>
         <p className="mt-2 text-muted-foreground">
-          {t(
-            "form.successBody",
-            "Thank you for volunteering. The Corrections TCP Coordinator will contact you soon.",
-          )}
+          {successMessage}
         </p>
         <Button
           variant="outline"

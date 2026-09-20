@@ -125,6 +125,10 @@ export function generateOccurrenceDates(
   rangeStart: Date,
   rangeEnd: Date
 ): string[] {
+  rangeStart = new Date(rangeStart)
+  rangeEnd = new Date(rangeEnd)
+  rangeStart.setHours(0, 0, 0, 0)
+  rangeEnd.setHours(0, 0, 0, 0)
   if (!event.isRecurring || event.recurrenceType === "none") {
     return []
   }

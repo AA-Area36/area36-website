@@ -1,6 +1,7 @@
 "use client"
+import { nanoid } from "nanoid"
 
-import { useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -30,10 +31,22 @@ export function QuorumAdminClient({
   const [dialogOpen, setDialogOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [attemptKey, setAttemptKey] = useState(() => nanoid(14))
   const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
   const [form, setForm] = useState({ title: "", eventDate: today, quorumTarget: "", featured: true })
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem("quorum-create-attempt") ?? "null")
+      if (saved && /^[A-Za-z0-9_-]{14}$/.test(saved.key) && typeof saved.form?.title === "string" && typeof saved.form?.eventDate === "string" && typeof saved.form?.quorumTarget === "string" && typeof saved.form?.featured === "boolean") {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- Restore this tab's ambiguous operation after a reload.
+        setAttemptKey(saved.key)
+        setForm(saved.form)
+      }
+    } catch { /* Storage may be unavailable; in-memory retry still works. */ }
+  }, [])
 
   function createEvent() {
+    try { sessionStorage.setItem("quorum-create-attempt", JSON.stringify({ key: attemptKey, form })) } catch { /* In-memory fallback. */ }
     setError(null)
     startTransition(async () => {
       const result = await createQuorumEventAction({
@@ -41,8 +54,11 @@ export function QuorumAdminClient({
         eventDate: form.eventDate,
         quorumTarget: Number(form.quorumTarget),
         featured: form.featured,
-      })
+      }, attemptKey)
       if (!result.success) { setError(result.error); return }
+      try { sessionStorage.removeItem("quorum-create-attempt") } catch { /* No persistent draft. */ }
+      setError(result.warning ?? null)
+      setAttemptKey(nanoid(14))
       setDialogOpen(false)
       setForm({ title: "", eventDate: today, quorumTarget: "", featured: true })
       router.refresh()
@@ -51,6 +67,7 @@ export function QuorumAdminClient({
 
   return (
     <div className="space-y-8">
+      {!dialogOpen && error && <p role="status" className="rounded-lg border p-3">{error}</p>}
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div><div className="mb-3 flex items-center gap-2 text-sm font-medium text-primary"><Radio className="h-4 w-4" />Meeting operations</div><h1 className="text-3xl font-bold tracking-tight">Quorum events</h1><p className="mt-2 max-w-2xl text-muted-foreground">Create a private attendance sheet, publish check-in, and monitor voting representation from one place.</p></div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}><DialogTrigger asChild><Button disabled={!driveAuthorized}><Plus className="mr-2 h-4 w-4" />Create event</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Create quorum event</DialogTitle><DialogDescription>A private Google Sheet and reusable public links will be created automatically.</DialogDescription></DialogHeader><div className="space-y-5 py-2">

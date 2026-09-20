@@ -22,7 +22,7 @@ export function AddFolderDialog() {
     setIsSubmitting(true)
     setError(null)
 
-    const result = await addRecordingFolder({ driveId, folderName, password })
+    const result = await addRecordingFolder({ driveId, folderName, password }).catch(() => ({ success: false, error: "Unable to save. Please try again." }))
     
     setIsSubmitting(false)
     
