@@ -73,6 +73,7 @@ const secondaryLinks = [
   { href: "/admin/reports", label: "Reports", icon: FileText, requiredPermission: "reports:read" },
   { href: "/admin/district-sites", label: "District Sites", icon: Map, requiredPermission: "district-sites:read" },
   { href: "/admin/quorum", label: "Quorum", icon: Vote, requiredPermission: "quorum:view" },
+  { href: "/admin/elections", label: "Elections", icon: Vote, requiredPermission: "elections:read" },
   { href: "/admin/corrections", label: "Corrections", icon: Building2, requiredPermission: "corrections:view" },
   { href: "/admin/roles", label: "Role Management", icon: ShieldCheck, requiredPermission: "access:read" },
 ] as const satisfies readonly NavLink[]

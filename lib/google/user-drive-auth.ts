@@ -49,8 +49,9 @@ export async function hasQuorumDriveOwnerAuthorization(): Promise<boolean> {
   return !!account?.refreshToken && scopeSet(account.scope).has(GOOGLE_DRIVE_FILE_SCOPE)
 }
 
-export async function getQuorumDriveOwnerAccessToken(forceRefresh = false): Promise<string> {
-  const { env } = await getCloudflareContext({ async: true })
+export async function getQuorumDriveOwnerAccessToken(forceRefresh = false, bindings?: CloudflareEnv): Promise<string> {
+  // Scheduled election syncs receive bindings directly, outside a Next request.
+  const env = bindings ?? (await getCloudflareContext({ async: true })).env
   const account = await getStoredAccount(env)
   if (!account?.refreshToken || !scopeSet(account.scope).has(GOOGLE_DRIVE_FILE_SCOPE)) {
     throw new Error("Quorum Drive owner has not connected Google Drive")
@@ -64,8 +65,8 @@ export async function getQuorumDriveOwnerAccessToken(forceRefresh = false): Prom
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: env.AUTH_GOOGLE_ID,
-      client_secret: env.AUTH_GOOGLE_SECRET,
+      client_id: env.AUTH_GOOGLE_ID || process.env.AUTH_GOOGLE_ID,
+      client_secret: env.AUTH_GOOGLE_SECRET || process.env.AUTH_GOOGLE_SECRET,
       refresh_token: account.refreshToken,
       grant_type: "refresh_token",
     }),

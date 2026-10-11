@@ -12,6 +12,7 @@ declare global {
       GDRIVE_PRIVATE_KEY: string
       GDRIVE_PRIVATE_KEY_ID: string
       GDRIVE_QUORUM_FOLDER_ID?: string
+      GDRIVE_ELECTIONS_FOLDER_ID?: string
       QUORUM_DRIVE_OWNER_EMAIL?: string
       GMAIL_SENDER_EMAIL?: string
       NEXTAUTH_SECRET?: string
@@ -55,6 +56,7 @@ declare global {
     GDRIVE_COMMITTEES_FOLDER_ID: string
     GDRIVE_SERVICE_RESOURCES_FOLDER_ID: string
     GDRIVE_QUORUM_FOLDER_ID: string
+    GDRIVE_ELECTIONS_FOLDER_ID?: string
     // Gmail API (uses same service account as Google Drive)
     GMAIL_SENDER_EMAIL: string
     QUORUM_DRIVE_OWNER_EMAIL?: string

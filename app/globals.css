@@ -295,3 +295,18 @@ p a, .prose a { text-decoration-line: underline; text-underline-offset: 0.2em; }
   text-transform: uppercase;
   color: var(--muted-foreground);
 }
+
+.election-presentation #office-heading { font-size: 2.75rem; }
+.election-presentation .font-mono { font-size: 1.75rem; }
+.election-count input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+.election-count input::-webkit-inner-spin-button,
+.election-count input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+@media print {
+  body:has(.election-workspace) header:has(nav),
+  .election-workspace .election-controls,
+  body:has(.election-workspace) .skip-link { display: none !important; }
+  .election-workspace { color: #111; }
+  .election-workspace .election-print-summary { display: block; margin-top: 2rem; }
+  .election-workspace details { break-inside: avoid; }
+  .election-workspace details > div { display: block; }
+}
