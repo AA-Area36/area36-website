@@ -8,6 +8,7 @@ import { withCache, CACHE_KEYS } from "./cache"
 import { filterArchivedFolders } from "./archive"
 import { isFolderRestricted } from "./restricted"
 import { createConcurrencyLimiter } from "@/lib/utils/concurrency"
+import { getResourceDocumentDate } from "@/lib/resources/organization"
 import type {
   Resource,
   ResourceCategory,
@@ -47,29 +48,10 @@ function formatFileSize(bytes: string | undefined): string | undefined {
  * Supports formats like: "2025", "May 2025", "2025-03", "March 2024"
  */
 function extractDate(file: DriveFile): string | undefined {
-  const name = file.name.replace(/\.[^.]+$/, "")
-
-  // Try to extract year and optional month
-  const yearMatch = name.match(/\b(20\d{2})\b/)
-  const monthYearMatch = name.match(
-    /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\d{2})\b/i
-  )
-
-  if (monthYearMatch) {
-    return `${monthYearMatch[1]} ${monthYearMatch[2]}`
-  }
-
-  if (yearMatch) {
-    return yearMatch[1]
-  }
-
-  // Try to use modified time year
-  if (file.modifiedTime) {
-    const year = new Date(file.modifiedTime).getFullYear()
-    return year.toString()
-  }
-
-  return undefined
+  return getResourceDocumentDate({
+    title: file.name,
+    date: file.modifiedTime?.slice(0, 4),
+  })
 }
 
 /**
@@ -112,6 +94,7 @@ function driveFileToResource(
     category,
     mimeType: file.mimeType,
     date: extractDate(file),
+    modifiedTime: file.modifiedTime,
     size: formatFileSize(file.size),
     downloadUrl: `/api/files/download/${file.id}`,
     previewUrl: `/api/files/preview/${file.id}`,

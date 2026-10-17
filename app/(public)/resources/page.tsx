@@ -15,7 +15,7 @@ import { createTranslator } from "@/lib/content/t"
 import { getRequestLocale } from "@/lib/i18n/get-locale"
 
 export const metadata: Metadata = {
-  title: "Resources | Area 36",
+  title: "Documents & Forms | Area 36",
   description:
     "Access forms, documents, delegate reports, and other materials for A.A. service work in Area 36.",
 }
@@ -30,13 +30,21 @@ export default async function ResourcesPage() {
   return (
     <>
       <PageHeader
-        title={t("header.title", "Resources")}
+        variant="dense"
+        title={t("header.title", "Documents & Forms")}
         description={t(
           "header.description",
-          "Access forms, documents, delegate reports, and other materials to support your service work in Area 36.",
+          "Find Area documents, service forms, and delegate reports below. View a file online or download a copy.",
         )}
         ariaId="resources-heading"
       />
+
+        {/* Document lists - lazy load from API */}
+        <section className="pb-10 sm:pb-12" aria-label="Documents and forms">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <ResourcesLoader />
+          </div>
+        </section>
 
         {/* Quick Links */}
         <section className="py-8 border-b border-border">
@@ -61,13 +69,6 @@ export default async function ResourcesPage() {
                 <Link href="#asl">{t("quickLinks.asl", "ASL Resources")}</Link>
               </Button>
             </div>
-          </div>
-        </section>
-
-        {/* Documents Tabs - lazy loads from API */}
-        <section className="py-12 sm:py-16" aria-label="Documents and forms">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <ResourcesLoader />
           </div>
         </section>
 

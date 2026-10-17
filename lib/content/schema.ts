@@ -1071,8 +1071,8 @@ const pagesDefaultsEn = {
   },
   resources: {
     header: {
-      title: "Resources",
-      description: "Access forms, documents, delegate reports, and other materials to support your service work in Area 36.",
+      title: "Documents & Forms",
+      description: "Find Area documents, service forms, and delegate reports below. View a file online or download a copy.",
     },
     quickLinks: {
       findMeeting: "Find a Meeting",

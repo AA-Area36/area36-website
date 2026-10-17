@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { CategoryCombobox } from "@/components/category-combobox"
+import { getDocumentCategory } from "@/lib/resources/organization"
 import { upsertFileMetadata, deleteFileMetadata, getFileMetadataById } from "./actions"
 import type { FileMetadataMutationResult, FileNode } from "./actions"
 
@@ -118,7 +119,7 @@ export function FileMetadataDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Edit File Metadata</DialogTitle>
+          <DialogTitle>Edit File Details</DialogTitle>
           <DialogDescription className="break-all">
             {file.name}
           </DialogDescription>
@@ -145,14 +146,25 @@ export function FileMetadataDialog({
           </div>
 
           <div className="space-y-2">
-            <Label>Category (Optional)</Label>
+            <Label htmlFor="file-category">Category</Label>
             <CategoryCombobox
+              id="file-category"
+              aria-describedby="file-category-help"
               value={category}
               onChange={setCategory}
             />
-            <p className="text-xs text-muted-foreground">
-              Select a preset category or type a custom one. Used to tag files for display in specific page sections.
+            <p id="file-category-help" className="text-xs text-muted-foreground">
+              Choose a preset or type a new category. On Documents & Forms, the saved category controls filtering and grouping within the file’s section.
             </p>
+            {category ? (
+              <Button variant="link" className="h-auto p-0 text-xs" onClick={() => setCategory("")}>
+                Clear category
+              </Button>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                No category saved. Documents & Forms will use the filename suggestion: {getDocumentCategory({ title: file.displayName || file.name }).label}.
+              </p>
+            )}
           </div>
 
           <div className="space-y-4">
@@ -187,6 +199,10 @@ export function FileMetadataDialog({
             )}
           </div>
         </div>
+
+        <p className="text-xs text-muted-foreground">
+          After saving, use Bust Cache in File Management to publish file changes.
+        </p>
 
         <DialogFooter className="flex-col sm:flex-row gap-2">
           {file.hasMetadata && (

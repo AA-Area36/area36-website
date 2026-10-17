@@ -2,7 +2,7 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
-type PageHeaderVariant = "default" | "compact" | "featured"
+type PageHeaderVariant = "default" | "compact" | "dense" | "featured"
 
 interface PageHeaderProps {
   /** Page title */
@@ -16,6 +16,7 @@ interface PageHeaderProps {
    * Visual variant:
    * - "default"  — py-16 sm:py-20, no icon/badge
    * - "compact"  — py-12 sm:py-16, no icon/badge
+   * - "dense"    — py-6, smaller title for content-heavy pages
    * - "featured" — py-16 sm:py-24, with icon + badge
    */
   variant?: PageHeaderVariant
@@ -47,6 +48,7 @@ interface PageHeaderProps {
 const paddingMap: Record<PageHeaderVariant, string> = {
   default: "py-16 sm:py-20",
   compact: "py-12 sm:py-16",
+  dense: "py-6",
   featured: "py-16 sm:py-24",
 }
 
@@ -153,7 +155,7 @@ function HeaderContent({
   mwClass?: string
 }) {
   const isFeatured = variant === "featured"
-  const descSpacing = isFeatured ? "mt-6" : "mt-4"
+  const descSpacing = isFeatured ? "mt-6" : variant === "dense" ? "mt-2" : "mt-4"
 
   return (
     <>
@@ -182,14 +184,14 @@ function HeaderContent({
 
       <h1
         {...(ariaId ? { id: ariaId } : {})}
-        className="text-4xl font-bold text-foreground sm:text-5xl"
+        className={variant === "dense" ? "text-3xl font-bold text-foreground sm:text-4xl" : "text-4xl font-bold text-foreground sm:text-5xl"}
       >
         {title}
       </h1>
 
       {description && (
         <p
-          className={`${descSpacing} text-lg text-muted-foreground leading-relaxed ${mwClass ?? ""}`}
+          className={`${descSpacing} ${variant === "dense" ? "text-base" : "text-lg"} text-muted-foreground leading-relaxed ${mwClass ?? ""}`}
         >
           {description}
         </p>

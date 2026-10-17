@@ -15,6 +15,7 @@ import {
   markFileUnlocked,
 } from "@/lib/files/unlocked-store"
 import { supportsInlinePdfPreview } from "@/lib/files/preview"
+import { getResourceDocumentDate } from "@/lib/resources/organization"
 import type { Resource } from "@/lib/gdrive/types"
 
 interface ResourceViewerProps {
@@ -133,7 +134,8 @@ export function ResourceViewerWithPassword(props: ResourceViewerWithPasswordProp
 
   // Build subtitle
   const subtitleParts: string[] = []
-  if (currentResource?.date) subtitleParts.push(currentResource.date)
+  const documentDate = currentResource ? getResourceDocumentDate(currentResource) : undefined
+  if (documentDate) subtitleParts.push(documentDate)
   if (currentResource?.size) subtitleParts.push(currentResource.size)
   if (currentResource?.isProtected) subtitleParts.push("Protected")
   const subtitle = subtitleParts.join(" · ")
@@ -197,19 +199,24 @@ export function ResourceViewerWithPassword(props: ResourceViewerWithPasswordProp
   )
 }
 
-// Clickable resource item that opens the viewer
+// Resource list row with explicit preview and download controls.
 interface ResourceItemWithViewerProps {
   resource: Resource
+  categoryLabel?: string
+  headingLevel?: "h3" | "h4"
   icon: React.ComponentType<{ className?: string }>
   onView: (resource: Resource) => void
 }
 
 export function ResourceItemWithViewer({
   resource,
+  categoryLabel,
+  headingLevel: Heading = "h3",
   icon: Icon,
   onView,
 }: ResourceItemWithViewerProps) {
   const canPreview = supportsInlinePdfPreview(resource.mimeType)
+  const documentDate = getResourceDocumentDate(resource)
   const [loadingAction, setLoadingAction] = React.useState<"view" | "download" | null>(null)
   const [passwordDialogOpen, setPasswordDialogOpen] = React.useState(false)
 
@@ -261,38 +268,49 @@ export function ResourceItemWithViewer({
 
   return (
     <>
-      <article className="group flex items-center gap-4 rounded-lg border border-border bg-card p-4 transition-all hover:border-primary/30 hover:shadow-md">
-        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+      <article className="grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)] items-start gap-x-4 gap-y-3 p-4 transition-colors hover:bg-muted/30 sm:grid-cols-[2.5rem_minmax(0,1fr)_auto] sm:items-center sm:px-5 sm:py-3.5">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
           {resource.isProtected ? (
-            <Lock className="h-6 w-6" aria-hidden="true" />
+            <Lock className="h-5 w-5" aria-hidden="true" />
           ) : (
-            <Icon className="h-6 w-6" aria-hidden="true" />
+            <Icon className="h-5 w-5" aria-hidden="true" />
           )}
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="font-medium text-foreground truncate group-hover:text-primary transition-colors">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <Heading className="font-medium leading-relaxed text-foreground [overflow-wrap:anywhere]">
               {resource.title}
-            </h3>
+            </Heading>
             {resource.isProtected && (
-              <Badge variant="secondary" className="text-xs">
+              <Badge variant="secondary" className="shrink-0 text-xs">
                 Protected
               </Badge>
             )}
           </div>
-          <p className="text-sm text-muted-foreground">
-            {resource.date && resource.size && `${resource.date} · ${resource.size}`}
-            {resource.date && !resource.size && resource.date}
-            {!resource.date && resource.size && resource.size}
-            {resource.description && !resource.date && !resource.size && resource.description}
-          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-2">
+            {(canPreview || documentDate || resource.size) && (
+              <p className="text-sm text-muted-foreground">
+                {[canPreview ? "PDF" : null, documentDate, resource.size].filter(Boolean).join(" · ")}
+              </p>
+            )}
+            {categoryLabel && (
+              <Badge variant="outline" className="font-normal text-muted-foreground">
+                {categoryLabel}
+              </Badge>
+            )}
+          </div>
+          {resource.description && (
+            <p className="mt-1 text-sm text-muted-foreground [overflow-wrap:anywhere]">
+              {resource.description}
+            </p>
+          )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="col-start-2 flex flex-wrap items-center gap-2 sm:col-start-3">
           {canPreview && (
             <Button
               variant="ghost"
-              size="icon"
-              className="hidden sm:inline-flex"
+              size="sm"
+              className="h-10 px-3"
               disabled={isBusy}
               onClick={handleViewClick}
               aria-label={`View ${resource.title}`}
@@ -302,11 +320,13 @@ export function ResourceItemWithViewer({
               ) : (
                 <Eye className="h-4 w-4" aria-hidden="true" />
               )}
+              View
             </Button>
           )}
           <Button
-            variant="ghost"
-            size="icon"
+            variant="outline"
+            size="sm"
+            className="h-10 px-3"
             disabled={isBusy}
             onClick={() => void handleDownload()}
             aria-label={`Download ${resource.title}`}
@@ -316,6 +336,7 @@ export function ResourceItemWithViewer({
             ) : (
               <Download className="h-4 w-4" aria-hidden="true" />
             )}
+            Download
           </Button>
         </div>
       </article>

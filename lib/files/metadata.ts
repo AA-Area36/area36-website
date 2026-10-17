@@ -72,6 +72,7 @@ export async function enrichResourcesWithMetadata(
       ...resource,
       title: meta.displayName,
       isProtected: !!meta.password,
+      documentCategory: meta.category,
     }
   })
 }

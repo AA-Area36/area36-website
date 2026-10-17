@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Check, ChevronsUpDown, X } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { DOCUMENT_CATEGORIES } from "@/lib/resources/organization"
 import { Button } from "@/components/ui/button"
 import {
   Command,
@@ -26,6 +27,10 @@ export interface CategoryGroup {
 
 // Predefined category suggestions grouped by page/feature
 const CATEGORY_GROUPS: CategoryGroup[] = [
+  {
+    label: "Documents & Forms",
+    options: DOCUMENT_CATEGORIES.map(({ label }) => label),
+  },
   {
     label: "Events",
     options: ["Annual Calendar"],
@@ -60,12 +65,16 @@ const CATEGORY_GROUPS: CategoryGroup[] = [
 ]
 
 interface CategoryComboboxProps {
+  id?: string
+  "aria-describedby"?: string
   value: string
   onChange: (value: string) => void
   placeholder?: string
 }
 
 export function CategoryCombobox({
+  id,
+  "aria-describedby": descriptionId,
   value,
   onChange,
   placeholder = "Select or type a category...",
@@ -100,6 +109,8 @@ export function CategoryCombobox({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          id={id}
+          aria-describedby={descriptionId}
           variant="outline"
           role="combobox"
           aria-expanded={open}

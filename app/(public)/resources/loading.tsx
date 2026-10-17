@@ -2,7 +2,7 @@ export default function Loading() {
   return (
     <>
       {/* Hero skeleton */}
-      <section className="bg-gradient-to-b from-primary/5 to-background py-16 sm:py-20">
+      <section className="bg-gradient-to-b from-primary/5 to-background py-6">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl">
             <div className="h-10 w-48 bg-muted rounded animate-pulse" />
@@ -11,24 +11,16 @@ export default function Loading() {
         </div>
       </section>
 
-      {/* Quick links skeleton */}
-      <section className="py-8 border-b border-border">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-wrap gap-3">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-9 w-28 bg-muted rounded-md animate-pulse" />
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* Documents skeleton */}
-      <section className="py-12 sm:py-16">
+      <section className="pb-10 sm:pb-12">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="h-10 w-full max-w-md bg-muted rounded animate-pulse mb-6" />
-          <div className="grid gap-4 sm:grid-cols-2">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-20 bg-muted rounded-lg animate-pulse" />
+          <div className="mb-4 h-12 w-full animate-pulse rounded bg-muted" />
+          <div className="space-y-10">
+            {[...Array(3)].map((_, i) => (
+              <div key={i}>
+                <div className="mb-5 h-8 w-48 animate-pulse rounded bg-muted" />
+                <div className="h-56 animate-pulse rounded-xl bg-muted" />
+              </div>
             ))}
           </div>
         </div>

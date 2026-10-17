@@ -57,6 +57,9 @@ export interface Resource {
   category: ResourceCategory
   mimeType: string
   date?: string
+  modifiedTime?: string
+  /** Optional topic assigned through the file metadata editor. */
+  documentCategory?: string | null
   size?: string
   downloadUrl?: string
   previewUrl: string

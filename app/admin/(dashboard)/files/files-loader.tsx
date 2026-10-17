@@ -302,7 +302,7 @@ export function AdminFilesLoader() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">File Management</h1>
           <p className="text-muted-foreground mt-1">
-            Set custom display names and passwords for files across all Google Drive folders.
+            Manage display names, categories, and passwords for files across all Google Drive folders.
           </p>
         </div>
 
@@ -320,7 +320,7 @@ export function AdminFilesLoader() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">File Management</h1>
           <p className="text-muted-foreground mt-1">
-            Set custom display names and passwords for files across all Google Drive folders.
+            Manage display names, categories, and passwords for files across all Google Drive folders.
           </p>
         </div>
 
@@ -344,7 +344,7 @@ export function AdminFilesLoader() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">File Management</h1>
           <p className="text-muted-foreground mt-1">
-            Set custom display names and passwords for files across all Google Drive folders.
+            Manage display names, categories, and passwords for files across all Google Drive folders.
           </p>
         </div>
         <div className="flex gap-2">

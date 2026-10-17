@@ -84,11 +84,15 @@ function FileItem({
         {file.displayName && file.displayName !== file.name && (
           <p className="text-xs text-muted-foreground truncate">{file.name}</p>
         )}
+        {file.category && (
+          <p className="truncate text-xs text-primary">Category: {file.category}</p>
+        )}
       </div>
       <Button
         variant="ghost"
         size="icon"
-        className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+        className="h-8 w-8 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
+        aria-label={`Edit details for ${file.displayName || file.name}`}
         onClick={() => onEdit(file)}
       >
         <Pencil className="h-3.5 w-3.5" />
