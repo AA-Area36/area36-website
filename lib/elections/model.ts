@@ -21,7 +21,10 @@ export type Office = {
   status: "setup" | "balloting" | "motion" | "hat" | "elected"
   winnerId: string | null; electionMethod: "ballot" | "hat" | null; fifthBallotApproved: boolean | null
 }
-export type ElectionState = { title: string; date: string; expectedVotes: number | null; offices: Office[] }
+export type ElectionState = {
+  title: string; date: string; expectedVotes: number | null; offices: Office[]
+  publicDisplay?: { enabled: boolean; officeIndex: number }
+}
 export type ElectionRecord = {
   id: string; revision: number; state: ElectionState; updatedAt: string
   spreadsheetId: string | null; syncedRevision: number; syncError: string | null
@@ -38,6 +41,7 @@ const votes = z.array(voteSchema).min(1).max(MAX_CANDIDATES)
 const metrics = { expectedVotes: count.min(1).nullable().optional(), noCandidate: channelsSchema.optional() }
 const reason = z.string().trim().min(5, "Describe the correction (at least 5 characters).").max(500)
 export const commandSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("display"), officeIndex, enabled: z.boolean() }),
   z.object({ type: z.literal("candidates"), officeIndex, names: z.array(z.string().trim().min(1).max(100).refine(name => !/[\r\n]/.test(name), "Use one input for each candidate.")).min(1, "Enter at least one candidate.").max(MAX_CANDIDATES) }),
   z.object({ type: z.literal("draft"), officeIndex, votes, ...metrics }),
   z.object({ type: z.literal("finalize"), officeIndex, votes, ...metrics }),
@@ -135,6 +139,9 @@ export function applyCommand(state: ElectionState, command: ElectionCommand, act
   const office = next.offices[command.officeIndex]
   if (!office) throw new Error("Office not found.")
   switch (command.type) {
+    case "display":
+      next.publicDisplay = { enabled: command.enabled, officeIndex: command.officeIndex }
+      break
     case "candidates": {
       if (office.ballots.length || !["setup", "balloting"].includes(office.status)) throw new Error("Candidates cannot change after balloting starts.")
       if (new Set(command.names.map(name => name.toLocaleLowerCase())).size !== command.names.length) throw new Error("Candidate names must be distinct.")

@@ -52,6 +52,32 @@ The procedure follows [The A.A. Service Manual, Appendix G, pages 114–115](htt
 **Meeting display** increases tally sizes and hides editing controls. **Print
 results** includes the selected office's recorded ballots and all office outcomes.
 
+## Public election display
+
+In the election workspace, use **Publish display** and then **Open public
+display** to share `/elections/<election-id>`. Elections stay private until a
+user with election write permission publishes them. Anyone with that link can
+view the election without signing in. The page is excluded from search indexing.
+
+The display refreshes every three seconds and shows saved counts, including the
+ballot currently being counted, candidate percentages, X, expected turnout, the
+two-thirds threshold, recorded ballot history, and confirmed results. Unsaved
+inputs do not appear. It offers no voting or editing controls, and does not
+include audit identities, correction reasons, sync errors, or Google Sheet links.
+The Google Sheet keeps its existing Drive permissions.
+
+The display initially follows the office selected when publishing. After
+switching offices in the workspace, use **Show [office]** to change the public
+focus. Viewers can inspect other offices and recorded ballots, then choose
+**Follow live office** to return to the teller's focus. Corrections update the
+display; affected ballots show a review notice, and later ballots superseded by
+an earlier winner remain marked as archived.
+
+Use **Stop sharing** to disable the page and its data endpoint. Open displays
+remove the election totals on their next successful refresh. Both page and API
+bypass shared caching. Publishing controls use the existing saved election state
+and require no additional database migration.
+
 ## Storage and Google Drive
 
 Apply migration `0032_third_legacy_elections.sql` before using the feature. The

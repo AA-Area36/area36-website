@@ -63,6 +63,8 @@ export function getPublicHtmlCacheKey(
   if (
     url.pathname.startsWith("/admin") ||
     url.pathname.startsWith("/api") ||
+    url.pathname === "/elections" ||
+    url.pathname.startsWith("/elections/") ||
     url.pathname.startsWith("/_next") ||
     url.pathname === "/favicon.ico"
   ) {

@@ -79,6 +79,7 @@ describe("public HTML Worker cache", () => {
   it.each([
     ["admin route", "https://area36.org/admin", {}],
     ["API route", "https://area36.org/api/events", {}],
+    ["live election display", "https://area36.org/elections/991d17cd-2c69-4825-bd38-e44c61783f04", {}],
     ["filtered URL", "https://area36.org/events?q=assembly", {}],
     [
       "authenticated or preview cookie",
