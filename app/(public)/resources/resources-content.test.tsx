@@ -46,17 +46,18 @@ async function choose(label: string, option: string) {
 }
 
 function titles(section: string) {
-  return within(screen.getByRole("region", { name: section }))
-    .getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)
+  const collection = within(screen.getByRole("region", { name: section }))
+  const grouped = collection.getByRole("switch", { name: "Group by category" }).getAttribute("aria-checked") === "true"
+  return collection.getAllByRole("heading", { level: grouped ? 4 : 3 }).map((heading) => heading.textContent)
 }
 
 describe("resource filtering and sorting", () => {
-  it("provides category filtering and grouping controls for every section", () => {
+  it("provides category filtering and enables grouping by default for every section", () => {
     render(<ResourcesContent resources={resources} />)
     for (const title of ["Area Documents", "Forms", "Delegate Reports"]) {
       const section = within(screen.getByRole("region", { name: title }))
       expect(section.getByRole("combobox", { name: `Filter ${title.toLowerCase()} by category` })).toBeVisible()
-      expect(section.getByRole("switch", { name: "Group by category" })).not.toBeChecked()
+      expect(section.getByRole("switch", { name: "Group by category" })).toBeChecked()
     }
   })
 
@@ -78,6 +79,9 @@ describe("resource filtering and sorting", () => {
 
   it("sorts each section independently and skips non-PDF files in preview navigation", async () => {
     render(<ResourcesContent resources={resources} />)
+    for (const title of ["Area Documents", "Forms"]) {
+      fireEvent.click(within(screen.getByRole("region", { name: title })).getByRole("switch", { name: "Group by category" }))
+    }
     await choose("Sort forms", "Title: Z–A")
     expect(titles("Forms")).toEqual(["Group Form", "Expense Form"])
     expect(titles("Area Documents")).toEqual(["Budget 2026", "Finance Policy 2025", "Budget 2024", "Guidelines 2022"])
@@ -97,7 +101,11 @@ describe("resource filtering and sorting", () => {
 
   it("toggles category groups while preserving the sort and preview order", async () => {
     render(<ResourcesContent resources={resources} />)
-    fireEvent.click(within(screen.getByRole("region", { name: "Area Documents" })).getByRole("switch", { name: "Group by category" }))
+    const groupSwitch = within(screen.getByRole("region", { name: "Area Documents" })).getByRole("switch", { name: "Group by category" })
+    fireEvent.click(groupSwitch)
+    expect(screen.queryByRole("region", { name: "Budgets" })).not.toBeInTheDocument()
+    expect(titles("Area Documents")).toEqual(["Budget 2026", "Finance Policy 2025", "Budget 2024", "Guidelines 2022"])
+    fireEvent.click(groupSwitch)
     const budgets = screen.getByRole("region", { name: "Budgets" })
     expect(within(budgets).getAllByRole("heading", { level: 4 }).map((el) => el.textContent))
       .toEqual(["Budget 2026", "Budget 2024"])
@@ -116,7 +124,6 @@ describe("resource filtering and sorting", () => {
     }} />)
     await choose("Filter area documents by category", "Safety Resources (1)")
     expect(titles("Area Documents")).toEqual(["New file"])
-    fireEvent.click(within(screen.getByRole("region", { name: "Area Documents" })).getByRole("switch", { name: "Group by category" }))
     expect(screen.getByRole("region", { name: "Safety Resources" })).toBeVisible()
     fireEvent.click(within(screen.getByRole("region", { name: "Area Documents" })).getByRole("switch", { name: "Group by category" }))
     expect(screen.queryByRole("region", { name: "Safety Resources" })).not.toBeInTheDocument()
@@ -140,12 +147,13 @@ describe("resource filtering and sorting", () => {
     expect(titles(title)).toEqual(["Saved topic B", "Saved topic A"])
     expect(titles("Area Documents")).toHaveLength(4)
 
-    fireEvent.click(section.getByRole("switch", { name: "Group by category" }))
     expect(section.getByRole("region", { name: "Saved topic" })).toBeVisible()
     expect(section.getAllByRole("heading", { level: 4 }).map((el) => el.textContent))
       .toEqual(["Saved topic B", "Saved topic A"])
+    fireEvent.click(section.getByRole("switch", { name: "Group by category" }))
+    expect(section.getByRole("switch", { name: "Group by category" })).not.toBeChecked()
     expect(within(screen.getByRole("region", { name: "Area Documents" }))
-      .getByRole("switch", { name: "Group by category" })).not.toBeChecked()
+      .getByRole("switch", { name: "Group by category" })).toBeChecked()
 
     fireEvent.click(section.getByRole("button", { name: "View Saved topic B" }))
     expect(await screen.findByRole("dialog", { name: "Saved topic B" })).toHaveTextContent("1 of 2")
@@ -161,9 +169,6 @@ describe("resource filtering and sorting", () => {
       forms: [resource("Expense form", { ...common, category: "forms" })],
       delegateReports: [resource("Delegate finances", { ...common, category: "delegate-reports" })],
     }} />)
-    for (const switchControl of screen.getAllByRole("switch", { name: "Group by category" })) {
-      fireEvent.click(switchControl)
-    }
     const groups = [...container.querySelectorAll('section section[aria-labelledby]')]
       .filter((el) => el.getAttribute("aria-labelledby")?.includes("-group-"))
     expect(groups).toHaveLength(3)

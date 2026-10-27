@@ -92,9 +92,9 @@ export function ResourcesContent({ resources }: ResourcesContentProps) {
     delegateReports: "all",
   })
   const [groupedSections, setGroupedSections] = React.useState<Record<SectionKey, boolean>>({
-    areaDocuments: false,
-    forms: false,
-    delegateReports: false,
+    areaDocuments: true,
+    forms: true,
+    delegateReports: true,
   })
   const [sortOrders, setSortOrders] = React.useState<Record<SectionKey, ResourceSortOrder>>({
     areaDocuments: "newest",
