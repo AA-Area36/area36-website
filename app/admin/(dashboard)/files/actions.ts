@@ -384,11 +384,15 @@ export async function getFileMetadataById(driveId: string) {
 
   const db = await getDb()
   const results = await db
-    .select()
+    .select({
+      displayName: fileMetadata.displayName,
+      category: fileMetadata.category,
+      isProtected: sql<boolean>`(${fileMetadata.password} IS NOT NULL AND ${fileMetadata.password} <> '')`.mapWith(Boolean),
+    })
     .from(fileMetadata)
     .where(eq(fileMetadata.driveId, driveId))
     .limit(1)
-  return results[0] || null
+  return results.at(0) ?? null
 }
 
 /**
