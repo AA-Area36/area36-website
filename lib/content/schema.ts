@@ -115,6 +115,7 @@ const globalDefaultsEn = {
     brand: { title: "Area 36", subtitle: "Southern Minnesota A.A." },
     nav: {
       home: "Home",
+      search: "Search site",
       events: "Events",
       about: {
         label: "About",

@@ -22,12 +22,12 @@ export function ElectionList({ elections, driveAuthorized, canWrite }: { electio
   return <div className="space-y-8">
     <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
       <div><p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-primary">Area 36 · Service elections</p><h1 className="font-serif text-4xl tracking-tight sm:text-5xl">Third Legacy elections</h1><p className="mt-3 max-w-xl text-muted-foreground">A clear path through every ballot, from the first tally to the final result.</p></div>
-      {canWrite && <Button onClick={() => { setOpen(true); creationId.current ??= crypto.randomUUID() }}><Plus className="h-4 w-4" />New election</Button>}
+      <div className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link href="/admin/elections/motions">Assembly motions</Link></Button>{canWrite && <Button onClick={() => { setOpen(true); creationId.current ??= crypto.randomUUID() }}><Plus className="h-4 w-4" />New election</Button>}</div>
     </div>
     {!driveAuthorized && <div className="flex flex-col justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-5 text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100 sm:flex-row sm:items-center"><div><p className="font-medium">Connect Google Drive to keep an election sheet.</p><p className="mt-1 text-sm">Election work is saved here. Sheets sync once the Area account is connected.</p></div>{canWrite && <form action={connectElectionDriveAction}><Button type="submit" variant="outline" className="border-amber-600 bg-transparent text-inherit">Connect Google Drive</Button></form>}</div>}
     <div className="grid gap-4 sm:grid-cols-3">{[
       ["01", "Set up the candidates", "Choose an office and enter the names standing for election."],
-      ["02", "Record each ballot", "Enter in person and online totals. Check the expected vote count."],
+      ["02", "Record each ballot", "Enter in-person totals and collect online votes on the website. Check the expected vote count."],
       ["03", "Follow the procedure", "See who remains, when a motion is needed, and when to go to the hat."],
     ].map(([step, heading, description]) => <div key={step} className="border-t-2 border-primary/30 pt-5"><span className="font-mono text-sm text-primary">{step}</span><h2 className="mt-3 font-semibold">{heading}</h2><p className="mt-1 text-sm leading-relaxed text-muted-foreground">{description}</p></div>)}</div>
     <section aria-labelledby="saved-elections" className="space-y-4"><h2 id="saved-elections" className="text-lg font-semibold">Election records</h2>{elections.length ? <div className="grid gap-4 md:grid-cols-2">{elections.map(election => {

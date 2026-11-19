@@ -1,5 +1,6 @@
+import { publicElectionRoom } from "@/lib/voting/store"
 import { z } from "zod"
-import { assessBallot, getEligibleDraftVotes, reviewOffice, type ElectionRecord, type Office, type Vote, type VoteChannels } from "./model"
+import { assessBallot, getEligibleDraftVotes, reviewOffice, type ResultOrder, type ElectionRecord, type Office, type Vote, type VoteChannels } from "./model"
 import { getElection } from "./store"
 
 export type PublicBallot = {
@@ -18,6 +19,7 @@ export type PublicOffice = {
   needsReview: boolean
   winner: string | null
   electionMethod: Office["electionMethod"]
+  winningBallot?: number | null
   ballots: PublicBallot[]
 }
 export type PublicElection = {
@@ -28,6 +30,10 @@ export type PublicElection = {
   updatedAt: string
   officeIndex: number
   offices: PublicOffice[]
+  order?: ResultOrder
+  showLive?: boolean
+  summary?: boolean
+  votingRoom?: { code: string | null } | null
 }
 
 function ballotDisplay(office: Office, number: number, votes: Vote[], noCandidate: VoteChannels, expected: number | null, phase: PublicBallot["phase"]): PublicBallot {
@@ -46,18 +52,24 @@ function ballotDisplay(office: Office, number: number, votes: Vote[], noCandidat
 /** Explicit allowlist: public viewers never receive audit actors or Drive details. */
 export function toPublicElection(election: ElectionRecord): PublicElection | null {
   if (election.state.publicDisplay?.enabled !== true) return null
+  const settings = election.state.publicDisplay
+  const showLive = settings.showLive ?? true
   return {
+    showLive, order: settings.order ?? "entered", summary: settings.summary ?? false,
     id: election.id, title: election.state.title, date: election.state.date,
     revision: election.revision, updatedAt: election.updatedAt,
     officeIndex: election.state.publicDisplay.officeIndex,
     offices: election.state.offices.map(office => {
       const review = reviewOffice(office)
       const ballots = office.ballots.map(ballot => ballotDisplay(office, ballot.number, ballot.votes, ballot.noCandidate, ballot.expectedVotes, review.archivedBallots.includes(ballot.number) ? "archived" : "recorded"))
-      if (office.status === "balloting" && !review.issues.length) {
+      if (showLive && office.status === "balloting" && !review.issues.length) {
         // Older saved states may predate draft reconciliation. Never publish obsolete totals.
         ballots.push(ballotDisplay(office, office.ballots.length + 1, getEligibleDraftVotes(office, review.eligibleIds), office.draftNoCandidate, office.expectedVotes, "counting"))
       }
+      const entered = new Map(office.candidates.map((candidate, index) => [candidate.id, index]))
+      for (const ballot of ballots) ballot.candidates.sort((a, b) => (entered.get(a.id) ?? Infinity) - (entered.get(b.id) ?? Infinity))
       return {
+        winningBallot: review.issues.length ? null : review.winningBallot,
         name: office.name, status: office.status, needsReview: review.issues.length > 0,
         winner: review.issues.length ? null : office.candidates.find(candidate => candidate.id === office.winnerId)?.name ?? null,
         electionMethod: review.issues.length ? null : office.electionMethod,
@@ -70,5 +82,6 @@ export function toPublicElection(election: ElectionRecord): PublicElection | nul
 export async function getPublicElection(db: D1Database, id: string): Promise<PublicElection | null> {
   if (!z.string().uuid().safeParse(id).success) return null
   const election = await getElection(db, id)
-  return election ? toPublicElection(election) : null
+  const display = election ? toPublicElection(election) : null
+  return display ? { ...display, votingRoom: await publicElectionRoom(db, id) } : null
 }

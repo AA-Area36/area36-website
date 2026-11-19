@@ -46,7 +46,7 @@ export async function saveElectionAction(data: unknown) {
   } catch (error) {
     if (error instanceof ElectionConflict) return { success: false as const, error: error.message, conflict: true }
     // Only known domain errors are shown to operators; database details stay private.
-    const messages = ["This office", "Enter totals", "Candidates cannot", "Candidate names", "Only five", "Enter at least", "The fifth", "Select a remaining", "Ballot", "Expected votes", "Recorded votes", "Review the", "This save", "Election not found"]
+    const messages = ["This office", "Enter totals", "Candidates cannot", "Candidate names", "Only five", "Enter at least", "The fifth", "Select a remaining", "Ballot", "Expected votes", "Recorded votes", "Review the", "This save", "Election not found", "Close online voting", "Finish recording the current online ballot"]
     const message = error instanceof Error && messages.some(prefix => error.message.startsWith(prefix)) ? error.message : "Save could not be confirmed. Retry before leaving this page."
     return { success: false as const, error: message, conflict: false }
   }

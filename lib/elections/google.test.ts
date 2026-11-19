@@ -1,5 +1,4 @@
 // @vitest-environment node
-import { readFileSync } from "node:fs"
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest"
 import { createSqliteD1 } from "@/tests/helpers/sqlite-d1"
 import { createElection, getElection, mutateElection } from "./store"
@@ -14,7 +13,7 @@ describe("background election Sheets sync", () => {
   const input = { id: "991d17cd-2c69-4825-bd38-e44c61783f04", title: "Election", date: "2026-10-10" }
   beforeEach(async () => {
     database = createSqliteD1()
-    database.sqlite.exec(readFileSync(new URL("../db/migrations/0032_third_legacy_elections.sql", import.meta.url), "utf8"))
+    database.migrate()
     env = { DB: database.client, GDRIVE_ELECTIONS_FOLDER_ID: "election-folder" } as CloudflareEnv
     await createElection(database.client, input, "teller")
   })

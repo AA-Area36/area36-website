@@ -2,6 +2,15 @@ import { z } from "zod"
 
 export const OFFICE_NAMES = ["Delegate", "Alt Delegate", "Chair", "Alt Chair", "Secretary", "Treasurer"] as const
 export const PROCEDURE_URL = "https://www.aa.org/sites/default/files/literature/BM-31_2024-2026_AA_Service_Manual_12-2024.pdf"
+export const RESULT_ORDERS = ["entered", "most", "least"] as const
+export type ResultOrder = typeof RESULT_ORDERS[number]
+export const RESULT_ORDER_LABELS: Record<ResultOrder, string> = {
+  entered: "Entered order", most: "Most votes first", least: "Least votes first",
+}
+export function orderResultRows<T extends { total: number }>(rows: T[], order: ResultOrder): T[] {
+  if (order === "entered") return rows
+  return [...rows].sort((a, b) => order === "most" ? b.total - a.total : a.total - b.total)
+}
 export const MAX_CANDIDATES = 40
 const count = z.number().int().min(0).max(100_000)
 const channelsSchema = z.object({ inPerson: count, online: count })
@@ -23,7 +32,7 @@ export type Office = {
 }
 export type ElectionState = {
   title: string; date: string; expectedVotes: number | null; offices: Office[]
-  publicDisplay?: { enabled: boolean; officeIndex: number }
+  publicDisplay?: { enabled: boolean; officeIndex: number; showLive?: boolean; order?: ResultOrder; summary?: boolean }
 }
 export type ElectionRecord = {
   id: string; revision: number; state: ElectionState; updatedAt: string
@@ -41,7 +50,7 @@ const votes = z.array(voteSchema).min(1).max(MAX_CANDIDATES)
 const metrics = { expectedVotes: count.min(1).nullable().optional(), noCandidate: channelsSchema.optional() }
 const reason = z.string().trim().min(5, "Describe the correction (at least 5 characters).").max(500)
 export const commandSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("display"), officeIndex, enabled: z.boolean() }),
+  z.object({ type: z.literal("display"), officeIndex, enabled: z.boolean(), showLive: z.boolean().optional(), order: z.enum(RESULT_ORDERS).optional(), summary: z.boolean().optional() }),
   z.object({ type: z.literal("candidates"), officeIndex, names: z.array(z.string().trim().min(1).max(100).refine(name => !/[\r\n]/.test(name), "Use one input for each candidate.")).min(1, "Enter at least one candidate.").max(MAX_CANDIDATES) }),
   z.object({ type: z.literal("draft"), officeIndex, votes, ...metrics }),
   z.object({ type: z.literal("finalize"), officeIndex, votes, ...metrics }),
@@ -146,7 +155,12 @@ export function applyCommand(state: ElectionState, command: ElectionCommand, act
   if (!office) throw new Error("Office not found.")
   switch (command.type) {
     case "display":
-      next.publicDisplay = { enabled: command.enabled, officeIndex: command.officeIndex }
+      next.publicDisplay = {
+        enabled: command.enabled, officeIndex: command.officeIndex,
+        showLive: command.showLive ?? next.publicDisplay?.showLive ?? Boolean(next.publicDisplay),
+        order: command.order ?? next.publicDisplay?.order ?? "entered",
+        summary: command.summary ?? next.publicDisplay?.summary ?? false,
+      }
       break
     case "candidates": {
       if (office.ballots.length || !["setup", "balloting"].includes(office.status)) throw new Error("Candidates cannot change after balloting starts.")

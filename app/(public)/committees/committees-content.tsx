@@ -2,6 +2,7 @@
 
 import { Mail, Users, ArrowRight } from "lucide-react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { CommitteeFilesSection } from "@/components/committees/committee-files"
 import { CommitteeInfoCard } from "@/components/committees/committee-info-card"
@@ -39,6 +40,8 @@ function groupFilesByCategory(files: CommitteeFile[]) {
 }
 
 export function CommitteesContent({ committees, committeeFiles, content }: CommitteesContentProps) {
+  const selectedSlug = useSearchParams().get("committee")
+  const selectedCommittee = committees.find((committee) => committee.slug === selectedSlug)
   const { t } = createTranslator(content ?? {})
   const chairLabel = t("committeeUi.chairLabel", "Chair")
   const contactCommitteeLabel = t("committeeUi.contactCommitteeLabel", "Contact Committee")
@@ -50,7 +53,7 @@ export function CommitteesContent({ committees, committeeFiles, content }: Commi
   const correctionsDatabaseTitle = t("committeeUi.correctionsDatabaseTitle", "Corrections Database")
 
   return (
-    <Accordion type="single" collapsible className="space-y-4 pb-1">
+    <Accordion key={selectedSlug} type="single" collapsible defaultValue={selectedCommittee?.name} className="space-y-4 pb-1">
       {committees.map((committee) => {
         const files = committeeFiles[committee.slug] || []
         const { categorized, uncategorized, sortedCategories } = groupFilesByCategory(files)
@@ -78,8 +81,9 @@ export function CommitteesContent({ committees, committeeFiles, content }: Commi
         return (
           <AccordionItem
             key={committee.name}
+            id={`committee-${committee.slug}`}
             value={committee.name}
-            className="rounded-xl border border-border bg-card px-6"
+            className="scroll-mt-24 rounded-xl border border-border bg-card px-6"
           >
             <AccordionTrigger className="hover:no-underline py-4">
               <div className="flex items-center gap-3 text-left">

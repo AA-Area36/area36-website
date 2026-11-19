@@ -1,5 +1,4 @@
 // @vitest-environment node
-import { readFileSync } from "node:fs"
 import { beforeEach, afterEach, describe, expect, it } from "vitest"
 import { createSqliteD1 } from "@/tests/helpers/sqlite-d1"
 import { createElection, getElection, mutateElection, ElectionConflict } from "./store"
@@ -8,7 +7,7 @@ describe("durable election saves", () => {
   let database: ReturnType<typeof createSqliteD1>
   const input = { id: "991d17cd-2c69-4825-bd38-e44c61783f04", title: "Area elections", date: "2026-10-10" }
   const actor = "teller@area36.org"
-  beforeEach(() => { database = createSqliteD1(); database.sqlite.exec(readFileSync(new URL("../db/migrations/0032_third_legacy_elections.sql", import.meta.url), "utf8")) })
+  beforeEach(() => { database = createSqliteD1(); database.migrate() })
   afterEach(() => database.sqlite.close())
   it("creates one durable record and rejects reuse of a creation id with different details", async () => {
     const first = await createElection(database.client, input, actor)

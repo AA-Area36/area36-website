@@ -4,6 +4,7 @@ import { z } from "zod"
 import { requireAreaAdminSession } from "@/lib/auth/guards"
 import { hasPermission } from "@/lib/auth/rbac"
 import { getElection } from "@/lib/elections/store"
+import { getElectionRooms } from "@/lib/voting/store"
 import { ElectionWorkspace } from "../election-workspace"
 
 export const dynamic = "force-dynamic"
@@ -14,7 +15,7 @@ export default async function ElectionPage({ params }: { params: Promise<{ id: s
   const { id } = await params
   if (!z.string().uuid().safeParse(id).success) notFound()
   const { env } = await getCloudflareContext({ async: true })
-  const [election, canWrite] = await Promise.all([getElection(env.DB, id), hasPermission(session, "elections:write")])
+  const [election, canWrite, rooms] = await Promise.all([getElection(env.DB, id), hasPermission(session, "elections:write"), getElectionRooms(env.DB, id)])
   if (!election) notFound()
-  return <ElectionWorkspace initialElection={election} canWrite={canWrite} />
+  return <ElectionWorkspace initialElection={election} initialRooms={rooms} canWrite={canWrite} />
 }

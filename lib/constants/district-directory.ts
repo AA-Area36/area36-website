@@ -18,6 +18,21 @@ export type DistrictDirectoryEntry = {
   contributionAddress?: string
 }
 
+export function getDistrictDirectory(value: unknown): DistrictDirectoryEntry[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((district): district is DistrictDirectoryEntry =>
+    district !== null &&
+    typeof district === "object" &&
+    Number.isInteger(district.number) &&
+    typeof district.name === "string" &&
+    Array.isArray(district.counties),
+  )
+}
+
+export function districtCardId(number: number) {
+  return `district-${number}`
+}
+
 export const districtDirectory: DistrictDirectoryEntry[] = [
   {
     number: 1,
