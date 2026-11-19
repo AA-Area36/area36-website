@@ -57,6 +57,24 @@ function documentRequest(
 }
 
 describe("public HTML Worker cache", () => {
+  it("bypasses HTML cached before the public event privacy change", async () => {
+    const cache = new MemoryCache()
+    const request = documentRequest("https://area36.org/events")
+    const legacyKey = new URL(request.url)
+    legacyKey.searchParams.set("__a36_cache_locale", "en")
+    legacyKey.searchParams.set("__a36_cache_revision", "0")
+    await cache.put(legacyKey, new Response("Legacy private event data"))
+    const pending: Promise<unknown>[] = []
+    const next = vi.fn(async () => new Response("Public event page", { headers: { "content-type": "text/html" } }))
+    const args = { request, env: enabledEnv, cache, next, ctx: { waitUntil: (work: Promise<unknown>) => { pending.push(work) } } }
+    const response = await serveWithPublicHtmlCache(args)
+    await Promise.all(pending)
+    expect(response.headers.get("x-area36-cache")).toBe("MISS")
+    expect(await response.text()).toBe("Public event page")
+    expect((await serveWithPublicHtmlCache(args)).headers.get("x-area36-cache")).toBe("HIT")
+    expect(next).toHaveBeenCalledOnce()
+  })
+
   it("keys otherwise identical pages by locale", () => {
     const english = getPublicHtmlCacheKey(
       documentRequest("https://area36.org/about", {

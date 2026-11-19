@@ -8,6 +8,8 @@ import { getDistrictSiteForMiddleware } from "@/lib/district/sites-middleware"
 
 const EDGE_CACHE_CONTROL =
   "public, max-age=0, s-maxage=300, stale-while-revalidate=3600"
+// Invalidate pages rendered with the former public event DTO, independently of D1 content edits.
+const PUBLIC_HTML_CACHE_SCHEMA = "2"
 
 type PublicHtmlCacheEnv = {
   PUBLIC_HTML_CACHE_ENABLED?: string
@@ -92,6 +94,7 @@ export function getPublicHtmlCacheKey(
 
   const cacheUrl = new URL(url)
   cacheUrl.searchParams.set("__a36_cache_locale", locale)
+  cacheUrl.searchParams.set("__a36_cache_schema", PUBLIC_HTML_CACHE_SCHEMA)
 
   return new Request(cacheUrl, {
     method: "GET",

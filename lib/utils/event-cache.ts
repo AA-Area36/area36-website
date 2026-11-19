@@ -1,6 +1,7 @@
 import { invalidateEdgeCache } from "@/lib/cache/edge-cache"
 
-const APPROVED_EVENTS_CACHE_KEY = "events:approved"
+// The previous namespace may contain submitter contact data. Never read it again.
+export const APPROVED_EVENTS_CACHE_KEY = "events:approved:v2"
 const CALENDAR_CACHE_KEY = "calendar:ical"
 const DISTRICT_NUMBERS = Array.from({ length: 27 }, (_, index) => index + 1).filter(
   (districtNumber) => districtNumber !== 10

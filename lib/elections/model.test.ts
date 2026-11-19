@@ -69,6 +69,23 @@ describe("Third Legacy procedure", () => {
 
 
 describe("turnout and direct corrections", () => {
+  it.each([false, true])("reconciles a live draft when a correction changes eligibility (reinstate %s)", reinstate => {
+    let state = run(createElectionState("Synthetic election", "2026-11-19"), { type: "candidates", officeIndex: 0, names: ["Alex", "Blair", "Casey"] })
+    state = run(state, { type: "finalize", officeIndex: 0, votes: votes(40, 35, 25) })
+    state = run(state, { type: "finalize", officeIndex: 0, votes: reinstate ? votes(50, 40, 10) : votes(40, 35, 25) })
+    const draft = votes(25, 30, 40).slice(0, reinstate ? 2 : 3).map(vote => ({ ...vote, online: 5 }))
+    state = run(state, { type: "draft", officeIndex: 0, votes: draft, expectedVotes: 110, noCandidate: { inPerson: 3, online: 4 } })
+    const corrected = run(state, { type: "correct", officeIndex: 0, ballotNumber: 2, votes: reinstate ? votes(40, 35, 25) : votes(50, 40, 10), expectedVotes: 100, reason: "Reviewed candidate eligibility" })
+    const expectedDraft = reinstate ? [...draft, { candidateId: "3", inPerson: 0, online: 0 }] : draft.slice(0, 2)
+    expect(corrected.offices[0].draft).toEqual(expectedDraft)
+    expect(corrected.offices[0]).toMatchObject({ expectedVotes: 110, draftNoCandidate: { inPerson: 3, online: 4 } })
+    expect(corrected.offices[0].ballots[0]).toEqual(state.offices[0].ballots[0])
+    expect(corrected.offices.slice(1)).toEqual(state.offices.slice(1))
+    expect(state.offices[0].draft).toEqual(draft)
+    expect(reviewOffice(corrected.offices[0]).issues).toEqual([])
+    expect(() => run(corrected, { type: "finalize", officeIndex: 0, votes: corrected.offices[0].draft })).not.toThrow()
+  })
+
   it("includes X in percentages and the election threshold, while X cannot win", () => {
     const result = assessBallot(1, votes(60, 30), { inPerson: 5, online: 5 }, 100)
     expect(result).toMatchObject({ total: 100, candidateTotal: 90, threshold: 67, noCandidateShare: 0.1, difference: 0, winnerId: null })

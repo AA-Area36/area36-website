@@ -11,6 +11,27 @@ function fixture() {
 }
 
 describe("public election projection", () => {
+  it.each([false, true])("uses reviewed eligibility for previously saved incompatible drafts (reinstate %s)", reinstate => {
+    const election = fixture()
+    let state = createElectionState("Synthetic election", "2026-11-19")
+    const command = (value: Parameters<typeof applyCommand>[1]) => { state = applyCommand(state, value, "synthetic-actor", "now") }
+    const votes = (...counts: number[]) => counts.map((inPerson, index) => ({ candidateId: String(index + 1), inPerson, online: 0 }))
+    command({ type: "candidates", officeIndex: 0, names: ["Alex", "Blair", "Casey"] })
+    command({ type: "finalize", officeIndex: 0, votes: votes(40, 35, 25), expectedVotes: 100 })
+    command({ type: "finalize", officeIndex: 0, votes: reinstate ? votes(40, 35, 25) : votes(50, 40, 10) })
+    command({ type: "display", officeIndex: 0, enabled: true })
+    // Simulate persisted state from before the correction fix, including stale eligibleIds.
+    state.offices[0].eligibleIds = reinstate ? ["1", "2"] : ["1", "2", "3"]
+    state.offices[0].draft = reinstate ? votes(30, 30) : votes(30, 30, 40)
+    state.offices[0].draftNoCandidate = { inPerson: 3, online: 4 }
+    const before = structuredClone(state)
+    const result = toPublicElection({ ...election, state })!.offices[0]
+    expect(result.needsReview).toBe(false)
+    expect(result.ballots.at(-1)).toMatchObject({ recorded: 67, expected: 100, difference: -33, threshold: 45, noCandidate: { total: 7 } })
+    expect(result.ballots.at(-1)!.candidates.map(row => [row.id, row.total])).toEqual(reinstate ? [["1", 30], ["2", 30], ["3", 0]] : [["1", 30], ["2", 30]])
+    expect(state).toEqual(before)
+  })
+
   it("is private by default and can be published and stopped without changing offices", () => {
     const election = fixture()
     expect(toPublicElection(election)).toBeNull()

@@ -7,6 +7,7 @@ import {
 } from "@/lib/db/schema"
 import { eq, asc, gt, and, or, isNull } from "drizzle-orm"
 import { getEventsForDateRange } from "@/lib/utils/event-queries"
+import { APPROVED_EVENTS_CACHE_KEY } from "@/lib/utils/event-cache"
 import type { DisplayEvent } from "@/lib/types/recurrence"
 import { withEdgeCache } from "@/lib/cache/edge-cache"
 import { createRequestLogger } from "@/lib/logger"
@@ -14,7 +15,6 @@ import { recordError } from "@/lib/monitoring/errors"
 import { loadEventRelations } from "@/lib/events/load-event-relations"
 import { createApiErrorResponse } from "@/lib/api/error-response"
 
-const CACHE_KEY_BASE = "events:approved"
 const CACHE_TTL = 60 * 5 // 5 minutes
 
 function parseDistrictParam(value: string | null): number | null {
@@ -92,7 +92,7 @@ export async function GET(request: Request) {
   const districtNumber = parseDistrictParam(new URL(request.url).searchParams.get("district"))
 
   try {
-    const cacheKey = districtNumber ? `${CACHE_KEY_BASE}:district:${districtNumber}` : CACHE_KEY_BASE
+    const cacheKey = districtNumber ? `${APPROVED_EVENTS_CACHE_KEY}:district:${districtNumber}` : APPROVED_EVENTS_CACHE_KEY
     const { data, status } = await withEdgeCache(
       cacheKey,
       () => buildApprovedEvents(log, districtNumber),
@@ -108,8 +108,9 @@ export async function GET(request: Request) {
     return NextResponse.json(data, {
       headers: {
         "X-Request-Id": log.requestId,
-        // Let the CDN cache, but make the browser revalidate so edits show up quickly on refresh.
-        "Cache-Control": "public, max-age=0, s-maxage=300, stale-while-revalidate=3600",
+        // Every read must reach the Worker, which selects the current public DTO cache namespace.
+        "Cache-Control": "public, max-age=0, must-revalidate",
+        "Cloudflare-CDN-Cache-Control": "no-store",
       },
     })
   } catch (error) {
