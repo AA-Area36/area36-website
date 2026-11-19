@@ -19,7 +19,7 @@ describe("public election projection", () => {
     command({ type: "candidates", officeIndex: 0, names: ["Alex", "Blair", "Casey"] })
     command({ type: "finalize", officeIndex: 0, votes: votes(40, 35, 25), expectedVotes: 100 })
     command({ type: "finalize", officeIndex: 0, votes: reinstate ? votes(40, 35, 25) : votes(50, 40, 10) })
-    command({ type: "display", officeIndex: 0, enabled: true })
+    command({ type: "display", officeIndex: 0, enabled: true, showLive: true })
     // Simulate persisted state from before the correction fix, including stale eligibleIds.
     state.offices[0].eligibleIds = reinstate ? ["1", "2"] : ["1", "2", "3"]
     state.offices[0].draft = reinstate ? votes(30, 30) : votes(30, 30, 40)

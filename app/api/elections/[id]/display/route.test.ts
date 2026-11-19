@@ -1,5 +1,4 @@
 // @vitest-environment node
-import { readFileSync } from "node:fs"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { createSqliteD1 } from "@/tests/helpers/sqlite-d1"
 import { createElection, mutateElection } from "@/lib/elections/store"
@@ -14,7 +13,7 @@ describe("anonymous election display API", () => {
   let database: ReturnType<typeof createSqliteD1>
   beforeEach(async () => {
     database = createSqliteD1()
-    database.sqlite.exec(readFileSync(new URL("../../../../../lib/db/migrations/0032_third_legacy_elections.sql", import.meta.url), "utf8"))
+    database.migrate()
     context.env = { DB: database.client } as CloudflareEnv
     await createElection(database.client, { id, title: "Private until published", date: "2026-10-17" }, "admin@area36.org")
   })
