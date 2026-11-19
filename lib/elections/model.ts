@@ -90,6 +90,12 @@ export function assessBallot(number: number, votes: Vote[], noCandidate = emptyC
 }
 function sameIds(left: string[], right: string[]) { return left.length === right.length && left.every(id => right.includes(id)) }
 
+/** Preserve current candidate counts, omit withdrawn candidates and zero newly eligible ones. */
+export function getEligibleDraftVotes(office: Office, eligibleIds: string[]): Vote[] {
+  const draft = new Map(office.draft.map(vote => [vote.candidateId, vote]))
+  return eligibleIds.map(candidateId => draft.get(candidateId) ?? { candidateId, ...emptyChannels() })
+}
+
 /** Later records are retained; an earlier corrected election archives them. */
 export function reviewOffice(office: Office) {
   let eligibleIds = office.candidates.map(candidate => candidate.id)
@@ -119,14 +125,14 @@ function reconcileCorrectedOffice(office: Office) {
   const review = reviewOffice(office)
   const previousEligibleIds = office.eligibleIds
   office.eligibleIds = review.eligibleIds
-  // Retain later ballots and drafts. Review notices stop inconsistent dependent
-  // records from being treated as a confirmed election result.
+  // Retain recorded ballots and drafts while dependent history needs review.
   if (review.issues.length) {
     office.winnerId = null; office.electionMethod = null
     office.status = office.ballots.length === 5 ? "hat" : office.ballots.length === 4 && office.fifthBallotApproved === null ? "motion" : "balloting"
     return
   }
   if (review.winnerId) { office.winnerId = review.winnerId; office.electionMethod = "ballot"; office.status = "elected"; return }
+  office.draft = getEligibleDraftVotes(office, review.eligibleIds)
   const last = office.ballots.at(-1)!
   const hatReached = last.number === 5 || (last.number === 4 && office.fifthBallotApproved === false)
   if (hatReached && office.electionMethod === "hat" && office.winnerId && review.eligibleIds.includes(office.winnerId) && sameIds(previousEligibleIds, review.eligibleIds)) return

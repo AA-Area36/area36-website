@@ -151,7 +151,6 @@ export function buildDistrictMonthlyMeetingOccurrences(
         timeTBD: !startTime,
         addressTBD: !address,
         meetingLinkTBD: locationType !== "in-person",
-        submitterEmail: "",
         isRecurring: true,
         isModified: !!overrideDate,
         recurrenceDescription: `Monthly on ${pattern.label}`,

@@ -62,7 +62,7 @@ function FileItem({
   onEdit,
 }: {
   file: FileNode
-  onEdit: (file: FileNode) => void
+  onEdit: (file: FileNode, opener: HTMLButtonElement) => void
 }) {
   return (
     <div className="flex items-center gap-2 py-1.5 px-2 hover:bg-muted/50 rounded-md group">
@@ -93,7 +93,7 @@ function FileItem({
         size="icon"
         className="h-8 w-8 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100"
         aria-label={`Edit details for ${file.displayName || file.name}`}
-        onClick={() => onEdit(file)}
+        onClick={(event) => onEdit(file, event.currentTarget)}
       >
         <Pencil className="h-3.5 w-3.5" />
       </Button>
@@ -108,7 +108,7 @@ function FolderItem({
   level = 0,
 }: {
   folder: FolderNode
-  onEditFile: (file: FileNode) => void
+  onEditFile: (file: FileNode, opener: HTMLButtonElement) => void
   defaultExpanded?: boolean
   level?: number
 }) {
@@ -176,6 +176,7 @@ function FolderItem({
 export function FolderExplorer({ folders, onMetadataUpdated }: FolderExplorerProps) {
   const [search, setSearch] = React.useState("")
   const [editingFile, setEditingFile] = React.useState<FileNode | null>(null)
+  const editButton = React.useRef<HTMLButtonElement>(null)
 
   const filteredFolders = React.useMemo(
     () => filterTree(folders, search) as FolderNode[],
@@ -207,7 +208,10 @@ export function FolderExplorer({ folders, onMetadataUpdated }: FolderExplorerPro
               <FolderItem
                 key={folder.id}
                 folder={folder}
-                onEditFile={setEditingFile}
+                onEditFile={(file, opener) => {
+                  editButton.current = opener
+                  setEditingFile(file)
+                }}
                 defaultExpanded={!!search}
               />
             ))}
@@ -220,6 +224,10 @@ export function FolderExplorer({ folders, onMetadataUpdated }: FolderExplorerPro
         file={editingFile}
         open={!!editingFile}
         onOpenChange={(open: boolean) => !open && setEditingFile(null)}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault()
+          editButton.current?.focus()
+        }}
         onSaved={onMetadataUpdated}
       />
     </div>

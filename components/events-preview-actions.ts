@@ -5,10 +5,14 @@ import { events } from "@/lib/db/schema"
 import { eq, asc, gt, and, or, isNull, ne } from "drizzle-orm"
 import type { Event } from "@/lib/db/schema"
 
+export type UpcomingEventPreview = Pick<Event,
+  "id" | "title" | "type" | "date" | "endDate" | "startTime" | "endTime" | "locationType" | "address"
+>
+
 /**
  * Fetch the next 4 upcoming non-district events
  */
-export async function fetchUpcomingEvents(): Promise<Event[]> {
+export async function fetchUpcomingEvents(): Promise<UpcomingEventPreview[]> {
   try {
     const db = await getDb()
     
@@ -19,7 +23,17 @@ export async function fetchUpcomingEvents(): Promise<Event[]> {
     const yesterdayStr = yesterday.toLocaleDateString("en-CA", { timeZone: "America/Chicago" })
 
     const upcomingEvents = await db
-      .select()
+      .select({
+        id: events.id,
+        title: events.title,
+        type: events.type,
+        date: events.date,
+        endDate: events.endDate,
+        startTime: events.startTime,
+        endTime: events.endTime,
+        locationType: events.locationType,
+        address: events.address,
+      })
       .from(events)
       .where(
         and(

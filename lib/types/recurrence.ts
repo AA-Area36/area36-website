@@ -80,7 +80,7 @@ export interface FlyerInfo {
   fileSize: number
 }
 
-// For display purposes - unified type for both single events and occurrences
+// Public display DTO for single events and occurrences. Keep submitter and review data private.
 export interface DisplayEvent {
   id: string // eventId or occurrenceId
   isRecurringInstance: boolean
@@ -103,7 +103,6 @@ export interface DisplayEvent {
   timeTBD: boolean
   addressTBD: boolean
   meetingLinkTBD: boolean
-  submitterEmail: string
 
   // Recurrence metadata for display
   isRecurring: boolean

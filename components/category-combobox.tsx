@@ -7,12 +7,10 @@ import { DOCUMENT_CATEGORIES } from "@/lib/resources/organization"
 import { Button } from "@/components/ui/button"
 import {
   Command,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
   CommandList,
-  CommandSeparator,
 } from "@/components/ui/command"
 import {
   Popover,
@@ -20,7 +18,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 
-export interface CategoryGroup {
+interface CategoryGroup {
   label: string
   options: string[]
 }
@@ -64,11 +62,14 @@ const CATEGORY_GROUPS: CategoryGroup[] = [
   },
 ]
 
+const CATEGORY_PRESETS = CATEGORY_GROUPS.flatMap((group) => group.options)
+
 interface CategoryComboboxProps {
   id?: string
   "aria-describedby"?: string
   value: string
   onChange: (value: string) => void
+  popoverContainer: HTMLElement | null
   placeholder?: string
 }
 
@@ -77,125 +78,102 @@ export function CategoryCombobox({
   "aria-describedby": descriptionId,
   value,
   onChange,
+  popoverContainer,
   placeholder = "Select or type a category...",
 }: CategoryComboboxProps) {
   const [open, setOpen] = React.useState(false)
   const [search, setSearch] = React.useState("")
+  const trigger = React.useRef<HTMLButtonElement>(null)
 
-  // All preset values flattened for matching
-  const allPresets = React.useMemo(
-    () => CATEGORY_GROUPS.flatMap((g) => g.options),
-    []
-  )
+  function handleOpenChange(nextOpen: boolean) {
+    setOpen(nextOpen)
+    if (!nextOpen) setSearch("")
+  }
 
-  const handleSelect = (selectedValue: string) => {
+  function handleSelect(selectedValue: string) {
     onChange(selectedValue)
-    setSearch("")
-    setOpen(false)
+    handleOpenChange(false)
   }
 
-  const handleClear = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    onChange("")
-    setSearch("")
-  }
-
-  // Check if typed search is a custom value (not in presets)
-  const isCustomValue = search.trim() !== "" && !allPresets.some(
-    (p) => p.toLowerCase() === search.trim().toLowerCase()
+  const customValue = search.trim()
+  const isCustomValue = customValue !== "" && !CATEGORY_PRESETS.some(
+    (preset) => preset.toLowerCase() === customValue.toLowerCase()
   )
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          id={id}
-          aria-describedby={descriptionId}
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className="w-full justify-between font-normal"
+    <div className="flex items-center gap-2">
+      <Popover open={open} onOpenChange={handleOpenChange}>
+        <PopoverTrigger asChild>
+          <Button
+            ref={trigger}
+            id={id}
+            type="button"
+            aria-describedby={descriptionId}
+            variant="outline"
+            role="combobox"
+            className="min-w-0 flex-1 justify-between font-normal"
+          >
+            <span className={cn("truncate", !value && "text-muted-foreground")}>
+              {value || placeholder}
+            </span>
+            <ChevronsUpDown className="opacity-50" aria-hidden="true" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          container={popoverContainer}
+          aria-label="Category options"
+          className="w-(--radix-popover-trigger-width) max-w-(--radix-popover-content-available-width) p-0"
+          align="start"
+          collisionPadding={8}
         >
-          <span className={cn("truncate", !value && "text-muted-foreground")}>
-            {value || placeholder}
-          </span>
-          <div className="flex items-center gap-1 ml-2 shrink-0">
-            {value && (
-              <X
-                className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground"
-                onClick={handleClear}
-              />
-            )}
-            <ChevronsUpDown className="h-4 w-4 opacity-50" />
-          </div>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-        <Command shouldFilter={true}>
-          <CommandInput
-            placeholder="Search or type custom..."
-            value={search}
-            onValueChange={setSearch}
-          />
-          <CommandList>
-            <CommandEmpty className="py-3 px-2 text-sm text-muted-foreground">
-              {search.trim() ? (
-                <button
-                  type="button"
-                  className="w-full text-left px-2 py-1.5 rounded-sm hover:bg-accent hover:text-accent-foreground cursor-default"
-                  onClick={() => handleSelect(search.trim())}
-                >
-                  Use &ldquo;{search.trim()}&rdquo;
-                </button>
-              ) : (
-                "Type to search or enter a custom category."
-              )}
-            </CommandEmpty>
-
-            {/* Custom value option when typing something not in presets */}
-            {isCustomValue && (
-              <>
+          <Command label="Search categories" className="max-h-(--radix-popover-content-available-height)">
+            <CommandInput
+              placeholder="Search or type custom..."
+              value={search}
+              onValueChange={setSearch}
+              wrapperClassName="shrink-0"
+            />
+            <CommandList className="min-h-0 overscroll-contain">
+              {isCustomValue && (
                 <CommandGroup heading="Custom">
                   <CommandItem
-                    value={`custom:${search.trim()}`}
-                    onSelect={() => handleSelect(search.trim())}
+                    value={customValue}
+                    onSelect={() => handleSelect(customValue)}
+                    className="break-all"
                   >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        value === search.trim() ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    Use &ldquo;{search.trim()}&rdquo;
+                    Use &ldquo;{customValue}&rdquo;
                   </CommandItem>
                 </CommandGroup>
-                <CommandSeparator />
-              </>
-            )}
-
-            {/* Grouped preset options */}
-            {CATEGORY_GROUPS.map((group) => (
-              <CommandGroup key={group.label} heading={group.label}>
-                {group.options.map((option) => (
-                  <CommandItem
-                    key={option}
-                    value={option}
-                    onSelect={() => handleSelect(option)}
-                  >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        value === option ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    {option}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            ))}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+              )}
+              {CATEGORY_GROUPS.map((group) => (
+                <CommandGroup key={group.label} heading={group.label}>
+                  {group.options.map((option) => (
+                    <CommandItem key={option} value={option} onSelect={() => handleSelect(option)}>
+                      <Check className={value === option ? "opacity-100" : "opacity-0"} aria-hidden="true" />
+                      {option}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ))}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      {value && (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-label="Clear category"
+          title="Clear category"
+          onClick={() => {
+            handleSelect("")
+            trigger.current?.focus()
+          }}
+        >
+          <X aria-hidden="true" />
+        </Button>
+      )}
+    </div>
   )
 }

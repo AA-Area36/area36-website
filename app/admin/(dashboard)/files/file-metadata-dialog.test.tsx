@@ -1,7 +1,7 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { FileMetadataDialog } from "./file-metadata-dialog"
-import { upsertFileMetadata } from "./actions"
+import { getFileMetadataById, upsertFileMetadata } from "./actions"
 import type { FileNode } from "./actions"
 
 vi.mock("./actions", () => ({
@@ -21,6 +21,7 @@ const file: FileNode = {
 describe("admin document categories", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(getFileMetadataById).mockResolvedValue(null)
     Element.prototype.scrollIntoView = vi.fn()
     vi.mocked(upsertFileMetadata).mockResolvedValue({
       success: true,
@@ -34,8 +35,10 @@ describe("admin document categories", () => {
     const onSaved = vi.fn()
     render(<FileMetadataDialog file={file} open onOpenChange={vi.fn()} onSaved={onSaved} />)
     fireEvent.click(screen.getByRole("combobox", { name: "Category" }))
-    fireEvent.change(screen.getByPlaceholderText("Search or type custom..."), { target: { value: "Safety Resources" } })
-    fireEvent.click(await screen.findByRole("option", { name: /Use.*Safety Resources/ }))
+    const editor = screen.getByRole("dialog", { name: "Edit File Details" })
+    const options = within(editor).getByRole("dialog", { name: "Category options" })
+    fireEvent.change(within(options).getByRole("combobox", { name: "Search categories" }), { target: { value: "Safety Resources" } })
+    fireEvent.click(await within(options).findByRole("option", { name: /Use.*Safety Resources/ }))
     fireEvent.click(screen.getByRole("button", { name: "Save" }))
     await waitFor(() => expect(upsertFileMetadata).toHaveBeenCalledWith({
       driveId: file.id,
@@ -50,10 +53,22 @@ describe("admin document categories", () => {
   })
 
   it("lets an admin clear a saved category and explains the automatic fallback", async () => {
-    render(<FileMetadataDialog file={{ ...file, name: "Budget 2026.pdf", category: "Safety Resources" }} open onOpenChange={vi.fn()} />)
+    let resolveMetadata!: (value: Awaited<ReturnType<typeof getFileMetadataById>>) => void
+    vi.mocked(getFileMetadataById).mockReturnValue(new Promise(resolve => { resolveMetadata = resolve }))
+    render(<FileMetadataDialog file={{ ...file, hasMetadata: true, name: "Budget 2026.pdf", category: "Old Category" }} open onOpenChange={vi.fn()} />)
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Clear category" })).toBeDisabled()
+    await act(async () => resolveMetadata({ displayName: "Budget 2026", category: "Safety Resources", isProtected: true }))
+    const category = screen.getByRole("combobox", { name: "Category" })
+    expect(category).toHaveTextContent("Safety Resources")
     fireEvent.click(screen.getByRole("button", { name: "Clear category" }))
-    expect(screen.getByText(/filename suggestion: Budgets/)).toBeVisible()
+    expect(category).toHaveFocus()
+    expect(category).toHaveAttribute("aria-expanded", "false")
+    expect(screen.getByText(/Automatic category: Budgets/)).toBeVisible()
     fireEvent.click(screen.getByRole("button", { name: "Save" }))
-    await waitFor(() => expect(upsertFileMetadata).toHaveBeenCalledWith(expect.objectContaining({ category: null })))
+    await waitFor(() => expect(upsertFileMetadata).toHaveBeenCalledWith(expect.objectContaining({
+      category: null,
+      password: undefined,
+    })))
   })
 })

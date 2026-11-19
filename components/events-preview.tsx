@@ -1,11 +1,10 @@
 import Link from "next/link"
 import { Calendar, MapPin, ArrowRight, CalendarX } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { fetchUpcomingEvents } from "./events-preview-actions"
-import type { Event } from "@/lib/db/schema"
+import { fetchUpcomingEvents, type UpcomingEventPreview } from "./events-preview-actions"
 
 // Format date for display
-function formatEventDate(event: Event): string {
+function formatEventDate(event: UpcomingEventPreview): string {
   const startDate = new Date(event.date + "T00:00:00")
   
   if (event.endDate && event.endDate !== event.date) {
@@ -28,7 +27,7 @@ function formatEventDate(event: Event): string {
 }
 
 // Format time for display
-function formatEventTime(event: Event): string | null {
+function formatEventTime(event: UpcomingEventPreview): string | null {
   if (!event.startTime) return null
   
   const formatTime = (time: string) => {
@@ -46,7 +45,7 @@ function formatEventTime(event: Event): string | null {
 }
 
 // Get location display
-function formatLocation(event: Event): string {
+function formatLocation(event: UpcomingEventPreview): string {
   if (event.locationType === "online") {
     return "Online"
   }

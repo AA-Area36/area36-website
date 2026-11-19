@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { assessBallot, reviewOffice, type ElectionRecord, type Office, type Vote, type VoteChannels } from "./model"
+import { assessBallot, getEligibleDraftVotes, reviewOffice, type ElectionRecord, type Office, type Vote, type VoteChannels } from "./model"
 import { getElection } from "./store"
 
 export type PublicBallot = {
@@ -54,7 +54,8 @@ export function toPublicElection(election: ElectionRecord): PublicElection | nul
       const review = reviewOffice(office)
       const ballots = office.ballots.map(ballot => ballotDisplay(office, ballot.number, ballot.votes, ballot.noCandidate, ballot.expectedVotes, review.archivedBallots.includes(ballot.number) ? "archived" : "recorded"))
       if (office.status === "balloting" && !review.issues.length) {
-        ballots.push(ballotDisplay(office, office.ballots.length + 1, office.draft, office.draftNoCandidate, office.expectedVotes, "counting"))
+        // Older saved states may predate draft reconciliation. Never publish obsolete totals.
+        ballots.push(ballotDisplay(office, office.ballots.length + 1, getEligibleDraftVotes(office, review.eligibleIds), office.draftNoCandidate, office.expectedVotes, "counting"))
       }
       return {
         name: office.name, status: office.status, needsReview: review.issues.length > 0,
