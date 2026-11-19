@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { ChevronRight } from "lucide-react"
 
 const routeLabels: Record<string, string> = {
+  "/search": "Search",
   "/about": "About",
   "/events": "Events",
   "/committees": "Committees & Officers",

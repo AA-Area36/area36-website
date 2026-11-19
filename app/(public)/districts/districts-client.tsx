@@ -11,22 +11,7 @@ import { cn } from "@/lib/utils"
 import { PageHeader } from "@/components/page-header"
 import type { ContentDoc } from "@/lib/content/schema"
 import { createTranslator, formatTemplate, getAtPath } from "@/lib/content/t"
-import type { DistrictDirectoryEntry } from "@/lib/constants/district-directory"
-
-function isDistrictDirectory(value: unknown): value is DistrictDirectoryEntry[] {
-  return (
-    Array.isArray(value) &&
-    value.every(
-      (district) =>
-        district !== null &&
-        typeof district === "object" &&
-        "number" in district &&
-        typeof district.number === "number" &&
-        "name" in district &&
-        typeof district.name === "string",
-    )
-  )
-}
+import { districtCardId, getDistrictDirectory } from "@/lib/constants/district-directory"
 
 export function DistrictsClient({ content }: { content: ContentDoc }) {
   const router = useRouter()
@@ -35,8 +20,7 @@ export function DistrictsClient({ content }: { content: ContentDoc }) {
   const learnMoreHrefRaw = t("page.about.learnMoreHref", "/service-basics")
   const learnMoreHref = learnMoreHrefRaw === "/service" ? "/service-basics" : learnMoreHrefRaw
 
-  const directoryRaw = getAtPath(content, "directory")
-  const districts: DistrictDirectoryEntry[] = isDistrictDirectory(directoryRaw) ? directoryRaw : []
+  const districts = getDistrictDirectory(getAtPath(content, "directory"))
 
   // Get initial values from URL
   const initialSearch = searchParams.get("q") || ""
@@ -44,6 +28,15 @@ export function DistrictsClient({ content }: { content: ContentDoc }) {
 
   const [searchQuery, setSearchQuery] = React.useState(initialSearch)
   const [expandedDistrict, setExpandedDistrict] = React.useState<number | null>(initialDistrict)
+
+  React.useEffect(() => {
+    if (initialDistrict === null) return
+    const anchor = districtCardId(initialDistrict)
+    if (window.location.hash === `#${anchor}`) {
+      // A client navigation can restore scroll before the directory cards mount.
+      document.getElementById(anchor)?.scrollIntoView({ block: "start" })
+    }
+  }, [initialDistrict])
 
   // Update URL when filters change
   const updateURL = React.useCallback(
@@ -139,7 +132,7 @@ export function DistrictsClient({ content }: { content: ContentDoc }) {
               const isExpanded = expandedDistrict === district.number
 
               return (
-                <div key={district.number} className="rounded-xl border border-border bg-card overflow-hidden">
+                <div key={district.number} id={districtCardId(district.number)} className="scroll-mt-24 rounded-xl border border-border bg-card overflow-hidden">
                   {/* Header - Always visible */}
                   <button
                     onClick={() => toggleDistrict(district.number)}
@@ -206,7 +199,7 @@ export function DistrictsClient({ content }: { content: ContentDoc }) {
                             )}
                           </div>
 
-                          {(district.meetingDay || district.meetingLocation) && (
+                          {(district.meetingDay || district.meetingLocation || district.meetingAddress) && (
                             <div>
                               <h4 className="text-sm font-medium text-muted-foreground mb-1">
                                 {t("page.labels.districtMeeting", "District Meeting")}
@@ -220,11 +213,11 @@ export function DistrictsClient({ content }: { content: ContentDoc }) {
                                   </span>
                                 </div>
                               )}
-                              {district.meetingLocation && (
+                              {(district.meetingLocation || district.meetingAddress) && (
                                 <div className="flex items-start gap-2 text-foreground mt-1">
                                   <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
                                   <div>
-                                    <p>{district.meetingLocation}</p>
+                                    {district.meetingLocation && <p>{district.meetingLocation}</p>}
                                     {district.meetingAddress && <p className="text-sm text-muted-foreground">{district.meetingAddress}</p>}
                                   </div>
                                 </div>

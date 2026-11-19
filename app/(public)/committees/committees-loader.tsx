@@ -25,19 +25,16 @@ export function CommitteesLoader({ committees, content }: CommitteesLoaderProps)
   const { data, isLoading, error, refetch } = useCommittees()
   const { t } = createTranslator(content ?? {})
 
-  if (isLoading) {
-    return <GdriveLoader message={t("committeeUi.loadingFilesLabel", "Loading committee files...")} />
-  }
-
   // Even if no files or error, show the committees with their static info
   const committeeFiles: CommitteeFiles = data || {}
 
   return (
     <>
+      <CommitteesContent committees={committees} committeeFiles={committeeFiles} content={content} />
+      {isLoading && <GdriveLoader message={t("committeeUi.loadingFilesLabel", "Loading committee files...")} />}
       {error && !data ? (
         <GdriveError resourceName="Committee files" onRetry={refetch} />
       ) : null}
-      <CommitteesContent committees={committees} committeeFiles={committeeFiles} content={content} />
     </>
   )
 }

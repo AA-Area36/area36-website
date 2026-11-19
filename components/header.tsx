@@ -44,6 +44,7 @@ export async function Header() {
       brandTitle={t("header.brand.title", "Area 36")}
       brandSubtitle={t("header.brand.subtitle", "Southern Minnesota A.A.")}
       navigation={navigation}
+      searchLabel={t("header.nav.search", "Search site")}
     />
   )
 }

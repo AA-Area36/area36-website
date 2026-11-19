@@ -18,6 +18,7 @@ import {
   Hand,
   Briefcase,
   BookMarked,
+  Search,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -94,10 +95,12 @@ export function HeaderClient({
   brandTitle,
   brandSubtitle,
   navigation,
+  searchLabel = "Search site",
 }: {
   brandTitle: string
   brandSubtitle: string
   navigation: HeaderNavItem[]
+  searchLabel?: string
 }) {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false)
@@ -349,6 +352,7 @@ export function HeaderClient({
             ),
           )}
           <div className="ml-4 flex items-center gap-1 border-l border-border pl-4">
+            <Button variant="ghost" size="icon" asChild><Link href="/search" aria-label={searchLabel} title={searchLabel}><Search className="h-5 w-5" aria-hidden="true" /></Link></Button>
             {mounted ? (
               <>
                 <LanguageSelector />
@@ -364,6 +368,7 @@ export function HeaderClient({
 
         {/* Mobile menu button */}
         <div className="flex items-center gap-1 lg:hidden">
+          <Button variant="ghost" size="icon" asChild><Link href="/search" aria-label={searchLabel} title={searchLabel}><Search className="h-5 w-5" aria-hidden="true" /></Link></Button>
           <LanguageSelector />
           <AccessibilityMenu />
           <ThemeToggle />

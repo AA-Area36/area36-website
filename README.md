@@ -29,6 +29,18 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
+## Site search
+
+The header search opens `/search`. Results show documents and forms first, then
+pages and sections, then matches in general page copy. District results open the
+matching card in the district directory.
+
+MiniSearch indexes localized public page copy and document metadata from the
+existing Google Drive catalogs. Searchable document fields include titles,
+descriptions, and categories. File contents and scanned text are outside the
+index. Document previews and downloads use the existing file-access workflow,
+including password checks.
+
 ## Deploy to Cloudflare
 
 Deploy the application with the repository script:
